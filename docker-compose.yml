@@ -1,0 +1,64 @@
+services:
+  leadengine-mysql:
+    image: mysql:8.0
+    container_name: leadengine-mysql
+    environment:
+      MYSQL_DATABASE: leadengine
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - leadengine-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - leadengine
+
+  leadengine-api:
+    build:
+      context: .
+      dockerfile: src/LeadEngine.Api/Dockerfile
+    container_name: leadengine-api
+    depends_on:
+      leadengine-mysql:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Server=leadengine-mysql;Port=3306;Database=leadengine;User=${MYSQL_USER};Password=${MYSQL_PASSWORD};
+      IntegracaoLeads__BaseUrl: ${INTEGRACAO_LEADS_BASE_URL:-}
+      IntegracaoLeads__Endpoint: ${INTEGRACAO_LEADS_ENDPOINT:-/api/leads}
+      IntegracaoLeads__ApiKey: ${INTEGRACAO_LEADS_API_KEY:-}
+      Database__ApplyMigrationsOnStartup: "true"
+      Cors__AllowedOrigins__0: http://localhost:5173
+      Cors__AllowedOrigins__1: http://localhost:8080
+    ports:
+      - "5080:8080"
+    networks:
+      - leadengine
+
+  leadengine-web:
+    build:
+      context: .
+      dockerfile: src/LeadEngine.Web/Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:5080
+    container_name: leadengine-web
+    depends_on:
+      - leadengine-api
+    ports:
+      - "5173:80"
+    networks:
+      - leadengine
+
+volumes:
+  leadengine-mysql-data:
+
+networks:
+  leadengine:
+    driver: bridge
