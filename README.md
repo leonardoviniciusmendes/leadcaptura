@@ -1,14 +1,14 @@
 # Lead Engine
 
-Aplicacao simples para capturar leads originados de campanhas do Google Ads para venda de planos de saude.
+Aplicação simples para capturar leads originados de campanhas do Google Ads para venda de planos de saúde.
 
-Fluxo:
+Fluxo atual:
 
 ```text
-Google Ads -> Landing page -> Formulario -> API Lead Engine -> MySQL -> API externa
+Google Ads -> Landing page -> Formulário -> WhatsApp do corretor
 ```
 
-O escopo termina em capturar, validar, salvar, registrar origem e enviar para uma API externa. Nao ha CRM, funil, contratos, atendimento via WhatsApp, IA ou disparo automatico.
+Neste primeiro momento, o formulário abre o WhatsApp do corretor com os dados preenchidos. A API e a estrutura de banco permanecem no projeto para a fase futura, quando os leads também serão persistidos.
 
 ## Arquitetura
 
@@ -21,7 +21,7 @@ src/
   LeadEngine.Web             Vue 3, landing pages e formularios
 ```
 
-## Configuracao
+## Configuração
 
 Principais variaveis:
 
@@ -32,9 +32,12 @@ IntegracaoLeads__Endpoint
 IntegracaoLeads__ApiKey
 Cors__AllowedOrigins__0
 VITE_API_BASE_URL
+VITE_CORRETOR_WHATSAPP
 ```
 
-Exemplo da integracao externa:
+`VITE_CORRETOR_WHATSAPP` deve ser informado com DDI e DDD, somente números. Exemplo: `5521999999999`.
+
+Exemplo da integração externa:
 
 ```json
 {
@@ -48,7 +51,7 @@ Exemplo da integracao externa:
 
 ## Executar com Docker
 
-Crie um `.env` local a partir de `.env.example` e ajuste as senhas/chaves reais. O `.env` nao deve ser commitado.
+Crie um `.env` local a partir de `.env.example` e ajuste as senhas/chaves reais. O `.env` não deve ser commitado.
 
 ```bash
 copy .env.example .env
@@ -57,7 +60,7 @@ docker compose up --build
 
 A API aplica as migrations automaticamente no container por causa de `Database__ApplyMigrationsOnStartup=true`.
 
-Servicos:
+Serviços:
 
 ```text
 API: http://localhost:5080
@@ -129,7 +132,7 @@ dataInicial, dataFinal, tipo, status, campanha, landingPage, whatsApp, pagina, t
 
 As paginas ficam configuradas em `src/LeadEngine.Web/src/landingPages.ts`.
 
-## Exemplo de requisicao
+## Exemplo de requisição
 
 ```json
 {
@@ -156,13 +159,13 @@ As paginas ficam configuradas em `src/LeadEngine.Web/src/landingPages.ts`.
 }
 ```
 
-## Seguranca e privacidade
+## Segurança e privacidade
 
-- O IP original nao e armazenado; apenas hash.
-- O frontend nao envia dados pessoais para `dataLayer`.
+- O IP original não é armazenado; apenas hash.
+- O frontend não envia dados pessoais para `dataLayer`.
 - O backend aplica limite de request, rate limiting, honeypot, validacao e headers de seguranca.
-- Logs nao registram corpo completo da requisicao.
-- WhatsApp, e-mail, CNPJ e CEP sao mascarados nas respostas administrativas.
+- Logs não registram corpo completo da requisição.
+- WhatsApp, e-mail, CNPJ e CEP são mascarados nas respostas administrativas.
 
 ## Pendencias para producao
 

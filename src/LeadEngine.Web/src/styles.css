@@ -98,44 +98,53 @@ h1 {
   box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
 }
 
-.type-toggle {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 14px;
-  padding: 4px;
-  border-radius: 8px;
-  background: #eef3f8;
-}
-
-.type-toggle button {
-  min-height: 44px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #506176;
-  font-weight: 750;
-  cursor: pointer;
-}
-
-.type-toggle button.active {
-  background: #fff;
-  color: #0f766e;
-  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.12);
-}
-
 .lead-form {
   display: grid;
   gap: 12px;
 }
 
 .lead-form label,
-.ages {
+.ages,
+.radio-group {
   display: grid;
   gap: 6px;
   color: #334155;
   font-size: 0.92rem;
   font-weight: 700;
+}
+
+.radio-group {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  border: 0;
+  gap: 8px;
+}
+
+.radio-group legend {
+  grid-column: 1 / -1;
+  padding: 0;
+  margin-bottom: 2px;
+}
+
+.radio-option {
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+}
+
+.radio-option:has(input:checked) {
+  border-color: #0f766e;
+  background: #ecfdf5;
+  color: #0f766e;
 }
 
 .lead-form input {
@@ -153,6 +162,19 @@ h1 {
   border-color: #0f766e;
 }
 
+.lead-form input:disabled {
+  background: #f1f5f9;
+  color: #475569;
+  cursor: not-allowed;
+}
+
+.lead-form input[type="radio"] {
+  width: 16px;
+  min-height: 16px;
+  padding: 0;
+  accent-color: #0f766e;
+}
+
 .label-row,
 .age-row {
   display: grid;
@@ -162,7 +184,7 @@ h1 {
 }
 
 .age-row {
-  grid-template-columns: 70px 1fr 42px;
+  grid-template-columns: 78px 1fr;
 }
 
 .label-row button,
@@ -263,5 +285,11 @@ h1 {
 
   .copy {
     padding-top: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .radio-group {
+    grid-template-columns: 1fr;
   }
 }

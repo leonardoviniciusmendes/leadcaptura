@@ -1,6 +1,6 @@
 <template>
   <p class="privacy">
-    Ao enviar, voce concorda em ser contatado para receber informacoes e cotacoes de planos de saude.
-    Seus dados nao serao enviados ao Google Tag Manager.
+    Ao enviar, você concorda em ser contatado para receber informações e cotações de planos de saúde.
+    Seus dados não serão enviados ao Google Tag Manager.
   </p>
 </template>

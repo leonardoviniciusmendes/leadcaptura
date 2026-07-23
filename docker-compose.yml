@@ -48,6 +48,7 @@ services:
       dockerfile: src/LeadEngine.Web/Dockerfile
       args:
         VITE_API_BASE_URL: http://localhost:5080
+        VITE_CORRETOR_WHATSAPP: ${VITE_CORRETOR_WHATSAPP}
     container_name: leadengine-web
     depends_on:
       - leadengine-api

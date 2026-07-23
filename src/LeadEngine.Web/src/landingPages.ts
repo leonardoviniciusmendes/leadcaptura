@@ -11,84 +11,84 @@ export interface LandingPageConfig {
 export const landingPages: LandingPageConfig[] = [
   {
     slug: '/',
-    titulo: 'Cotacao de Plano de Saude',
-    subtitulo: 'Receba opcoes conforme sua regiao, perfil e quantidade de vidas.',
+    titulo: 'Cotação de Plano de Saúde',
+    subtitulo: 'Receba opções conforme sua região, perfil e quantidade de vidas.',
     tipoLeadPadrao: 'Familia',
-    beneficios: ['Atendimento pelo WhatsApp', 'Comparacao de operadoras', 'Sem compromisso']
+    beneficios: ['Atendimento pelo WhatsApp', 'Comparação de operadoras', 'Sem compromisso']
   },
   {
     slug: '/plano-de-saude',
-    titulo: 'Plano de Saude Sob Medida',
+    titulo: 'Plano de Saúde Sob Medida',
     subtitulo: 'Compare alternativas individuais, familiares, MEI e empresariais.',
     tipoLeadPadrao: 'Familia',
-    beneficios: ['Cotacao personalizada', 'Orientacao objetiva', 'Contato rapido']
+    beneficios: ['Cotação personalizada', 'Orientação objetiva', 'Contato rápido']
   },
   {
     slug: '/plano-familiar',
-    titulo: 'Plano de Saude Familiar',
-    subtitulo: 'Informe as idades e receba opcoes adequadas para sua familia.',
+    titulo: 'Plano de Saúde Familiar',
+    subtitulo: 'Informe as idades e receba opções adequadas para sua família.',
     tipoLeadPadrao: 'Familia',
     campanha: 'plano_familiar',
-    beneficios: ['Opcoes para varias idades', 'Rede hospitalar conforme preferencia', 'Atendimento humano']
+    beneficios: ['Opções para várias idades', 'Rede hospitalar conforme preferência', 'Atendimento humano']
   },
   {
     slug: '/plano-individual',
-    titulo: 'Plano de Saude Individual',
-    subtitulo: 'Encontre alternativas para sua necessidade e regiao.',
+    titulo: 'Plano de Saúde Individual',
+    subtitulo: 'Encontre alternativas para sua necessidade e região.',
     tipoLeadPadrao: 'PessoaFisica',
     campanha: 'plano_individual',
-    beneficios: ['Formulario rapido', 'Comparacao clara', 'Contato pelo WhatsApp']
+    beneficios: ['Formulário rápido', 'Comparação clara', 'Contato pelo WhatsApp']
   },
   {
     slug: '/plano-empresarial',
-    titulo: 'Plano de Saude Empresarial',
-    subtitulo: 'Cote planos para socios, colaboradores e dependentes.',
+    titulo: 'Plano de Saúde Empresarial',
+    subtitulo: 'Cote planos para sócios, colaboradores e dependentes.',
     tipoLeadPadrao: 'Empresa',
     campanha: 'plano_empresarial',
-    beneficios: ['Opcoes PME', 'Simulacao por quantidade de vidas', 'Atendimento consultivo']
+    beneficios: ['Opções PME', 'Simulação por quantidade de vidas', 'Atendimento consultivo']
   },
   {
     slug: '/plano-mei',
-    titulo: 'Plano de Saude para MEI',
+    titulo: 'Plano de Saúde para MEI',
     subtitulo: 'Compare possibilidades para MEI e pequenas equipes.',
     tipoLeadPadrao: 'Mei',
     campanha: 'plano_mei',
-    beneficios: ['Cotacao simples', 'Planos por perfil empresarial', 'Sem envio automatico de mensagens']
+    beneficios: ['Cotação simples', 'Planos por perfil empresarial', 'Sem envio automático de mensagens']
   },
   {
     slug: '/amil',
     titulo: 'Encontre o Plano Amil Ideal',
-    subtitulo: 'Receba uma comparacao personalizada conforme sua regiao e suas idades.',
+    subtitulo: 'Receba uma comparação personalizada conforme sua região e suas idades.',
     tipoLeadPadrao: 'Familia',
     operadora: 'Amil',
     campanha: 'amil',
-    beneficios: ['Opcoes individuais, familiares e empresariais', 'Comparacao de rede credenciada', 'Atendimento pelo WhatsApp']
+    beneficios: ['Opções individuais, familiares e empresariais', 'Comparação de rede credenciada', 'Atendimento pelo WhatsApp']
   },
   {
     slug: '/bradesco-saude',
-    titulo: 'Cotacao Bradesco Saude',
-    subtitulo: 'Veja opcoes conforme perfil, regiao e quantidade de vidas.',
+    titulo: 'Cotação Bradesco Saúde',
+    subtitulo: 'Veja opções conforme perfil, região e quantidade de vidas.',
     tipoLeadPadrao: 'Empresa',
-    operadora: 'Bradesco Saude',
+    operadora: 'Bradesco Saúde',
     campanha: 'bradesco_saude',
-    beneficios: ['Foco em planos empresariais', 'Cotacao por porte', 'Retorno pelo WhatsApp']
+    beneficios: ['Foco em planos empresariais', 'Cotação por porte', 'Retorno pelo WhatsApp']
   },
   {
     slug: '/sulamerica-saude',
-    titulo: 'Cotacao SulAmerica Saude',
-    subtitulo: 'Receba alternativas para familia, MEI ou empresa.',
+    titulo: 'Cotação SulAmérica Saúde',
+    subtitulo: 'Receba alternativas para família, MEI ou empresa.',
     tipoLeadPadrao: 'Familia',
     operadora: 'SulAmerica',
     campanha: 'sulamerica_saude',
-    beneficios: ['Comparacao personalizada', 'Preferencias de rede', 'Formulario direto']
+    beneficios: ['Comparação personalizada', 'Preferências de rede', 'Formulário direto']
   },
   {
     slug: '/unimed',
-    titulo: 'Cotacao Unimed',
-    subtitulo: 'Informe seus dados e receba opcoes disponiveis para sua regiao.',
+    titulo: 'Cotação Unimed',
+    subtitulo: 'Informe seus dados e receba opções disponíveis para sua região.',
     tipoLeadPadrao: 'Familia',
     operadora: 'Unimed',
     campanha: 'unimed',
-    beneficios: ['Atendimento regional', 'Opcao familiar ou empresarial', 'Contato sem compromisso']
+    beneficios: ['Atendimento regional', 'Opção familiar ou empresarial', 'Contato sem compromisso']
   }
 ];
