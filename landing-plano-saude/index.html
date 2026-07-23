@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Solicite uma cotação gratuita de plano de saúde individual, familiar, MEI ou empresarial." />
+  <title>Cotação de Plano de Saúde</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-content">
+      <a class="brand" href="#inicio">Plano Saúde Fácil</a>
+      <a class="top-cta" href="#cotacao">Solicitar cotação</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" id="inicio">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <span class="eyebrow">Atendimento personalizado</span>
+          <h1>Encontre o plano de saúde ideal para você, sua família ou empresa</h1>
+          <p>
+            Compare opções de planos individuais, familiares, empresariais e para MEI.
+            Preencha seus dados e receba uma análise sem compromisso.
+          </p>
+
+          <div class="benefits">
+            <div>✓ Cotação gratuita</div>
+            <div>✓ Atendimento pelo WhatsApp</div>
+            <div>✓ Comparação entre opções</div>
+          </div>
+
+          <a class="primary-button mobile-hero-button" href="#cotacao">Quero receber uma cotação</a>
+        </div>
+
+        <section class="form-card" id="cotacao" aria-labelledby="form-title">
+          <h2 id="form-title">Solicite sua cotação</h2>
+          <p>Preencha os dados abaixo. Leva menos de 2 minutos.</p>
+
+          <form id="lead-form">
+            <input type="hidden" id="utm_source" name="utm_source" />
+            <input type="hidden" id="utm_medium" name="utm_medium" />
+            <input type="hidden" id="utm_campaign" name="utm_campaign" />
+            <input type="hidden" id="utm_term" name="utm_term" />
+            <input type="hidden" id="gclid" name="gclid" />
+
+            <label for="nome">Nome</label>
+            <input id="nome" name="nome" type="text" autocomplete="name" required />
+
+            <label for="whatsapp">WhatsApp</label>
+            <input id="whatsapp" name="whatsapp" type="tel" inputmode="tel" placeholder="(21) 99999-9999" required />
+
+            <div class="two-columns">
+              <div>
+                <label for="cidade">Cidade</label>
+                <input id="cidade" name="cidade" type="text" value="Rio de Janeiro" required />
+              </div>
+              <div>
+                <label for="vidas">Quantidade de vidas</label>
+                <input id="vidas" name="vidas" type="number" min="1" max="99" value="1" required />
+              </div>
+            </div>
+
+            <label for="tipoPlano">Tipo de plano</label>
+            <select id="tipoPlano" name="tipoPlano" required>
+              <option value="">Selecione</option>
+              <option value="Individual">Individual</option>
+              <option value="Familiar">Familiar</option>
+              <option value="MEI">MEI</option>
+              <option value="Empresarial">Empresarial</option>
+            </select>
+
+            <label for="idades">Idade das pessoas</label>
+            <input id="idades" name="idades" type="text" placeholder="Ex.: 42, 40 e 12" required />
+
+            <label class="consent">
+              <input id="consentimento" name="consentimento" type="checkbox" required />
+              <span>Autorizo o contato para receber informações e cotações de planos de saúde.</span>
+            </label>
+
+            <button type="submit" class="primary-button">Receber cotação gratuita</button>
+
+            <p class="privacy-note">
+              Seus dados serão utilizados apenas para atendimento da sua solicitação.
+            </p>
+
+            <div id="form-message" class="form-message" role="status" aria-live="polite"></div>
+          </form>
+        </section>
+      </div>
+    </section>
+
+    <section class="how-it-works">
+      <div class="container">
+        <h2>Como funciona</h2>
+        <div class="steps">
+          <article>
+            <span>1</span>
+            <h3>Preencha seus dados</h3>
+            <p>Informe o tipo de plano, quantidade de pessoas e suas idades.</p>
+          </article>
+          <article>
+            <span>2</span>
+            <h3>Receba uma análise</h3>
+            <p>As opções serão comparadas de acordo com seu perfil e região.</p>
+          </article>
+          <article>
+            <span>3</span>
+            <h3>Escolha com segurança</h3>
+            <p>Você recebe orientação para escolher a opção mais adequada.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="audiences">
+      <div class="container">
+        <h2>Opções para diferentes necessidades</h2>
+        <div class="audience-grid">
+          <article><h3>Individual e familiar</h3><p>Para quem busca proteção pessoal ou para toda a família.</p></article>
+          <article><h3>MEI</h3><p>Alternativas empresariais para microempreendedores.</p></article>
+          <article><h3>Empresas</h3><p>Planos para equipes e dependentes.</p></article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-content">
+      <div>
+        <strong>Plano Saúde Fácil</strong>
+        <p>Consultoria e intermediação de planos de saúde.</p>
+      </div>
+      <p>© <span id="current-year"></span> Todos os direitos reservados.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
