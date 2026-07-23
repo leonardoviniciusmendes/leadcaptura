@@ -5,7 +5,14 @@ export function digits(value: string): string {
 }
 
 export function maskPhone(value: string): string {
-  const clean = digits(value).slice(0, 11);
+  const clean = digits(value).slice(0, 13);
+  if (clean.startsWith('55') && clean.length > 4) {
+    const area = clean.slice(2, 4);
+    const number = clean.slice(4);
+    if (number.length <= 4) return `+55 (${area}) ${number}`;
+    const firstPartLength = number.length > 8 ? 5 : 4;
+    return `+55 (${area}) ${number.slice(0, firstPartLength)}-${number.slice(firstPartLength)}`;
+  }
   if (clean.length <= 2) return clean;
   if (clean.length <= 7) return `(${clean.slice(0, 2)}) ${clean.slice(2)}`;
   return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7)}`;

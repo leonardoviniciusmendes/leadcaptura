@@ -28,7 +28,7 @@ export interface WhatsAppLeadResponse {
   mensagem: string;
 }
 
-const corretorWhatsApp = (import.meta.env.VITE_CORRETOR_WHATSAPP || '5521996965262').replace(/\D/g, '');
+const corretorWhatsApp = (import.meta.env.VITE_CORRETOR_WHATSAPP || '55219721110').replace(/\D/g, '');
 
 function line(label: string, value: unknown): string | null {
   if (value === undefined || value === null || value === '') return null;
