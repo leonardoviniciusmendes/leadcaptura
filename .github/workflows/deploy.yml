@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -23,25 +24,32 @@ jobs:
         working-directory: src/LeadEngine.Web
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Baixar código
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Configurar Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: src/LeadEngine.Web/package-lock.json
 
-      - run: npm ci
+      - name: Instalar dependências
+        run: npm ci
 
-      - run: npm run build
+      - name: Gerar build
+        run: npm run build
 
-      - uses: actions/upload-pages-artifact@v3
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Enviar arquivos do site
+        uses: actions/upload-pages-artifact@v3
         with:
           path: src/LeadEngine.Web/dist
 
   deploy:
     needs: build
-
     runs-on: ubuntu-latest
 
     environment:
@@ -49,5 +57,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - id: deployment
+      - name: Publicar GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
