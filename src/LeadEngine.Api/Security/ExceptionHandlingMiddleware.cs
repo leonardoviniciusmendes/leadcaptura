@@ -1,3 +1,4 @@
+using LeadEngine.Application.Common;
 using System.Text.Json;
 
 namespace LeadEngine.Api.Security;
@@ -19,6 +20,12 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Ex
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             await WriteAsync(context, "not_found", ex.Message);
+        }
+        catch (CampaignGenerationException ex)
+        {
+            logger.LogWarning(ex, "Campaign generation failed for {Path}", context.Request.Path);
+            context.Response.StatusCode = StatusCodes.Status502BadGateway;
+            await WriteAsync(context, "campaign_generation_failed", ex.Message);
         }
         catch (Exception ex)
         {

@@ -7,7 +7,7 @@ namespace LeadEngine.Application.Services;
 
 public sealed class FakeCampaignGenerationService : ICampaignGenerationService
 {
-    public CampaignGenerationResult Generate(GerarCampanhaRequest briefing)
+    public Task<CampaignGenerationResult> GenerateAsync(GerarCampanhaRequest briefing, CancellationToken cancellationToken)
     {
         var operadora = CampanhaValidator.OperadoraEfetiva(briefing);
         var publico = PublicoLabel(briefing.TipoPublico);
@@ -35,13 +35,28 @@ public sealed class FakeCampaignGenerationService : ICampaignGenerationService
             ? $"plano-{publico}-{operadora}-{local}"
             : $"plano-{publico}-{local}";
 
-        return new CampaignGenerationResult(
+        var result = new CampaignGenerationResult(
             nome,
             titulo,
             subtitulo,
             "Solicitar cotação pelo WhatsApp",
             mensagem,
-            CampanhaText.Slugify(slugParts));
+            CampanhaText.Slugify(slugParts),
+            ["Atendimento consultivo", "Cotação conforme perfil", "Comparação por região"],
+            [
+                new FaqItem("O valor é fixo?", "Não. Os preços variam por idade, região e tipo de contratação."),
+                new FaqItem("A rede é garantida?", "Não. Rede e cobertura dependem do plano escolhido."),
+                new FaqItem("Existe carência?", "A carência depende das condições da operadora e do contrato.")
+            ],
+            [$"plano de saúde {local}", $"cotação plano {publico.ToLowerInvariant()}", $"plano {operadora}"],
+            ["emprego", "salário", "concurso", "segunda via", "boleto", "login"],
+            ["Plano de saúde", $"Cotação em {local}", "Atendimento rápido", "Compare opções", "Fale no WhatsApp", "Plano por perfil", "Consultoria local", "Solicite cotação"],
+            ["Receba atendimento para comparar opções conforme seu perfil.", "Informe seus dados e fale com uma consultoria especializada.", "Cotação orientada para planos de saúde na sua região."],
+            "Fake",
+            "fake-deterministic",
+            0);
+
+        return Task.FromResult(result);
     }
 
     private static string PublicoLabel(TipoPublicoCampanha tipo)

@@ -1,4 +1,6 @@
 using LeadEngine.Application.Interfaces;
+using LeadEngine.Application.Services;
+using LeadEngine.Infrastructure.CampaignGeneration;
 using LeadEngine.Infrastructure.Integrations;
 using LeadEngine.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +21,33 @@ public static class DependencyInjection
 
         services.AddScoped<ILeadRepository, LeadRepository>();
         services.AddScoped<ICampanhaRepository, CampanhaRepository>();
+        services.AddScoped<CampaignPromptBuilder>();
+        services.AddScoped<CampaignGenerationResponseParser>();
+        services.AddScoped<FakeCampaignGenerationService>();
+        services.AddScoped<OpenRouterCampaignGenerationService>();
+        services.AddScoped<ICampaignGenerationService, ConfiguredCampaignGenerationService>();
+        services.Configure<CampaignGenerationOptions>(configuration.GetSection("CampaignGeneration"));
+        services.Configure<OpenRouterOptions>(options =>
+        {
+            configuration.GetSection("OpenRouter").Bind(options);
+            var apiKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
+            var model = Environment.GetEnvironmentVariable("OPENROUTER_MODEL");
+            if (!string.IsNullOrWhiteSpace(apiKey))
+            {
+                options.ApiKey = apiKey;
+            }
+
+            if (!string.IsNullOrWhiteSpace(model))
+            {
+                options.Model = model;
+            }
+        });
+        services.AddHttpClient("openrouter", (provider, client) =>
+        {
+            var config = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<OpenRouterOptions>>().Value;
+            client.BaseAddress = new Uri(config.BaseUrl.TrimEnd('/') + "/");
+            client.Timeout = Timeout.InfiniteTimeSpan;
+        });
         services.Configure<IntegracaoLeadsOptions>(configuration.GetSection("IntegracaoLeads"));
         services.AddHttpClient<IIntegracaoLeadService, IntegracaoLeadService>((provider, client) =>
         {

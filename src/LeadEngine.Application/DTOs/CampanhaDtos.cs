@@ -38,5 +38,18 @@ public sealed record CampanhaResponse(
     string TextoBotao,
     string MensagemWhatsApp,
     string Slug,
+    IReadOnlyList<string> Beneficios,
+    IReadOnlyList<FaqResponse> PerguntasFrequentes,
+    IReadOnlyList<string> PalavrasChave,
+    IReadOnlyList<string> PalavrasChaveNegativas,
+    IReadOnlyList<string> TitulosAnuncios,
+    IReadOnlyList<string> DescricoesAnuncios,
+    string? ErroGeracao,
+    string? ProviderIa,
+    string? ModeloIa,
+    DateTime? DataGeracao,
+    long? DuracaoGeracaoMs,
     DateTime DataCriacao,
     DateTime? DataAtualizacao);
+
+public sealed record FaqResponse(string Pergunta, string Resposta);

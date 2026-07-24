@@ -263,6 +263,62 @@ tbody tr.selected {
   padding: 16px;
 }
 
+.detail-section {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.detail-section h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 1rem;
+}
+
+.detail-section ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.detail-section details {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.detail-section summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.detail-section p {
+  margin: 8px 0 0;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.two-cols {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips span {
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #334155;
+  padding: 5px 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 dl {
   display: grid;
   gap: 10px;
@@ -291,7 +347,8 @@ dd {
   }
 
   .form-grid,
-  .grid-layout {
+  .grid-layout,
+  .two-cols {
     grid-template-columns: 1fr;
   }
 

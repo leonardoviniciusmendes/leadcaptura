@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\LeadEngine.Application\LeadEngine.Application.csproj" />
+    <ProjectReference Include="..\..\src\LeadEngine.Infrastructure\LeadEngine.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

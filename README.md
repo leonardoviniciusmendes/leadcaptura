@@ -2,7 +2,7 @@
 
 Assistente para gerar campanhas de Google Ads para planos de saúde sem exigir conhecimento técnico de mídia paga.
 
-Nesta etapa, o usuário informa apenas:
+O usuário informa:
 
 - público;
 - cidade;
@@ -12,7 +12,7 @@ Nesta etapa, o usuário informa apenas:
 - orçamento diário;
 - objetivo ou observação, opcional.
 
-O sistema gera uma campanha simulada, salva no MySQL e exibe o resultado no painel. Ainda não há integração real com OpenRouter nem Google Ads.
+O sistema gera a campanha, salva no MySQL e exibe o resultado no painel. A geração pode usar o provider `Fake` para desenvolvimento/testes ou `OpenRouter` para IA real.
 
 ## Fora do escopo atual
 
@@ -26,7 +26,6 @@ Não implementar nesta fase:
 - CRM;
 - propostas;
 - contratos;
-- OpenRouter real;
 - Google Ads real;
 - landing pública;
 - leads;
@@ -39,9 +38,9 @@ Os módulos antigos de captura de leads ainda existem no código, mas não são 
 ```text
 src/
   LeadEngine.Api             Controllers, Swagger, middlewares, CORS e health check
-  LeadEngine.Application     DTOs, validações, interfaces e casos de uso
+  LeadEngine.Application     DTOs, validações, interfaces, prompt, parser e casos de uso
   LeadEngine.Domain          Entidades e enums de domínio
-  LeadEngine.Infrastructure  EF Core, MySQL, repositories, migrations e integrações
+  LeadEngine.Infrastructure  EF Core, MySQL, repositories, OpenRouter, migrations e integrações
   LeadEngine.Web             Vue 3, TypeScript e telas do painel
 tests/
   LeadEngine.Application.Tests
@@ -53,7 +52,8 @@ Mais detalhes em `docs/architecture.md`.
 
 ```text
 Briefing simples
--> FakeCampaignGenerationService
+-> ICampaignGenerationService
+-> FakeCampaignGenerationService ou OpenRouterCampaignGenerationService
 -> Campanha persistida no MySQL
 -> Consulta por API
 -> Exibição no frontend
@@ -68,7 +68,13 @@ GET  /api/campanhas/{id}
 PUT  /api/campanhas/{id}/revisao
 ```
 
-Exemplo de briefing:
+Endpoint disponível somente em Development:
+
+```http
+POST /api/desenvolvimento/openrouter/testar
+```
+
+## Exemplo de requisição
 
 ```json
 {
@@ -83,21 +89,90 @@ Exemplo de briefing:
 }
 ```
 
-## Configuração
+## Exemplo de resposta
 
-Principais variáveis:
-
-```text
-ConnectionStrings__DefaultConnection
-Cors__AllowedOrigins__0
-VITE_API_BASE_URL
+```json
+{
+  "id": "00000000-0000-0000-0000-000000000000",
+  "nome": "Plano Familiar Amil - Barra da Tijuca",
+  "tipoPublico": "Familia",
+  "cidade": "Rio de Janeiro",
+  "estado": "RJ",
+  "regiao": "Barra da Tijuca",
+  "operadora": "Amil",
+  "orcamentoDiario": 20,
+  "status": "Gerada",
+  "tituloLandingPage": "Plano de Saúde Familiar em Barra da Tijuca",
+  "subtituloLandingPage": "Compare opções para seu perfil com atendimento personalizado.",
+  "textoBotao": "Solicitar cotação pelo WhatsApp",
+  "mensagemWhatsApp": "Olá, gostaria de uma cotação de plano de saúde familiar em Barra da Tijuca.",
+  "slug": "plano-familiar-amil-barra-da-tijuca",
+  "beneficios": ["Atendimento consultivo", "Cotação conforme perfil"],
+  "perguntasFrequentes": [
+    {
+      "pergunta": "O valor é fixo?",
+      "resposta": "Não. Os preços variam por idade, região e tipo de contratação."
+    }
+  ],
+  "palavrasChave": ["plano de saúde familiar"],
+  "palavrasChaveNegativas": ["emprego", "boleto"],
+  "titulosAnuncios": ["Plano de saúde"],
+  "descricoesAnuncios": ["Receba atendimento para comparar opções conforme seu perfil."],
+  "providerIa": "OpenRouter",
+  "modeloIa": "openai/gpt-4o-mini",
+  "duracaoGeracaoMs": 1200
+}
 ```
 
-O OpenRouter será configurado em etapa futura pelo `appsettings`.
+## Configuração
+
+Provider padrão:
+
+```json
+{
+  "CampaignGeneration": {
+    "Provider": "Fake",
+    "FallbackToFake": false
+  }
+}
+```
+
+Valores suportados:
+
+```text
+Fake
+OpenRouter
+```
+
+OpenRouter:
+
+```json
+{
+  "OpenRouter": {
+    "BaseUrl": "https://openrouter.ai/api/v1",
+    "ApiKey": "",
+    "Model": "",
+    "TimeoutSeconds": 60,
+    "MaxRetries": 2,
+    "Temperature": 0.3
+  }
+}
+```
+
+Prefira variáveis de ambiente:
+
+```text
+CAMPAIGN_GENERATION_PROVIDER=OpenRouter
+CAMPAIGN_GENERATION_FALLBACK_TO_FAKE=false
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=
+```
+
+Nunca coloque chave real no repositório.
 
 ## Executar com Docker
 
-Crie um `.env` local a partir de `.env.example` e ajuste as senhas reais. O `.env` não deve ser commitado.
+Crie um `.env` local a partir de `.env.example` e ajuste as senhas/chaves reais. O `.env` não deve ser commitado.
 
 ```bash
 copy .env.example .env
@@ -149,10 +224,11 @@ npm run build
 
 ## Migrations
 
-Migration criada nesta etapa:
+Migrations criadas:
 
 ```text
 20260724151255_AddCampanhas
+20260724173721_AddCampaignGenerationDetails
 ```
 
 Criar nova migration:
@@ -163,7 +239,7 @@ dotnet ef migrations add NomeDaMigration --project src/LeadEngine.Infrastructure
 
 ## Próximas etapas
 
-- Integrar `ICampaignGenerationService` com OpenRouter.
+- Testar OpenRouter em ambiente real com chave e modelo configurados.
+- Evoluir a revisão visual da campanha.
 - Separar entidades de grupo de anúncio, palavras-chave, anúncios e landing page quando houver necessidade real.
-- Adicionar revisão visual mais completa da campanha.
 - Preparar exportação ou publicação futura para Google Ads.

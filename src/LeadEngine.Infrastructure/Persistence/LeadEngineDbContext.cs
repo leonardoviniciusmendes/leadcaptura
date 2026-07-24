@@ -32,6 +32,15 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
             entity.Property(x => x.TextoBotao).HasMaxLength(80).IsRequired();
             entity.Property(x => x.MensagemWhatsApp).HasMaxLength(500).IsRequired();
             entity.Property(x => x.Slug).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.BeneficiosJson).HasColumnType("json");
+            entity.Property(x => x.PerguntasFrequentesJson).HasColumnType("json");
+            entity.Property(x => x.PalavrasChaveJson).HasColumnType("json");
+            entity.Property(x => x.PalavrasChaveNegativasJson).HasColumnType("json");
+            entity.Property(x => x.TitulosAnunciosJson).HasColumnType("json");
+            entity.Property(x => x.DescricoesAnunciosJson).HasColumnType("json");
+            entity.Property(x => x.ErroGeracao).HasMaxLength(500);
+            entity.Property(x => x.ProviderIa).HasMaxLength(40);
+            entity.Property(x => x.ModeloIa).HasMaxLength(120);
             entity.HasIndex(x => x.Slug).IsUnique();
             entity.HasIndex(x => x.DataCriacao);
             entity.HasIndex(x => x.Status);

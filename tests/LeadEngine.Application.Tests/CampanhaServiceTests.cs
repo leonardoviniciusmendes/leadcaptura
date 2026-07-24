@@ -1,5 +1,6 @@
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
+using LeadEngine.Application.Common;
 using LeadEngine.Application.Services;
 using LeadEngine.Domain.Entities;
 using LeadEngine.Domain.Enums;
@@ -9,21 +10,21 @@ namespace LeadEngine.Application.Tests;
 public sealed class CampanhaServiceTests
 {
     [Fact]
-    public void FakeGeneration_GeraNomeDaCampanha()
+    public async Task FakeGeneration_GeraNomeDaCampanha()
     {
         var service = new FakeCampaignGenerationService();
 
-        var result = service.Generate(BriefingPadrao());
+        var result = await service.GenerateAsync(BriefingPadrao(), CancellationToken.None);
 
         Assert.Equal("Plano Familiar Amil - Barra da Tijuca", result.Nome);
     }
 
     [Fact]
-    public void FakeGeneration_GeraSlugDaCampanha()
+    public async Task FakeGeneration_GeraSlugDaCampanha()
     {
         var service = new FakeCampaignGenerationService();
 
-        var result = service.Generate(BriefingPadrao());
+        var result = await service.GenerateAsync(BriefingPadrao(), CancellationToken.None);
 
         Assert.Equal("plano-familiar-amil-barra-da-tijuca", result.Slug);
     }
@@ -98,12 +99,38 @@ public sealed class CampanhaServiceTests
         Assert.Equal("plano-familiar-amil-barra-da-tijuca-2", segunda.Slug);
     }
 
+    [Fact]
+    public async Task GerarCampanha_StatusErroQuandoProviderFalha()
+    {
+        var repository = new InMemoryCampanhaRepository();
+        var service = new CampanhaService(repository, new FailingGenerationService());
+
+        await Assert.ThrowsAsync<CampaignGenerationException>(() => service.GerarCampanhaAsync(BriefingPadrao(), CancellationToken.None));
+
+        var campanha = Assert.Single(repository.Campanhas);
+        Assert.Equal(StatusCampanha.Erro, campanha.Status);
+        Assert.NotNull(campanha.ErroGeracao);
+    }
+
+    [Fact]
+    public async Task GerarCampanha_NaoPersisteConteudoParcialQuandoProviderFalha()
+    {
+        var repository = new InMemoryCampanhaRepository();
+        var service = new CampanhaService(repository, new FailingGenerationService());
+
+        await Assert.ThrowsAsync<CampaignGenerationException>(() => service.GerarCampanhaAsync(BriefingPadrao(), CancellationToken.None));
+
+        var campanha = Assert.Single(repository.Campanhas);
+        Assert.Equal(string.Empty, campanha.TituloLandingPage);
+        Assert.Equal(string.Empty, campanha.MensagemWhatsApp);
+    }
+
     private static CampanhaService Service(InMemoryCampanhaRepository? repository = null)
     {
         return new CampanhaService(repository ?? new InMemoryCampanhaRepository(), new FakeCampaignGenerationService());
     }
 
-    private static GerarCampanhaRequest BriefingPadrao()
+    public static GerarCampanhaRequest BriefingPadrao()
     {
         return new GerarCampanhaRequest(
             TipoPublicoCampanha.Familia,
@@ -114,6 +141,14 @@ public sealed class CampanhaServiceTests
             null,
             20,
             null);
+    }
+
+    private sealed class FailingGenerationService : ICampaignGenerationService
+    {
+        public Task<CampaignGenerationResult> GenerateAsync(GerarCampanhaRequest briefing, CancellationToken cancellationToken)
+        {
+            throw new CampaignGenerationException("Falha simulada.");
+        }
     }
 
     private sealed class InMemoryCampanhaRepository : ICampanhaRepository

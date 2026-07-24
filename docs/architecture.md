@@ -11,10 +11,10 @@ LeadEngine.Domain
   Entidades e enums sem dependências externas.
 
 LeadEngine.Application
-  Casos de uso, DTOs, validações, interfaces e abstrações.
+  Casos de uso, DTOs, validações, prompt builder, parser e abstrações.
 
 LeadEngine.Infrastructure
-  Entity Framework Core, MySQL, repositories e migrations.
+  Entity Framework Core, MySQL, repositories, OpenRouter e migrations.
 
 LeadEngine.Api
   Controllers HTTP, middlewares, CORS, Swagger e composição de dependências.
@@ -29,7 +29,10 @@ LeadEngine.Web
 NovaCampanhaView
 -> POST /api/campanhas/gerar
 -> CampanhaService.GerarCampanhaAsync
--> FakeCampaignGenerationService
+-> ICampaignGenerationService
+-> ConfiguredCampaignGenerationService
+-> FakeCampaignGenerationService ou OpenRouterCampaignGenerationService
+-> CampaignGenerationResponseParser
 -> CampanhaRepository
 -> MySQL
 -> CampanhasView
@@ -47,26 +50,37 @@ Campos mantidos dentro de `Campanha` nesta etapa:
 
 - briefing;
 - conteúdo gerado;
+- benefícios;
+- FAQ;
+- palavras-chave;
+- palavras negativas;
+- títulos e descrições de anúncios;
 - slug;
 - status;
-- datas de criação e atualização.
+- provider/modelo da IA;
+- erro de geração;
+- duração e data da geração.
 
-Entidades como `GrupoAnuncio`, `PalavraChave`, `Anuncio` e `LandingPage` ainda não foram criadas porque o fluxo atual não precisa delas.
+Entidades como `GrupoAnuncio`, `PalavraChave`, `Anuncio` e `LandingPage` ainda não foram criadas porque o fluxo atual não precisa delas como agregados separados.
 
 ## Decisões
 
 - CQRS foi aplicado de forma leve por métodos de caso de uso, sem MediatR.
 - Repository Pattern foi mantido com `ICampanhaRepository`.
 - A geração usa `ICampaignGenerationService`.
-- A implementação atual é `FakeCampaignGenerationService`, determinística e sem IA.
-- OpenRouter e Google Ads não foram integrados nesta etapa.
+- `FakeCampaignGenerationService` continua disponível para desenvolvimento e testes.
+- `OpenRouterCampaignGenerationService` usa HTTP simples com `IHttpClientFactory`, sem SDK externo.
+- `CampaignGenerationResponseParser` valida e normaliza a resposta da IA antes da persistência final.
+- O slug retornado pela IA nunca é confiado diretamente; ele é recriado com `CampanhaText.Slugify`.
+- Fallback para Fake só ocorre quando `CampaignGeneration:FallbackToFake` está explicitamente `true`.
+- Google Ads ainda não foi integrado.
 - O módulo antigo de leads permanece no código, mas não é o fluxo principal do produto.
 
 ## Persistência
 
 EF Core com MySQL.
 
-Tabela criada:
+Tabela principal:
 
 ```text
 Campanhas
@@ -77,4 +91,29 @@ Regras relevantes:
 - `OrcamentoDiario` com precisão `decimal(10,2)`;
 - índice único para `Slug`;
 - índice por `DataCriacao`;
-- índice por `Status`.
+- índice por `Status`;
+- listas geradas armazenadas em colunas JSON dentro de `Campanha`.
+
+## OpenRouter
+
+O provider `OpenRouter` chama:
+
+```http
+POST /api/v1/chat/completions
+```
+
+Com:
+
+- `Authorization: Bearer {ApiKey}`;
+- `Content-Type: application/json`;
+- `HTTP-Referer`;
+- `X-Title`;
+- `response_format: { "type": "json_object" }`.
+
+Resiliência implementada:
+
+- timeout configurável;
+- retry para 408, 429 e HTTP 5xx;
+- sem retry para erros 4xx não transitórios;
+- logs sem expor chave;
+- erro controlado pela API.

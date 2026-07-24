@@ -63,7 +63,45 @@
           <dd>{{ selected.mensagemWhatsApp }}</dd>
           <dt>Slug</dt>
           <dd>{{ selected.slug }}</dd>
+          <dt>Provider</dt>
+          <dd>{{ selected.providerIa || '-' }} <span v-if="selected.modeloIa">/ {{ selected.modeloIa }}</span></dd>
+          <dt>Status da geração</dt>
+          <dd>{{ selected.erroGeracao || generationStatus(selected) }}</dd>
         </dl>
+
+        <section class="detail-section" v-if="selected.beneficios.length">
+          <h3>Benefícios</h3>
+          <ul><li v-for="item in selected.beneficios" :key="item">{{ item }}</li></ul>
+        </section>
+
+        <section class="detail-section" v-if="selected.perguntasFrequentes.length">
+          <h3>FAQ</h3>
+          <details v-for="item in selected.perguntasFrequentes" :key="item.pergunta">
+            <summary>{{ item.pergunta }}</summary>
+            <p>{{ item.resposta }}</p>
+          </details>
+        </section>
+
+        <section class="detail-section two-cols">
+          <div v-if="selected.palavrasChave.length">
+            <h3>Palavras-chave</h3>
+            <ul><li v-for="item in selected.palavrasChave" :key="item">{{ item }}</li></ul>
+          </div>
+          <div v-if="selected.palavrasChaveNegativas.length">
+            <h3>Negativas</h3>
+            <ul><li v-for="item in selected.palavrasChaveNegativas" :key="item">{{ item }}</li></ul>
+          </div>
+        </section>
+
+        <section class="detail-section" v-if="selected.titulosAnuncios.length">
+          <h3>Títulos</h3>
+          <div class="chips"><span v-for="item in selected.titulosAnuncios" :key="item">{{ item }}</span></div>
+        </section>
+
+        <section class="detail-section" v-if="selected.descricoesAnuncios.length">
+          <h3>Descrições</h3>
+          <ul><li v-for="item in selected.descricoesAnuncios" :key="item">{{ item }}</li></ul>
+        </section>
       </aside>
     </section>
   </main>
@@ -132,5 +170,10 @@ function labelPublico(value: TipoPublicoCampanha) {
     Empresa: 'Empresa'
   };
   return labels[value];
+}
+
+function generationStatus(campanha: Campanha) {
+  if (!campanha.dataGeracao) return 'Geração ainda não concluída.';
+  return campanha.duracaoGeracaoMs ? `Gerada em ${campanha.duracaoGeracaoMs} ms.` : 'Gerada com sucesso.';
 }
 </script>

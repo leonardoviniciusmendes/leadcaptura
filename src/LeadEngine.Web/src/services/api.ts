@@ -46,6 +46,17 @@ export interface Campanha {
   textoBotao: string;
   mensagemWhatsApp: string;
   slug: string;
+  beneficios: string[];
+  perguntasFrequentes: Array<{ pergunta: string; resposta: string }>;
+  palavrasChave: string[];
+  palavrasChaveNegativas: string[];
+  titulosAnuncios: string[];
+  descricoesAnuncios: string[];
+  erroGeracao?: string;
+  providerIa?: string;
+  modeloIa?: string;
+  dataGeracao?: string;
+  duracaoGeracaoMs?: number;
   dataCriacao: string;
   dataAtualizacao?: string;
 }
