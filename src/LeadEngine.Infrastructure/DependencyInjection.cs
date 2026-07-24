@@ -18,6 +18,7 @@ public static class DependencyInjection
             options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 36))));
 
         services.AddScoped<ILeadRepository, LeadRepository>();
+        services.AddScoped<ICampanhaRepository, CampanhaRepository>();
         services.Configure<IntegracaoLeadsOptions>(configuration.GetSection("IntegracaoLeads"));
         services.AddHttpClient<IIntegracaoLeadService, IntegracaoLeadService>((provider, client) =>
         {

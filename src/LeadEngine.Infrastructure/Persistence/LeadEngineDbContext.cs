@@ -6,6 +6,7 @@ namespace LeadEngine.Infrastructure.Persistence;
 
 public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> options) : DbContext(options)
 {
+    public DbSet<Campanha> Campanhas => Set<Campanha>();
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<OrigemLead> OrigensLead => Set<OrigemLead>();
     public DbSet<TentativaCapturaLead> TentativasCapturaLead => Set<TentativaCapturaLead>();
@@ -13,6 +14,29 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Campanha>(entity =>
+        {
+            entity.ToTable("Campanhas");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Nome).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.TipoPublico).HasConversion<int>();
+            entity.Property(x => x.Cidade).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Estado).HasMaxLength(2).IsRequired();
+            entity.Property(x => x.Regiao).HasMaxLength(120);
+            entity.Property(x => x.Operadora).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.OrcamentoDiario).HasPrecision(10, 2);
+            entity.Property(x => x.Objetivo).HasMaxLength(500);
+            entity.Property(x => x.Status).HasConversion<int>();
+            entity.Property(x => x.TituloLandingPage).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.SubtituloLandingPage).HasMaxLength(300).IsRequired();
+            entity.Property(x => x.TextoBotao).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.MensagemWhatsApp).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.Slug).HasMaxLength(180).IsRequired();
+            entity.HasIndex(x => x.Slug).IsUnique();
+            entity.HasIndex(x => x.DataCriacao);
+            entity.HasIndex(x => x.Status);
+        });
+
         modelBuilder.Entity<Lead>(entity =>
         {
             entity.ToTable("Leads");
