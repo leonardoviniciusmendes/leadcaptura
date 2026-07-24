@@ -17,11 +17,22 @@ public sealed class LeadRepository(LeadEngineDbContext context) : ILeadRepositor
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    public Task<Lead?> ObterDuplicadoRecenteAsync(Guid campanhaId, string telefoneNormalizado, DateTime criadoApos, CancellationToken cancellationToken)
+    {
+        return context.Leads
+            .Include(x => x.Origem)
+            .Include(x => x.Campanha)
+            .Where(x => x.CampanhaId == campanhaId && x.WhatsAppNormalizado == telefoneNormalizado && x.CriadoEm >= criadoApos)
+            .OrderByDescending(x => x.CriadoEm)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public Task<Lead?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken)
     {
         return context.Leads
             .Include(x => x.Origem)
             .Include(x => x.LogsIntegracao)
+            .Include(x => x.Campanha)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
@@ -29,7 +40,12 @@ public sealed class LeadRepository(LeadEngineDbContext context) : ILeadRepositor
     {
         var pagina = Math.Max(query.Pagina, 1);
         var tamanhoPagina = Math.Clamp(query.TamanhoPagina, 1, 100);
-        var leads = context.Leads.Include(x => x.Origem).AsQueryable();
+        var leads = context.Leads.Include(x => x.Origem).Include(x => x.Campanha).AsQueryable();
+
+        if (query.CampanhaId is not null)
+        {
+            leads = leads.Where(x => x.CampanhaId == query.CampanhaId.Value);
+        }
 
         if (query.DataInicial is not null)
         {
@@ -53,7 +69,7 @@ public sealed class LeadRepository(LeadEngineDbContext context) : ILeadRepositor
 
         if (!string.IsNullOrWhiteSpace(query.Campanha))
         {
-            leads = leads.Where(x => x.Origem.UtmCampaign == query.Campanha);
+            leads = leads.Where(x => x.Campanha != null && x.Campanha.Nome.Contains(query.Campanha));
         }
 
         if (!string.IsNullOrWhiteSpace(query.LandingPage))
@@ -67,6 +83,16 @@ public sealed class LeadRepository(LeadEngineDbContext context) : ILeadRepositor
             leads = leads.Where(x => x.WhatsAppNormalizado == whatsapp);
         }
 
+        if (query.TipoContratacao is not null)
+        {
+            leads = leads.Where(x => x.TipoContratacao == query.TipoContratacao.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Origem))
+        {
+            leads = leads.Where(x => x.OrigemCaptura == query.Origem);
+        }
+
         var total = await leads.CountAsync(cancellationToken);
         var itens = await leads
             .OrderByDescending(x => x.CriadoEm)
@@ -75,6 +101,12 @@ public sealed class LeadRepository(LeadEngineDbContext context) : ILeadRepositor
             .ToArrayAsync(cancellationToken);
 
         return new PagedResult<Lead>(itens, total, pagina, tamanhoPagina);
+    }
+
+    public async Task<IReadOnlyList<Lead>> ListarPorCampanhaAsync(Guid campanhaId, LeadQuery query, CancellationToken cancellationToken)
+    {
+        var result = await ListarAsync(query with { CampanhaId = campanhaId, Pagina = 1, TamanhoPagina = 100 }, cancellationToken);
+        return result.Itens.ToArray();
     }
 
     public Task AdicionarAsync(Lead lead, CancellationToken cancellationToken)

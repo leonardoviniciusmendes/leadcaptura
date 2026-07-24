@@ -29,11 +29,13 @@ public sealed class LeadsController(
         [FromQuery] string? campanha,
         [FromQuery] string? landingPage,
         [FromQuery] string? whatsApp,
+        [FromQuery] TipoContratacaoLead? tipoContratacao,
+        [FromQuery] string? origem,
         [FromQuery] int pagina = 1,
         [FromQuery] int tamanhoPagina = 20,
         CancellationToken cancellationToken = default)
     {
-        var query = new LeadQuery(dataInicial, dataFinal, tipo, status, campanha, landingPage, whatsApp, pagina, tamanhoPagina);
+        var query = new LeadQuery(null, dataInicial, dataFinal, tipo, status, campanha, landingPage, whatsApp, tipoContratacao, origem, pagina, tamanhoPagina);
         return Ok(await consultaService.ListarAsync(query, cancellationToken));
     }
 

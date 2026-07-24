@@ -9,6 +9,9 @@
       <div class="actions header-actions">
         <RouterLink class="button secondary" to="/campanhas">Voltar</RouterLink>
         <button class="button secondary" :disabled="busy" @click="loadHistorico">Historico</button>
+        <button class="button secondary" :disabled="busy || !campanha?.publicada" @click="copyPublicUrl">Copiar URL publica</button>
+        <button v-if="!campanha?.publicada" class="button secondary" :disabled="busy || !campanha" @click="publicar">{{ publishing ? 'Publicando...' : 'Publicar landing' }}</button>
+        <button v-else class="button secondary" :disabled="busy || !campanha" @click="despublicar">{{ publishing ? 'Despublicando...' : 'Despublicar' }}</button>
         <button class="button" :disabled="busy || !campanha" @click="aprovar">{{ approving ? 'Aprovando...' : 'Aprovar campanha' }}</button>
       </div>
     </section>
@@ -25,6 +28,9 @@
           <dt>Operadora</dt><dd>{{ campanha.operadora }}</dd>
           <dt>Orcamento</dt><dd>{{ money(campanha.orcamentoDiario) }}</dd>
           <dt>Slug</dt><dd>{{ campanha.slug }}</dd>
+          <dt>Publicacao</dt><dd>{{ campanha.publicada ? 'Publicada' : 'Despublicada' }}</dd>
+          <dt>Data publicacao</dt><dd>{{ campanha.dataPublicacao ? dateTime(campanha.dataPublicacao) : '-' }}</dd>
+          <dt>URL publica</dt><dd>{{ publicUrl }}</dd>
         </dl>
       </ReviewBlock>
 
@@ -32,6 +38,12 @@
         <label>Titulo<input v-model="form.tituloLandingPage" maxlength="180" /></label>
         <label>Subtitulo<textarea v-model="form.subtituloLandingPage" maxlength="300" rows="3" /></label>
         <label>Texto do botao<input v-model="form.textoBotao" maxlength="80" /></label>
+        <section class="landing-preview">
+          <p class="eyebrow">Preview</p>
+          <h2>{{ form.tituloLandingPage || 'Titulo da landing' }}</h2>
+          <p>{{ form.subtituloLandingPage || 'Subtitulo da landing' }}</p>
+          <span class="button preview-button">{{ form.textoBotao || 'CTA' }}</span>
+        </section>
       </ReviewBlock>
 
       <ReviewBlock title="Beneficios" secao="Beneficios" :dirty="dirty" :busy="busy" @save="save" @cancel="reset" @regenerate="startRegeneration('Beneficios')">
@@ -120,10 +132,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import { confirmAction, showToast } from '../components/uiEvents';
 import {
   aprovarCampanha,
+  despublicarCampanha,
   listarHistoricoRevisoes,
   obterRevisaoCampanha,
+  publicarCampanha,
   regenerarCampanhaSecao,
   revisarCampanha,
   type Campanha,
@@ -139,6 +154,7 @@ const loading = ref(false);
 const saving = ref(false);
 const regenerating = ref(false);
 const approving = ref(false);
+const publishing = ref(false);
 const error = ref('');
 const saved = ref(false);
 const regeneratingSection = ref<CampanhaSecao | null>(null);
@@ -160,9 +176,10 @@ const form = reactive<RevisarCampanhaRequest>({
   descricoesAnuncios: []
 });
 
-const busy = computed(() => loading.value || saving.value || regenerating.value || approving.value);
+const busy = computed(() => loading.value || saving.value || regenerating.value || approving.value || publishing.value);
 const dirty = computed(() => JSON.stringify(form) !== baseline.value);
 const localizacao = computed(() => campanha.value ? [campanha.value.regiao, campanha.value.cidade, campanha.value.estado].filter(Boolean).join(' / ') : '');
+const publicUrl = computed(() => campanha.value ? `${window.location.origin}/lp/${campanha.value.slug}` : '');
 
 onMounted(load);
 
@@ -188,8 +205,10 @@ async function save() {
     campanha.value = await revisarCampanha(campanha.value.id, payload());
     hydrate(campanha.value);
     saved.value = true;
+    showToast({ type: 'success', title: 'Revisao salva', message: 'A campanha voltou para Gerada quando necessario.' });
   } catch (err: unknown) {
     error.value = message(err, 'Nao foi possivel salvar a revisao.');
+    showToast({ type: 'error', title: 'Erro ao salvar', message: error.value });
   } finally {
     saving.value = false;
   }
@@ -206,7 +225,12 @@ function startRegeneration(secao: CampanhaSecao) {
 
 async function regenerate() {
   if (!campanha.value || !regeneratingSection.value) return;
-  if (!confirm('Substituir esta secao pelo conteudo regenerado?')) return;
+  const confirmed = await confirmAction({
+    title: 'Substituir secao',
+    message: 'O conteudo atual desta secao sera substituido pela resposta da IA.',
+    confirmLabel: 'Substituir'
+  });
+  if (!confirmed) return;
   regenerating.value = true;
   error.value = '';
   try {
@@ -214,8 +238,10 @@ async function regenerate() {
     hydrate(campanha.value);
     regeneratingSection.value = null;
     saved.value = true;
+    showToast({ type: 'success', title: 'Secao regenerada', message: 'Revise o conteudo antes de publicar.' });
   } catch (err: unknown) {
     error.value = message(err, 'Nao foi possivel regenerar a secao.');
+    showToast({ type: 'error', title: 'Erro na regeneracao', message: error.value });
   } finally {
     regenerating.value = false;
   }
@@ -223,18 +249,83 @@ async function regenerate() {
 
 async function aprovar() {
   if (!campanha.value) return;
-  if (dirty.value && !confirm('Existem alteracoes nao salvas. Aprovar mesmo assim usando a ultima versao salva?')) return;
+  if (dirty.value) {
+    const confirmed = await confirmAction({
+      title: 'Aprovar campanha',
+      message: 'Existem alteracoes nao salvas. A aprovacao usara a ultima versao salva.',
+      confirmLabel: 'Aprovar'
+    });
+    if (!confirmed) return;
+  }
   approving.value = true;
   error.value = '';
   try {
     campanha.value = await aprovarCampanha(campanha.value.id);
     hydrate(campanha.value);
     saved.value = true;
+    showToast({ type: 'success', title: 'Campanha aprovada', message: 'Status alterado para Revisada.' });
   } catch (err: unknown) {
     error.value = message(err, 'Nao foi possivel aprovar a campanha.');
+    showToast({ type: 'error', title: 'Erro ao aprovar', message: error.value });
   } finally {
     approving.value = false;
   }
+}
+
+async function publicar() {
+  if (!campanha.value) return;
+  if (dirty.value) {
+    const confirmed = await confirmAction({
+      title: 'Publicar landing',
+      message: 'Existem alteracoes nao salvas. A publicacao usara a ultima versao salva.',
+      confirmLabel: 'Publicar'
+    });
+    if (!confirmed) return;
+  }
+  publishing.value = true;
+  error.value = '';
+  try {
+    await publicarCampanha(campanha.value.id);
+    campanha.value = await obterRevisaoCampanha(campanha.value.id);
+    hydrate(campanha.value);
+    saved.value = true;
+    showToast({ type: 'success', title: 'Landing publicada', message: publicUrl.value });
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel publicar a landing.');
+    showToast({ type: 'error', title: 'Erro ao publicar', message: error.value });
+  } finally {
+    publishing.value = false;
+  }
+}
+
+async function despublicar() {
+  if (!campanha.value) return;
+  const confirmed = await confirmAction({
+    title: 'Despublicar landing',
+    message: 'A URL publica deixara de responder para novos visitantes.',
+    confirmLabel: 'Despublicar'
+  });
+  if (!confirmed) return;
+  publishing.value = true;
+  error.value = '';
+  try {
+    await despublicarCampanha(campanha.value.id);
+    campanha.value = await obterRevisaoCampanha(campanha.value.id);
+    hydrate(campanha.value);
+    saved.value = true;
+    showToast({ type: 'info', title: 'Landing despublicada' });
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel despublicar a landing.');
+    showToast({ type: 'error', title: 'Erro ao despublicar', message: error.value });
+  } finally {
+    publishing.value = false;
+  }
+}
+
+async function copyPublicUrl() {
+  await navigator.clipboard.writeText(publicUrl.value);
+  saved.value = true;
+  showToast({ type: 'success', title: 'URL copiada', message: publicUrl.value });
 }
 
 async function loadHistorico() {

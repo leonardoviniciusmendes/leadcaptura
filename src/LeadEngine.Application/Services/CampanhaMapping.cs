@@ -36,7 +36,12 @@ public static class CampanhaMapping
             campanha.DataGeracao,
             campanha.DuracaoGeracaoMs,
             campanha.DataCriacao,
-            campanha.DataAtualizacao);
+            campanha.DataAtualizacao,
+            campanha.Publicada,
+            campanha.Ativo,
+            campanha.DataPublicacao,
+            campanha.DataDespublicacao,
+            campanha.UrlPublica);
     }
 
     private static IReadOnlyList<T> Deserialize<T>(string? json)

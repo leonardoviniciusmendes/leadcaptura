@@ -42,6 +42,9 @@ public sealed class CampaignReviewService(
         campanha.Nome = CampanhaText.Limitar(request.Nome, 180) ?? string.Empty;
         ApplyContent(campanha, conteudo);
         campanha.Status = StatusCampanha.Gerada;
+        campanha.Publicada = false;
+        campanha.Ativo = false;
+        campanha.DataDespublicacao = campanha.DataPublicacao is null ? campanha.DataDespublicacao : DateTime.UtcNow;
         campanha.DataAtualizacao = DateTime.UtcNow;
 
         await RegistrarAsync(campanha.Id, "Edicao manual", null, anterior, CampanhaContentSnapshot.From(campanha), OrigemRevisaoCampanha.Manual, null, null, null, cancellationToken);
@@ -81,6 +84,9 @@ public sealed class CampaignReviewService(
         }
 
         campanha.Status = StatusCampanha.Gerada;
+        campanha.Publicada = false;
+        campanha.Ativo = false;
+        campanha.DataDespublicacao = campanha.DataPublicacao is null ? campanha.DataDespublicacao : DateTime.UtcNow;
         campanha.DataAtualizacao = DateTime.UtcNow;
 
         await RegistrarAsync(campanha.Id, "Regeneracao parcial", result.Secao, anterior, CampanhaContentSnapshot.From(campanha), OrigemRevisaoCampanha.InteligenciaArtificial, request.InstrucaoAdicional, result.Provider, result.Modelo, cancellationToken);

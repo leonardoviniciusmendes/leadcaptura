@@ -57,7 +57,12 @@ public sealed record CampanhaResponse(
     DateTime? DataGeracao,
     long? DuracaoGeracaoMs,
     DateTime DataCriacao,
-    DateTime? DataAtualizacao);
+    DateTime? DataAtualizacao,
+    bool Publicada,
+    bool Ativo,
+    DateTime? DataPublicacao,
+    DateTime? DataDespublicacao,
+    string? UrlPublica);
 
 public sealed record FaqResponse(string Pergunta, string Resposta);
 
@@ -68,3 +73,26 @@ public sealed record CampanhaRevisaoHistoricoResponse(
     string ResumoAlteracao,
     string? Provider,
     string? Modelo);
+
+public sealed record CampanhaPublicacaoResponse(
+    Guid Id,
+    StatusCampanha Status,
+    bool Publicada,
+    bool Ativo,
+    DateTime? DataPublicacao,
+    DateTime? DataDespublicacao,
+    string? SlugPublico,
+    string? UrlPublica);
+
+public sealed record CampanhaPublicaResponse(
+    string Nome,
+    string Titulo,
+    string Subtitulo,
+    string TextoBotao,
+    IReadOnlyList<string> Beneficios,
+    IReadOnlyList<FaqResponse> PerguntasFrequentes,
+    string Operadora,
+    string Cidade,
+    string Estado,
+    TipoPublicoCampanha TipoPublico,
+    string MensagemBaseWhatsApp);

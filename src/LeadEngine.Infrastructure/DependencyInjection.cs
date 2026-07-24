@@ -29,7 +29,26 @@ public static class DependencyInjection
         services.AddScoped<OpenRouterCampaignGenerationService>();
         services.AddScoped<ICampaignSectionGenerationService, OpenRouterCampaignSectionGenerationService>();
         services.AddScoped<ICampaignGenerationService, ConfiguredCampaignGenerationService>();
+        services.AddScoped<ICampaignPublicationService, CampaignPublicationService>();
+        services.AddScoped<ILeadService, LeadService>();
+        services.AddScoped<IWhatsAppUrlBuilder, WhatsAppUrlBuilder>();
         services.Configure<CampaignGenerationOptions>(configuration.GetSection("CampaignGeneration"));
+        services.Configure<LeadCaptureOptions>(configuration.GetSection("LeadCapture"));
+        services.Configure<WhatsAppOptions>(options =>
+        {
+            configuration.GetSection("WhatsApp").Bind(options);
+            var numero = Environment.GetEnvironmentVariable("WHATSAPP_NUMERO");
+            var mensagem = Environment.GetEnvironmentVariable("WHATSAPP_MENSAGEM_PADRAO");
+            if (!string.IsNullOrWhiteSpace(numero))
+            {
+                options.Numero = numero;
+            }
+
+            if (!string.IsNullOrWhiteSpace(mensagem))
+            {
+                options.MensagemPadrao = mensagem;
+            }
+        });
         services.Configure<OpenRouterOptions>(options =>
         {
             configuration.GetSection("OpenRouter").Bind(options);

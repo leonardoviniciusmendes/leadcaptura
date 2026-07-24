@@ -70,6 +70,14 @@ PUT  /api/campanhas/{id}/revisao
 POST /api/campanhas/{id}/regenerar
 POST /api/campanhas/{id}/aprovar
 GET  /api/campanhas/{id}/historico-revisoes
+POST /api/campanhas/{id}/publicar
+POST /api/campanhas/{id}/despublicar
+GET  /api/campanhas/{id}/publicacao
+GET  /api/campanhas/{id}/leads
+GET  /api/publico/campanhas/{slug}
+POST /api/publico/campanhas/{slug}/leads
+GET  /api/leads
+GET  /api/leads/{id}
 ```
 
 Endpoint disponível somente em Development:
@@ -196,6 +204,85 @@ GET /api/campanhas/00000000-0000-0000-0000-000000000000/historico-revisoes
 
 Retorna data, seção, origem, resumo, provider e modelo. Conteúdo completo, prompts e chaves não são retornados.
 
+## Landing pública e captura de leads
+
+Somente campanhas com status `Revisada` podem ser publicadas. Ao publicar, a landing fica ativa em `/lp/{slug}`.
+
+Exemplo de URL pública:
+
+```text
+/lp/plano-familiar-amil-barra-da-tijuca
+```
+
+Exemplo de publicação:
+
+```http
+POST /api/campanhas/00000000-0000-0000-0000-000000000000/publicar
+```
+
+```json
+{
+  "status": "Revisada",
+  "publicada": true,
+  "ativo": true,
+  "slugPublico": "plano-familiar-amil-barra-da-tijuca",
+  "urlPublica": "/lp/plano-familiar-amil-barra-da-tijuca"
+}
+```
+
+Se uma campanha publicada for editada ou regenerada, ela é despublicada automaticamente, volta para `Gerada` e exige nova aprovação/publicação. Esta é a regra mais segura para o MVP.
+
+Consulta pública:
+
+```http
+GET /api/publico/campanhas/plano-familiar-amil-barra-da-tijuca
+```
+
+Captura de lead:
+
+```http
+POST /api/publico/campanhas/plano-familiar-amil-barra-da-tijuca/leads
+```
+
+```json
+{
+  "nome": "Maria Silva",
+  "telefone": "21999999999",
+  "email": "maria@email.com",
+  "cidade": "Rio de Janeiro",
+  "estado": "RJ",
+  "quantidadeVidas": 3,
+  "tipoContratacao": "Familiar",
+  "observacao": "Quero cobertura nacional.",
+  "consentimento": true,
+  "formOpenedAt": 1784910000000,
+  "utmSource": "google",
+  "utmMedium": "cpc",
+  "utmCampaign": "familia-rj",
+  "utmTerm": "plano familiar",
+  "utmContent": "anuncio-1",
+  "gclid": "valor-opcional",
+  "fbclid": null
+}
+```
+
+```json
+{
+  "leadId": "00000000-0000-0000-0000-000000000000",
+  "mensagem": "Lead registrado com sucesso.",
+  "whatsAppUrl": "https://wa.me/5511999999999?text=..."
+}
+```
+
+O endpoint público não retorna provider, modelo, duração, erro técnico, histórico ou dados administrativos. Se o mesmo telefone enviar novamente na mesma campanha dentro da janela configurada, a API retorna sucesso controlado e não cria novo lead.
+
+Proteção anti-spam do MVP:
+
+- rate limit por IP;
+- honeypot `website`;
+- tempo mínimo entre abrir e enviar o formulário;
+- User-Agent obrigatório no contexto da requisição.
+
 ## Configuração
 
 Provider padrão:
@@ -231,6 +318,23 @@ OpenRouter:
 }
 ```
 
+WhatsApp e captura pública:
+
+```json
+{
+  "WhatsApp": {
+    "Numero": "",
+    "MensagemPadrao": "Gostaria de receber uma cotacao."
+  },
+  "LeadCapture": {
+    "ConsentVersion": "1.0",
+    "MinimumFormSeconds": 2,
+    "MaxLeadsPerIpPerHour": 10,
+    "DuplicateWindowHours": 24
+  }
+}
+```
+
 Prefira variáveis de ambiente:
 
 ```text
@@ -238,6 +342,8 @@ CAMPAIGN_GENERATION_PROVIDER=OpenRouter
 CAMPAIGN_GENERATION_FALLBACK_TO_FAKE=false
 OPENROUTER_API_KEY=
 OPENROUTER_MODEL=
+WHATSAPP_NUMERO=
+WHATSAPP_MENSAGEM_PADRAO=
 ```
 
 Nunca coloque chave real no repositório.
@@ -302,6 +408,7 @@ Migrations criadas:
 20260724151255_AddCampanhas
 20260724173833_AddCampaignGenerationDetails
 20260724194341_AddCampanhaRevisoes
+20260724203700_AddLandingPublicaCapturaLeads
 ```
 
 Criar nova migration:

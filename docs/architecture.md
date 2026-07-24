@@ -52,6 +52,21 @@ CampanhaRevisaoView
 -> MySQL
 ```
 
+Fluxo de landing pública:
+
+```text
+Campanha Revisada
+-> POST /api/campanhas/{id}/publicar
+-> CampaignPublicationService
+-> /lp/{slug}
+-> GET /api/publico/campanhas/{slug}
+-> POST /api/publico/campanhas/{slug}/leads
+-> LeadService
+-> LeadRepository
+-> WhatsAppUrlBuilder
+-> redirecionamento controlado para WhatsApp
+```
+
 ## Domínio atual
 
 Entidade principal:
@@ -59,6 +74,7 @@ Entidade principal:
 ```text
 Campanha
 CampanhaRevisao
+Lead
 ```
 
 Campos mantidos dentro de `Campanha` nesta etapa:
@@ -76,6 +92,9 @@ Campos mantidos dentro de `Campanha` nesta etapa:
 - erro de geração;
 - duração e data da geração.
 - histórico de revisão em tabela separada.
+- publicação da landing na própria `Campanha`;
+- vínculo opcional de `Lead` com `Campanha`;
+- UTMs e status de envio externo preparados para integração futura.
 
 Entidades como `GrupoAnuncio`, `PalavraChave`, `Anuncio` e `LandingPage` ainda não foram criadas porque o fluxo atual não precisa delas como agregados separados.
 
@@ -96,6 +115,12 @@ Entidades como `GrupoAnuncio`, `PalavraChave`, `Anuncio` e `LandingPage` ainda n
 - Regeneração parcial chama OpenRouter apenas para a seção solicitada e aplica o resultado somente após validação da campanha completa.
 - Ao editar uma campanha já aprovada, o status volta para `Gerada`; não foi criado um status `EmRevisao` para manter a modelagem simples.
 - O histórico armazena conteúdo anterior e novo em JSON, mas a API pública de histórico retorna apenas resumo, origem, seção, provider e modelo.
+- Ao editar ou regenerar uma campanha publicada, ela é despublicada automaticamente e volta para `Gerada`.
+- A landing pública usa DTO específico e não expõe provider, modelo, duração, erro técnico, histórico ou campos administrativos.
+- A tabela `Leads` já existia; a migration da landing adiciona vínculo com campanha, campos de rastreamento, tipo de contratação e controles de envio externo.
+- A captura pública não envia para API externa nesta etapa; `StatusEnvioExterno` fica preparado como `Pendente`.
+- Duplicidade é verificada por consulta usando campanha, telefone normalizado e janela configurável, sem índice único para não bloquear casos legítimos.
+- O WhatsApp é apenas URL gerada; não há envio automático.
 
 ## Persistência
 
@@ -106,6 +131,7 @@ Tabela principal:
 ```text
 Campanhas
 CampanhasRevisoes
+Leads
 ```
 
 Regras relevantes:
@@ -118,6 +144,36 @@ Regras relevantes:
 - `CampanhasRevisoes` referencia `Campanhas` com cascade delete;
 - `ConteudoAnterior` e `ConteudoNovo` ficam em colunas JSON;
 - prompts completos, API keys e respostas completas de provider não são expostos por endpoint de histórico.
+- `Campanhas` possui `Publicada`, `Ativo`, `DataPublicacao`, `DataDespublicacao` e `UrlPublica`;
+- `Leads` possui índice em `CampanhaId` e índice composto em `CampanhaId`, `WhatsAppNormalizado`, `CriadoEm` para duplicidade por janela;
+- IP puro não é armazenado na captura pública; o contexto expõe hash.
+
+## Captura pública
+
+Proteções do MVP:
+
+- rate limit por IP no endpoint público de lead;
+- honeypot `website`;
+- tempo mínimo configurável entre renderizar o formulário e enviar;
+- User-Agent exigido quando disponível no contexto;
+- mensagens de erro controladas pelo middleware.
+
+Configurações:
+
+```json
+{
+  "WhatsApp": {
+    "Numero": "",
+    "MensagemPadrao": "Gostaria de receber uma cotacao."
+  },
+  "LeadCapture": {
+    "ConsentVersion": "1.0",
+    "MinimumFormSeconds": 2,
+    "MaxLeadsPerIpPerHour": 10,
+    "DuplicateWindowHours": 24
+  }
+}
+```
 
 ## OpenRouter
 

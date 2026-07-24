@@ -32,5 +32,11 @@ public sealed class Campanha
     public long? DuracaoGeracaoMs { get; set; }
     public DateTime DataCriacao { get; set; }
     public DateTime? DataAtualizacao { get; set; }
+    public bool Publicada { get; set; }
+    public bool Ativo { get; set; }
+    public DateTime? DataPublicacao { get; set; }
+    public DateTime? DataDespublicacao { get; set; }
+    public string? UrlPublica { get; set; }
     public ICollection<CampanhaRevisao> Revisoes { get; set; } = [];
+    public ICollection<Lead> Leads { get; set; } = [];
 }

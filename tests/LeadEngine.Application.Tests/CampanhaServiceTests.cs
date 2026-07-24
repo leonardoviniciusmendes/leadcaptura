@@ -351,6 +351,11 @@ public sealed class CampanhaServiceTests
             return Task.FromResult(Campanhas.FirstOrDefault(x => x.Id == id));
         }
 
+        public Task<Campanha?> ObterPublicadaPorSlugAsync(string slug, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Campanhas.FirstOrDefault(x => x.Slug == slug && x.Publicada && x.Ativo));
+        }
+
         public Task<IReadOnlyList<CampanhaRevisao>> ListarRevisoesAsync(Guid campanhaId, CancellationToken cancellationToken)
         {
             return Task.FromResult<IReadOnlyList<CampanhaRevisao>>(Revisoes.Where(x => x.CampanhaId == campanhaId).OrderByDescending(x => x.DataAlteracao).ToArray());

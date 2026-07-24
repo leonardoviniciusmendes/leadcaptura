@@ -42,9 +42,11 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
             entity.Property(x => x.ErroGeracao).HasMaxLength(500);
             entity.Property(x => x.ProviderIa).HasMaxLength(40);
             entity.Property(x => x.ModeloIa).HasMaxLength(120);
+            entity.Property(x => x.UrlPublica).HasMaxLength(250);
             entity.HasIndex(x => x.Slug).IsUnique();
             entity.HasIndex(x => x.DataCriacao);
             entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => new { x.Publicada, x.Ativo });
         });
 
         modelBuilder.Entity<CampanhaRevisao>(entity =>
@@ -72,6 +74,7 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
             entity.ToTable("Leads");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Tipo).HasConversion<int>();
+            entity.Property(x => x.TipoContratacao).HasConversion<int>();
             entity.Property(x => x.Status).HasConversion<int>();
             entity.Property(x => x.Nome).HasMaxLength(150).IsRequired();
             entity.Property(x => x.WhatsApp).HasMaxLength(20).IsRequired();
@@ -88,12 +91,31 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
             entity.Property(x => x.NomeEmpresa).HasMaxLength(180);
             entity.Property(x => x.Cnpj).HasMaxLength(14);
             entity.Property(x => x.CnpjNormalizado).HasMaxLength(14);
+            entity.Property(x => x.Observacao).HasMaxLength(1000);
             entity.Property(x => x.TextoConsentimentoVersao).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.OrigemCaptura).HasMaxLength(40);
+            entity.Property(x => x.IpHash).HasMaxLength(128);
+            entity.Property(x => x.UserAgentResumo).HasMaxLength(300);
+            entity.Property(x => x.UtmSource).HasMaxLength(100);
+            entity.Property(x => x.UtmMedium).HasMaxLength(100);
+            entity.Property(x => x.UtmCampaign).HasMaxLength(180);
+            entity.Property(x => x.UtmTerm).HasMaxLength(180);
+            entity.Property(x => x.UtmContent).HasMaxLength(180);
+            entity.Property(x => x.Gclid).HasMaxLength(180);
+            entity.Property(x => x.Fbclid).HasMaxLength(180);
+            entity.Property(x => x.StatusEnvioExterno).HasMaxLength(40);
+            entity.Property(x => x.UltimoErroEnvioExterno).HasMaxLength(500);
             entity.Property(x => x.ErroEnvio).HasMaxLength(500);
             entity.HasIndex(x => x.WhatsAppNormalizado);
             entity.HasIndex(x => x.CriadoEm);
             entity.HasIndex(x => x.Status);
             entity.HasIndex(x => x.Tipo);
+            entity.HasIndex(x => x.CampanhaId);
+            entity.HasIndex(x => new { x.CampanhaId, x.WhatsAppNormalizado, x.CriadoEm });
+            entity.HasOne(x => x.Campanha)
+                .WithMany(x => x.Leads)
+                .HasForeignKey(x => x.CampanhaId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<OrigemLead>(entity =>

@@ -2,9 +2,9 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using LeadEngine.Api.Security;
 using LeadEngine.Application.Interfaces;
-using LeadEngine.Application.Services;
 using LeadEngine.Infrastructure;
 using LeadEngine.Infrastructure.Persistence;
+using LeadEngine.Application.Services;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -66,6 +66,18 @@ builder.Services.AddRateLimiter(options =>
         limiter.PermitLimit = 8;
         limiter.Window = TimeSpan.FromMinutes(1);
         limiter.QueueLimit = 0;
+    });
+    options.AddPolicy("public-lead-capture", context =>
+    {
+        var config = context.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptions<LeadCaptureOptions>>().Value;
+        var key = RequestHashing.HashIp(context.Connection.RemoteIpAddress?.ToString());
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = Math.Max(1, config.MaxLeadsPerIpPerHour),
+            Window = TimeSpan.FromHours(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
     });
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
     {

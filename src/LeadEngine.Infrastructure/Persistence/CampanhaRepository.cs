@@ -26,6 +26,12 @@ public sealed class CampanhaRepository(LeadEngineDbContext context) : ICampanhaR
         return context.Campanhas.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
+    public Task<Campanha?> ObterPublicadaPorSlugAsync(string slug, CancellationToken cancellationToken)
+    {
+        return context.Campanhas
+            .FirstOrDefaultAsync(x => x.Slug == slug && x.Publicada && x.Ativo, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<CampanhaRevisao>> ListarRevisoesAsync(Guid campanhaId, CancellationToken cancellationToken)
     {
         return await context.CampanhasRevisoes
