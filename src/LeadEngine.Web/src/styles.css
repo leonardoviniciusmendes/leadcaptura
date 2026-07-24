@@ -864,6 +864,46 @@ dd {
   min-height: auto;
 }
 
+.google-ads-panel {
+  border-top: 1px solid #eef0f3;
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 18px;
+}
+
+.section-heading.compact h3 {
+  font-size: 17px;
+  margin: 0;
+}
+
+.actions.inline {
+  flex-direction: row;
+  justify-content: flex-end;
+}
+
+.accounts-list {
+  display: grid;
+  gap: 10px;
+}
+
+.account-card {
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.account-card span {
+  color: #6b7280;
+  display: block;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -906,6 +946,12 @@ dd {
   .compact-list,
   .public-layout {
     grid-template-columns: 1fr;
+  }
+
+  .account-card,
+  .actions.inline {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .review-section-header {

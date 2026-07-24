@@ -11,7 +11,8 @@ public sealed class ConfiguracaoService(
     IConfiguracaoRepository repository,
     IConfigurationResolver resolver,
     ISecretProtector protector,
-    IWhatsAppUrlBuilder whatsAppUrlBuilder) : IConfiguracaoService
+    IWhatsAppUrlBuilder whatsAppUrlBuilder,
+    IGoogleAdsContaRepository? googleAdsContaRepository = null) : IConfiguracaoService
 {
     public async Task<IReadOnlyList<ConfiguracaoCategoriaResponse>> ListarAsync(CancellationToken cancellationToken)
     {
@@ -123,6 +124,7 @@ public sealed class ConfiguracaoService(
             CategoriaConfiguracao.OpenRouter => await TestarOpenRouterAsync(cancellationToken),
             CategoriaConfiguracao.WhatsApp => await TestarWhatsAppAsync(cancellationToken),
             CategoriaConfiguracao.ExternalLeadApi => await TestarExternalLeadApiAsync(cancellationToken),
+            CategoriaConfiguracao.GoogleAds => await TestarGoogleAdsConfiguracaoAsync(cancellationToken),
             _ => new TesteConfiguracaoResponse(true, "Validacao local concluida.")
         };
     }
@@ -136,6 +138,8 @@ public sealed class ConfiguracaoService(
         var publicUrl = await Value(CategoriaConfiguracao.Application, "PublicBaseUrl", cancellationToken);
         var externalEnabled = bool.TryParse(await Value(CategoriaConfiguracao.ExternalLeadApi, "Enabled", cancellationToken), out var enabled) && enabled;
         var externalBase = await Value(CategoriaConfiguracao.ExternalLeadApi, "BaseUrl", cancellationToken);
+        var googleConfig = await GoogleAdsConfig(cancellationToken);
+        var googleConta = googleAdsContaRepository is null ? null : await googleAdsContaRepository.ObterPadraoAsync(cancellationToken);
         var pendencias = new List<string>();
 
         var openConfigured = openKey.Configured && !string.IsNullOrWhiteSpace(model);
@@ -161,6 +165,7 @@ public sealed class ConfiguracaoService(
             new ConfiguracaoStatusItem(true, "Pronto"),
             new ConfiguracaoStatusItem(externalEnabled && !string.IsNullOrWhiteSpace(externalBase), externalEnabled ? (string.IsNullOrWhiteSpace(externalBase) ? "Pendente" : "Pronto") : "Desativado"),
             new ConfiguracaoStatusItem(!string.IsNullOrWhiteSpace(publicUrl), string.IsNullOrWhiteSpace(publicUrl) ? "Pendente" : "Pronto"),
+            new ConfiguracaoStatusItem(googleConfig.ApiConfigurada && googleConta is not null, googleConta is null ? "Nao conectado" : (googleConta.AccessTokenExpiraEm <= DateTime.UtcNow ? "Token expirado" : "Conectado")),
             pendencias);
     }
 
@@ -209,6 +214,37 @@ public sealed class ConfiguracaoService(
         var baseUrl = await Value(CategoriaConfiguracao.ExternalLeadApi, "BaseUrl", cancellationToken);
         Validate(ConfiguracaoCatalog.Get(CategoriaConfiguracao.ExternalLeadApi, "BaseUrl"), baseUrl);
         return new TesteConfiguracaoResponse(true, "Configuracao externa valida.");
+    }
+
+    private async Task<TesteConfiguracaoResponse> TestarGoogleAdsConfiguracaoAsync(CancellationToken cancellationToken)
+    {
+        var config = await GoogleAdsConfig(cancellationToken);
+        if (!config.OAuthConfigurado)
+        {
+            return new TesteConfiguracaoResponse(false, "OAuth Google Ads pendente.");
+        }
+
+        if (string.IsNullOrWhiteSpace(config.DeveloperToken))
+        {
+            return new TesteConfiguracaoResponse(false, "Developer token pendente.");
+        }
+
+        return new TesteConfiguracaoResponse(true, "Configuracao Google Ads valida.");
+    }
+
+    private async Task<GoogleAdsConfiguration> GoogleAdsConfig(CancellationToken cancellationToken)
+    {
+        return new GoogleAdsConfiguration(
+            await Value(CategoriaConfiguracao.GoogleAds, "ClientId", cancellationToken),
+            await Value(CategoriaConfiguracao.GoogleAds, "ClientSecret", cancellationToken),
+            await Value(CategoriaConfiguracao.GoogleAds, "DeveloperToken", cancellationToken),
+            await Value(CategoriaConfiguracao.GoogleAds, "LoginCustomerId", cancellationToken),
+            await Value(CategoriaConfiguracao.GoogleAds, "RedirectUri", cancellationToken) ?? string.Empty,
+            await Value(CategoriaConfiguracao.GoogleAds, "AuthEndpoint", cancellationToken) ?? string.Empty,
+            await Value(CategoriaConfiguracao.GoogleAds, "TokenEndpoint", cancellationToken) ?? string.Empty,
+            await Value(CategoriaConfiguracao.GoogleAds, "UserInfoEndpoint", cancellationToken) ?? string.Empty,
+            await Value(CategoriaConfiguracao.GoogleAds, "ApiBaseUrl", cancellationToken) ?? string.Empty,
+            await Value(CategoriaConfiguracao.GoogleAds, "Scopes", cancellationToken) ?? string.Empty);
     }
 
     private async Task<string?> Value(CategoriaConfiguracao categoria, string key, CancellationToken cancellationToken)
@@ -280,6 +316,20 @@ public sealed class ConfiguracaoService(
         {
             if (definition.Key == "DefaultFooterText" && value?.Length > 500) throw new ArgumentException("DefaultFooterText deve ter no maximo 500 caracteres.");
             if (!string.IsNullOrWhiteSpace(value) && value.Contains('<')) throw new ArgumentException("Landing nao aceita HTML arbitrario.");
+        }
+        if (definition.Categoria == CategoriaConfiguracao.GoogleAds)
+        {
+            if (definition.Key is "RedirectUri" or "AuthEndpoint" or "TokenEndpoint" or "UserInfoEndpoint" or "ApiBaseUrl")
+            {
+                if (string.IsNullOrWhiteSpace(value) || !Uri.TryCreate(value, UriKind.Absolute, out _)) throw new ArgumentException($"{definition.Key} deve ser uma URL valida.");
+            }
+
+            if (definition.Key == "ClientId" && value?.Length > 300) throw new ArgumentException("ClientId deve ter no maximo 300 caracteres.");
+            if (definition.Key == "LoginCustomerId")
+            {
+                var digits = new string((value ?? string.Empty).Where(char.IsDigit).ToArray());
+                if (!string.IsNullOrWhiteSpace(value) && digits.Length is < 6 or > 20) throw new ArgumentException("LoginCustomerId invalido.");
+            }
         }
     }
 }

@@ -33,6 +33,7 @@ public sealed record ConfiguracoesStatusResponse(
     ConfiguracaoStatusItem CapturaLeads,
     ConfiguracaoStatusItem ExternalLeadApi,
     ConfiguracaoStatusItem UrlPublica,
+    ConfiguracaoStatusItem GoogleAds,
     IReadOnlyList<string> Pendencias);
 
 public sealed record ConfiguracaoStatusItem(bool Configurado, string Status);

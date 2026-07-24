@@ -29,7 +29,17 @@ public static class ConfiguracaoCatalog
         new(CategoriaConfiguracao.ExternalLeadApi, "MaxRetries", TipoConfiguracao.Numero, false, "2", "EXTERNAL_LEAD_API_MAX_RETRIES", "ExternalLeadApi:MaxRetries", "Retries externo."),
         new(CategoriaConfiguracao.Application, "PublicBaseUrl", TipoConfiguracao.Url, false, "", "APPLICATION_PUBLIC_BASE_URL", "Application:PublicBaseUrl", "URL publica da aplicacao."),
         new(CategoriaConfiguracao.Landing, "DefaultFooterText", TipoConfiguracao.Texto, false, "Valores, redes, carencias e coberturas dependem do plano.", "LANDING_DEFAULT_FOOTER_TEXT", "Landing:DefaultFooterText", "Rodape padrao."),
-        new(CategoriaConfiguracao.Landing, "PrivacyPolicyUrl", TipoConfiguracao.Url, false, "", "LANDING_PRIVACY_POLICY_URL", "Landing:PrivacyPolicyUrl", "URL de privacidade.")
+        new(CategoriaConfiguracao.Landing, "PrivacyPolicyUrl", TipoConfiguracao.Url, false, "", "LANDING_PRIVACY_POLICY_URL", "Landing:PrivacyPolicyUrl", "URL de privacidade."),
+        new(CategoriaConfiguracao.GoogleAds, "ClientId", TipoConfiguracao.Texto, false, "", "GOOGLE_ADS_CLIENT_ID", "GoogleAds:ClientId", "Client ID OAuth do Google."),
+        new(CategoriaConfiguracao.GoogleAds, "ClientSecret", TipoConfiguracao.Segredo, true, null, "GOOGLE_ADS_CLIENT_SECRET", "GoogleAds:ClientSecret", "Client secret OAuth do Google."),
+        new(CategoriaConfiguracao.GoogleAds, "DeveloperToken", TipoConfiguracao.Segredo, true, null, "GOOGLE_ADS_DEVELOPER_TOKEN", "GoogleAds:DeveloperToken", "Developer token do Google Ads."),
+        new(CategoriaConfiguracao.GoogleAds, "LoginCustomerId", TipoConfiguracao.Texto, false, "", "GOOGLE_ADS_LOGIN_CUSTOMER_ID", "GoogleAds:LoginCustomerId", "Customer ID gerente opcional."),
+        new(CategoriaConfiguracao.GoogleAds, "RedirectUri", TipoConfiguracao.Url, false, "http://localhost:5173/configuracoes?googleAdsCallback=1", "GOOGLE_ADS_REDIRECT_URI", "GoogleAds:RedirectUri", "URL de callback OAuth."),
+        new(CategoriaConfiguracao.GoogleAds, "AuthEndpoint", TipoConfiguracao.Url, false, "https://accounts.google.com/o/oauth2/v2/auth", "GOOGLE_ADS_AUTH_ENDPOINT", "GoogleAds:AuthEndpoint", "Endpoint de autorizacao OAuth."),
+        new(CategoriaConfiguracao.GoogleAds, "TokenEndpoint", TipoConfiguracao.Url, false, "https://oauth2.googleapis.com/token", "GOOGLE_ADS_TOKEN_ENDPOINT", "GoogleAds:TokenEndpoint", "Endpoint de token OAuth."),
+        new(CategoriaConfiguracao.GoogleAds, "UserInfoEndpoint", TipoConfiguracao.Url, false, "https://openidconnect.googleapis.com/v1/userinfo", "GOOGLE_ADS_USER_INFO_ENDPOINT", "GoogleAds:UserInfoEndpoint", "Endpoint de dados do usuario."),
+        new(CategoriaConfiguracao.GoogleAds, "ApiBaseUrl", TipoConfiguracao.Url, false, "https://googleads.googleapis.com/v19", "GOOGLE_ADS_API_BASE_URL", "GoogleAds:ApiBaseUrl", "URL base da Google Ads API."),
+        new(CategoriaConfiguracao.GoogleAds, "Scopes", TipoConfiguracao.Texto, false, "https://www.googleapis.com/auth/adwords openid email profile", "GOOGLE_ADS_SCOPES", "GoogleAds:Scopes", "Escopos OAuth solicitados.")
     ];
 
     public static ConfigDefinition Get(CategoriaConfiguracao categoria, string key)

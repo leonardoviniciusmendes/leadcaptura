@@ -124,7 +124,7 @@ Entidades como `GrupoAnuncio`, `PalavraChave`, `Anuncio` e `LandingPage` ainda n
 - `CampaignGenerationResponseParser` valida e normaliza a resposta da IA antes da persistência final.
 - O slug retornado pela IA nunca é confiado diretamente; ele é recriado com `CampanhaText.Slugify`.
 - Fallback para Fake só ocorre quando `CampaignGeneration:FallbackToFake` está explicitamente `true`.
-- Google Ads ainda não foi integrado.
+- Google Ads possui apenas infraestrutura de conexão OAuth, seleção de conta e teste de conectividade; publicação de campanhas continua fora do escopo.
 - O módulo antigo de leads permanece no código, mas não é o fluxo principal do produto.
 - A revisão manual não aceita status, provider, modelo, duração, id ou data de criação vindos do frontend.
 - `CampanhaSecao` é enum e o backend valida se a seção recebida é suportada antes de chamar IA.
@@ -155,6 +155,7 @@ CampanhasRevisoes
 Leads
 ConfiguracoesSistema
 ConfiguracoesSistemaHistorico
+GoogleAdsContas
 ```
 
 Regras relevantes:
@@ -172,6 +173,8 @@ Regras relevantes:
 - IP puro não é armazenado na captura pública; o contexto expõe hash.
 - `ConfiguracoesSistema.Chave` é única;
 - `ConfiguracoesSistemaHistorico` mantém valores anteriores/novos apenas para configurações não sensíveis.
+- `GoogleAdsContas.CustomerId` é único;
+- tokens OAuth do Google Ads ficam protegidos em `AccessTokenProtegido` e `RefreshTokenProtegido`.
 
 ## Configurações
 
@@ -185,6 +188,7 @@ LeadCapture
 ExternalLeadApi
 Application
 Landing
+GoogleAds
 ```
 
 Serviços que usam configuração efetiva:
@@ -200,9 +204,39 @@ Valores sensíveis:
 
 - `OpenRouter.ApiKey`;
 - `ExternalLeadApi.ApiKey`;
+- `GoogleAds.ClientSecret`;
+- `GoogleAds.DeveloperToken`;
+- tokens OAuth persistidos em `GoogleAdsContas`;
 - futuros tokens, senhas e client secrets.
 
 Limitação atual: o rate limiter global do ASP.NET Core é configurado na inicialização; os demais valores operacionais resolvidos pelos serviços passam a valer sem reiniciar após invalidação de cache.
+
+## Google Ads
+
+O módulo `GoogleAds` é uma preparação de infraestrutura. Ele não cria campanhas, grupos de anúncios, palavras-chave, anúncios ou publicações.
+
+Componentes:
+
+- `GoogleAdsController` expõe status, auth URL, callback OAuth, contas, seleção da conta padrão e teste;
+- `GoogleAdsConnectionService` coordena OAuth, persistência de contas e teste;
+- `GoogleAdsTokenService` renova access token automaticamente usando refresh token protegido;
+- `IGoogleAdsOAuthClient` isola chamadas HTTP reais para Google OAuth e Google Ads API;
+- `GoogleAdsContaRepository` persiste contas conectadas.
+
+Fluxo OAuth:
+
+1. A UI chama `GET /api/googleads/auth-url`.
+2. O usuário autoriza no Google.
+3. O callback envia `code` para `POST /api/googleads/oauth/callback`.
+4. O backend troca o code por tokens, busca o e-mail do usuário e lista contas acessíveis.
+5. Contas são gravadas em `GoogleAdsContas`; tokens são protegidos com `ISecretProtector`.
+6. A conta padrão pode ser selecionada por `POST /api/googleads/contas/{id}/selecionar`.
+
+Status possíveis na UI:
+
+- `Nao conectado`;
+- `Conectado`;
+- `Token expirado`.
 
 ## Captura pública
 

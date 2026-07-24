@@ -10,6 +10,7 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
     public DbSet<CampanhaRevisao> CampanhasRevisoes => Set<CampanhaRevisao>();
     public DbSet<ConfiguracaoSistema> ConfiguracoesSistema => Set<ConfiguracaoSistema>();
     public DbSet<ConfiguracaoSistemaHistorico> ConfiguracoesSistemaHistorico => Set<ConfiguracaoSistemaHistorico>();
+    public DbSet<GoogleAdsConta> GoogleAdsContas => Set<GoogleAdsConta>();
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<OrigemLead> OrigensLead => Set<OrigemLead>();
     public DbSet<TentativaCapturaLead> TentativasCapturaLead => Set<TentativaCapturaLead>();
@@ -100,6 +101,20 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
                 .WithMany(x => x.Historico)
                 .HasForeignKey(x => x.ConfiguracaoSistemaId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<GoogleAdsConta>(entity =>
+        {
+            entity.ToTable("GoogleAdsContas");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.CustomerId).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.Nome).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(180);
+            entity.Property(x => x.AccessTokenProtegido).HasMaxLength(4000);
+            entity.Property(x => x.RefreshTokenProtegido).HasMaxLength(4000);
+            entity.HasIndex(x => x.CustomerId).IsUnique();
+            entity.HasIndex(x => x.Padrao);
+            entity.HasIndex(x => x.Ativa);
         });
 
         modelBuilder.Entity<Lead>(entity =>

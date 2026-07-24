@@ -303,6 +303,7 @@ LeadCapture
 ExternalLeadApi
 Application
 Landing
+GoogleAds
 ```
 
 Prioridade da configuração efetiva:
@@ -369,9 +370,56 @@ Valores sensíveis nesta etapa:
 
 - `OpenRouter.ApiKey`;
 - `ExternalLeadApi.ApiKey`;
+- `GoogleAds.ClientSecret`;
+- `GoogleAds.DeveloperToken`;
+- tokens OAuth do Google Ads armazenados em `GoogleAdsContas`;
 - futuros tokens, senhas e client secrets.
 
 Segredos são protegidos com ASP.NET Core Data Protection antes de persistir. Eles não são retornados pela API nem gravados em histórico.
+
+## Google Ads
+
+O módulo Google Ads prepara a infraestrutura de conexão, sem criar campanhas, anúncios ou publicações.
+
+Endpoints:
+
+```http
+GET /api/googleads/status
+GET /api/googleads/auth-url
+POST /api/googleads/oauth/callback
+GET /api/googleads/contas
+POST /api/googleads/contas/{id}/selecionar
+POST /api/googleads/testar
+```
+
+Configurações:
+
+```json
+{
+  "GoogleAds": {
+    "ClientId": "",
+    "ClientSecret": "",
+    "DeveloperToken": "",
+    "LoginCustomerId": "",
+    "RedirectUri": "http://localhost:5173/configuracoes?googleAdsCallback=1",
+    "AuthEndpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+    "TokenEndpoint": "https://oauth2.googleapis.com/token",
+    "UserInfoEndpoint": "https://openidconnect.googleapis.com/v1/userinfo",
+    "ApiBaseUrl": "https://googleads.googleapis.com/v19",
+    "Scopes": "https://www.googleapis.com/auth/adwords openid email profile"
+  }
+}
+```
+
+Fluxo:
+
+1. Configure `ClientId`, `ClientSecret`, `DeveloperToken` e `RedirectUri`.
+2. Clique em `Conectar conta Google` na tela de Configurações.
+3. O callback troca o `code` por tokens e lista contas acessíveis.
+4. Selecione a conta padrão.
+5. Use `POST /api/googleads/testar` para validar a conexão.
+
+`AccessToken` e `RefreshToken` são protegidos por `ISecretProtector`. A API nunca retorna tokens.
 
 ## Configuração
 
@@ -434,6 +482,10 @@ OPENROUTER_API_KEY=
 OPENROUTER_MODEL=
 WHATSAPP_NUMERO=
 WHATSAPP_MENSAGEM_PADRAO=
+GOOGLE_ADS_CLIENT_ID=
+GOOGLE_ADS_CLIENT_SECRET=
+GOOGLE_ADS_DEVELOPER_TOKEN=
+GOOGLE_ADS_REDIRECT_URI=
 ```
 
 Nunca coloque chave real no repositório.
@@ -500,6 +552,7 @@ Migrations criadas:
 20260724194341_AddCampanhaRevisoes
 20260724203700_AddLandingPublicaCapturaLeads
 20260724210540_AddConfiguracoesSistema
+20260724212632_AddGoogleAdsIntegration
 ```
 
 Criar nova migration:

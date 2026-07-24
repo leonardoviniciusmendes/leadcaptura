@@ -11,6 +11,7 @@
       <MetricCard label="WhatsApp" :value="status.whatsApp.status" />
       <MetricCard label="API externa" :value="status.externalLeadApi.status" />
       <MetricCard label="URL publica" :value="status.urlPublica.status" />
+      <MetricCard label="Google Ads" :value="status.googleAds.status" />
     </section>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -59,6 +60,36 @@
               <button class="button" :disabled="saving">{{ saving ? 'Salvando...' : 'Salvar' }}</button>
             </div>
           </form>
+
+          <section v-if="selected === 'GoogleAds'" class="google-ads-panel">
+            <header class="section-heading compact">
+              <div>
+                <h3>Conexao Google Ads</h3>
+                <span>{{ googleStatus?.status || 'Nao conectado' }}</span>
+              </div>
+              <div class="actions inline">
+                <button class="button secondary" :disabled="googleBusy || saving || testing" @click="conectarGoogle">
+                  {{ googleBusy ? 'Conectando...' : 'Conectar conta Google' }}
+                </button>
+                <button class="button secondary" :disabled="googleBusy || !googleContas.length" @click="testarConexaoGoogle">
+                  Testar conexao
+                </button>
+              </div>
+            </header>
+
+            <div v-if="googleContas.length" class="accounts-list">
+              <article v-for="conta in googleContas" :key="conta.id" class="account-card">
+                <div>
+                  <strong>{{ conta.nome }}</strong>
+                  <span>{{ conta.customerId }} <template v-if="conta.email">Â· {{ conta.email }}</template></span>
+                </div>
+                <button class="button secondary" :disabled="googleBusy || conta.padrao" @click="selecionarConta(conta.id)">
+                  {{ conta.padrao ? 'Conta padrao' : 'Selecionar' }}
+                </button>
+              </article>
+            </div>
+            <EmptyState v-else title="Nenhuma conta conectada" message="Conecte uma conta Google para preparar a publicacao futura no Google Ads." />
+          </section>
         </template>
       </section>
     </section>
@@ -69,32 +100,52 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import MetricCard from '../components/MetricCard.vue';
 import SkeletonBlock from '../components/SkeletonBlock.vue';
+import EmptyState from '../components/EmptyState.vue';
 import { confirmAction, showToast } from '../components/uiEvents';
 import {
+  concluirGoogleAdsOAuth,
+  listarGoogleAdsContas,
+  obterGoogleAdsAuthUrl,
+  obterGoogleAdsStatus,
   obterConfiguracaoCategoria,
   obterStatusConfiguracoes,
+  selecionarGoogleAdsConta,
   salvarConfiguracaoCategoria,
+  testarGoogleAds,
   testarConfiguracao,
   type CategoriaConfiguracao,
   type ConfiguracaoCategoria,
-  type ConfiguracoesStatus
+  type ConfiguracoesStatus,
+  type GoogleAdsConta,
+  type GoogleAdsStatus
 } from '../services/api';
 
-const categorias: CategoriaConfiguracao[] = ['OpenRouter', 'CampaignGeneration', 'WhatsApp', 'LeadCapture', 'ExternalLeadApi', 'Application', 'Landing'];
+const categorias: CategoriaConfiguracao[] = ['OpenRouter', 'CampaignGeneration', 'WhatsApp', 'LeadCapture', 'ExternalLeadApi', 'Application', 'Landing', 'GoogleAds'];
 const selected = ref<CategoriaConfiguracao>('OpenRouter');
 const configs = reactive<Partial<Record<CategoriaConfiguracao, ConfiguracaoCategoria>>>({});
 const status = ref<ConfiguracoesStatus | null>(null);
+const googleStatus = ref<GoogleAdsStatus | null>(null);
+const googleContas = ref<GoogleAdsConta[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const testing = ref(false);
+const googleBusy = ref(false);
 const error = ref('');
 const form = reactive<Record<string, string>>({});
 const removeFlags = reactive<Record<string, boolean>>({});
 
 const current = computed(() => configs[selected.value]);
 
-onMounted(load);
+onMounted(async () => {
+  await handleGoogleCallback();
+  await load();
+});
 watch(selected, hydrate);
+watch(selected, async (value) => {
+  if (value === 'GoogleAds') {
+    await loadGoogleAds();
+  }
+});
 
 async function load() {
   loading.value = true;
@@ -107,10 +158,24 @@ async function load() {
     configs[selected.value] = categoria;
     status.value = statusResult;
     hydrate();
+    if (selected.value === 'GoogleAds') {
+      await loadGoogleAds();
+    }
   } catch {
     error.value = 'Nao foi possivel carregar as configuracoes.';
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadGoogleAds() {
+  try {
+    const [statusResult, contasResult] = await Promise.all([obterGoogleAdsStatus(), listarGoogleAdsContas()]);
+    googleStatus.value = statusResult;
+    googleContas.value = contasResult;
+  } catch {
+    googleStatus.value = { conectado: false, status: 'Erro' };
+    googleContas.value = [];
   }
 }
 
@@ -121,6 +186,82 @@ function hydrate() {
     form[item.chave] = item.sensivel ? '' : String(item.valor ?? '');
     removeFlags[item.chave] = false;
   });
+}
+
+async function conectarGoogle() {
+  googleBusy.value = true;
+  error.value = '';
+  try {
+    const result = await obterGoogleAdsAuthUrl();
+    window.sessionStorage.setItem('googleAdsOAuthState', result.state);
+    window.location.href = result.url;
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel iniciar o OAuth Google Ads.');
+    showToast({ type: 'error', title: 'Erro ao conectar', message: error.value });
+  } finally {
+    googleBusy.value = false;
+  }
+}
+
+async function handleGoogleCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const googleCallback = params.get('googleAdsCallback');
+  if (!code || !googleCallback) return;
+
+  const state = params.get('state') || undefined;
+  const expectedState = window.sessionStorage.getItem('googleAdsOAuthState');
+  if (expectedState && state && expectedState !== state) {
+    showToast({ type: 'error', title: 'OAuth invalido', message: 'State recebido nao confere.' });
+    return;
+  }
+
+  googleBusy.value = true;
+  selected.value = 'GoogleAds';
+  try {
+    googleContas.value = await concluirGoogleAdsOAuth({
+      code,
+      state,
+      redirectUri: `${window.location.origin}${window.location.pathname}?googleAdsCallback=1`
+    });
+    googleStatus.value = await obterGoogleAdsStatus();
+    window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}`);
+    showToast({ type: 'success', title: 'Google Ads conectado' });
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel concluir a conexao Google Ads.');
+    showToast({ type: 'error', title: 'Erro no OAuth', message: error.value });
+  } finally {
+    googleBusy.value = false;
+    window.sessionStorage.removeItem('googleAdsOAuthState');
+  }
+}
+
+async function selecionarConta(id: string) {
+  googleBusy.value = true;
+  try {
+    await selecionarGoogleAdsConta(id);
+    await loadGoogleAds();
+    showToast({ type: 'success', title: 'Conta padrao atualizada' });
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel selecionar a conta.');
+    showToast({ type: 'error', title: 'Erro ao selecionar', message: error.value });
+  } finally {
+    googleBusy.value = false;
+  }
+}
+
+async function testarConexaoGoogle() {
+  googleBusy.value = true;
+  try {
+    const result = await testarGoogleAds(googleStatus.value?.contaPadraoId);
+    showToast({ type: result.sucesso ? 'success' : 'error', title: result.status, message: result.customerId });
+    await loadGoogleAds();
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel testar a conexao Google Ads.');
+    showToast({ type: 'error', title: 'Erro no teste', message: error.value });
+  } finally {
+    googleBusy.value = false;
+  }
 }
 
 async function salvar() {
@@ -183,7 +324,8 @@ function labelCategoria(categoria: CategoriaConfiguracao) {
     LeadCapture: 'Captura de leads',
     ExternalLeadApi: 'API externa',
     Application: 'Aplicacao',
-    Landing: 'Landing'
+    Landing: 'Landing',
+    GoogleAds: 'Google Ads'
   };
   return labels[categoria];
 }
@@ -196,7 +338,8 @@ function description(categoria: CategoriaConfiguracao) {
     LeadCapture: 'Consentimento, anti-spam e duplicidade.',
     ExternalLeadApi: 'Preparacao para API externa futura.',
     Application: 'URL publica para landings e links.',
-    Landing: 'Textos padrao da experiencia publica.'
+    Landing: 'Textos padrao da experiencia publica.',
+    GoogleAds: 'OAuth, developer token e conta padrao para publicacao futura.'
   };
   return labels[categoria];
 }

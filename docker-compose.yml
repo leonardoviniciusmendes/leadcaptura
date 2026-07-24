@@ -41,6 +41,11 @@ services:
       WHATSAPP_NUMERO: ${WHATSAPP_NUMERO:-}
       WHATSAPP_MENSAGEM_PADRAO: ${WHATSAPP_MENSAGEM_PADRAO:-}
       APPLICATION_PUBLIC_BASE_URL: ${APPLICATION_PUBLIC_BASE_URL:-}
+      GOOGLE_ADS_CLIENT_ID: ${GOOGLE_ADS_CLIENT_ID:-}
+      GOOGLE_ADS_CLIENT_SECRET: ${GOOGLE_ADS_CLIENT_SECRET:-}
+      GOOGLE_ADS_DEVELOPER_TOKEN: ${GOOGLE_ADS_DEVELOPER_TOKEN:-}
+      GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${GOOGLE_ADS_LOGIN_CUSTOMER_ID:-}
+      GOOGLE_ADS_REDIRECT_URI: ${GOOGLE_ADS_REDIRECT_URI:-http://localhost:5173/configuracoes?googleAdsCallback=1}
       Database__ApplyMigrationsOnStartup: "true"
       Cors__AllowedOrigins__0: http://localhost:5173
       Cors__AllowedOrigins__1: http://localhost:8080

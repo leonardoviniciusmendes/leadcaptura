@@ -159,7 +159,8 @@ export type CategoriaConfiguracao =
   | 'LeadCapture'
   | 'ExternalLeadApi'
   | 'Application'
-  | 'Landing';
+  | 'Landing'
+  | 'GoogleAds';
 
 export interface ConfiguracaoItem {
   chave: string;
@@ -182,6 +183,7 @@ export interface ConfiguracoesStatus {
   capturaLeads: { configurado: boolean; status: string };
   externalLeadApi: { configurado: boolean; status: string };
   urlPublica: { configurado: boolean; status: string };
+  googleAds: { configurado: boolean; status: string };
   pendencias: string[];
 }
 
@@ -299,5 +301,66 @@ export async function testarConfiguracao(categoria: CategoriaConfiguracao): Prom
 
 export async function obterStatusConfiguracoes(): Promise<ConfiguracoesStatus> {
   const { data } = await api.get<ConfiguracoesStatus>('/api/configuracoes/status');
+  return data;
+}
+
+export interface GoogleAdsStatus {
+  conectado: boolean;
+  status: string;
+  contaPadraoId?: string;
+  customerId?: string;
+  nome?: string;
+}
+
+export interface GoogleAdsAuthUrl {
+  url: string;
+  state: string;
+}
+
+export interface GoogleAdsConta {
+  id: string;
+  customerId: string;
+  nome: string;
+  email?: string;
+  ativa: boolean;
+  padrao: boolean;
+  dataConexao: string;
+  accessTokenExpiraEm?: string;
+}
+
+export interface GoogleAdsTeste {
+  sucesso: boolean;
+  status: string;
+  customerId?: string;
+  duracaoMs?: number;
+}
+
+export async function obterGoogleAdsStatus(): Promise<GoogleAdsStatus> {
+  const { data } = await api.get<GoogleAdsStatus>('/api/googleads/status');
+  return data;
+}
+
+export async function obterGoogleAdsAuthUrl(): Promise<GoogleAdsAuthUrl> {
+  const { data } = await api.get<GoogleAdsAuthUrl>('/api/googleads/auth-url');
+  return data;
+}
+
+export async function concluirGoogleAdsOAuth(payload: { code: string; state?: string; redirectUri?: string }): Promise<GoogleAdsConta[]> {
+  const { data } = await api.post<GoogleAdsConta[]>('/api/googleads/oauth/callback', payload);
+  return data;
+}
+
+export async function listarGoogleAdsContas(): Promise<GoogleAdsConta[]> {
+  const { data } = await api.get<GoogleAdsConta[]>('/api/googleads/contas');
+  return data;
+}
+
+export async function selecionarGoogleAdsConta(id: string): Promise<GoogleAdsConta> {
+  const { data } = await api.post<GoogleAdsConta>(`/api/googleads/contas/${id}/selecionar`);
+  return data;
+}
+
+export async function testarGoogleAds(contaId?: string): Promise<GoogleAdsTeste> {
+  const { data } = await api.post<GoogleAdsTeste>('/api/googleads/testar', { contaId });
   return data;
 }

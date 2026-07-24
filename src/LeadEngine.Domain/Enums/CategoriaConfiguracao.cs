@@ -8,5 +8,6 @@ public enum CategoriaConfiguracao
     LeadCapture = 4,
     ExternalLeadApi = 5,
     Application = 6,
-    Landing = 7
+    Landing = 7,
+    GoogleAds = 8
 }

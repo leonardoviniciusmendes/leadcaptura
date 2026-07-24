@@ -2,6 +2,7 @@ using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
 using LeadEngine.Infrastructure.Configuration;
 using LeadEngine.Infrastructure.CampaignGeneration;
+using LeadEngine.Infrastructure.GoogleAds;
 using LeadEngine.Infrastructure.Integrations;
 using LeadEngine.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -23,9 +24,13 @@ public static class DependencyInjection
         services.AddScoped<ILeadRepository, LeadRepository>();
         services.AddScoped<ICampanhaRepository, CampanhaRepository>();
         services.AddScoped<IConfiguracaoRepository, ConfiguracaoRepository>();
+        services.AddScoped<IGoogleAdsContaRepository, GoogleAdsContaRepository>();
         services.AddScoped<ISecretProtector, DataProtectionSecretProtector>();
         services.AddScoped<IConfigurationResolver, ConfigurationResolver>();
         services.AddScoped<IConfiguracaoService, ConfiguracaoService>();
+        services.AddScoped<IGoogleAdsOAuthClient, GoogleAdsOAuthClient>();
+        services.AddScoped<IGoogleAdsTokenService, GoogleAdsTokenService>();
+        services.AddScoped<IGoogleAdsConnectionService, GoogleAdsConnectionService>();
         services.AddMemoryCache();
         services.AddDataProtection();
         services.AddScoped<CampaignPromptBuilder>();
@@ -76,6 +81,10 @@ public static class DependencyInjection
             var config = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<OpenRouterOptions>>().Value;
             client.BaseAddress = new Uri(config.BaseUrl.TrimEnd('/') + "/");
             client.Timeout = Timeout.InfiniteTimeSpan;
+        });
+        services.AddHttpClient("googleads", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
         });
         services.Configure<IntegracaoLeadsOptions>(configuration.GetSection("IntegracaoLeads"));
         services.AddHttpClient<IIntegracaoLeadService, IntegracaoLeadService>((provider, client) =>
