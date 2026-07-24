@@ -46,6 +46,7 @@ builder.Services.AddScoped<IRequestContext, HttpRequestContext>();
 builder.Services.AddScoped<LeadCaptureService>();
 builder.Services.AddScoped<LeadConsultaService>();
 builder.Services.AddScoped<CampanhaService>();
+builder.Services.AddScoped<ICampaignReviewService, CampaignReviewService>();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? ["http://localhost:5173"];

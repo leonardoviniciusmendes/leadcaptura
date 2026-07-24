@@ -19,7 +19,7 @@ public sealed class CampanhaService(
         var campanha = new Campanha
         {
             Id = Guid.NewGuid(),
-            Nome = "Campanha em geração",
+            Nome = "Campanha em geracao",
             TipoPublico = request.TipoPublico,
             Cidade = request.Cidade.Trim(),
             Estado = request.Estado.Trim().ToUpperInvariant(),
@@ -45,7 +45,7 @@ public sealed class CampanhaService(
             campanha.MensagemWhatsApp = generated.MensagemWhatsApp;
             campanha.Slug = await EnsureUniqueSlugAsync(generated.Slug, campanha.Id, cancellationToken);
             campanha.BeneficiosJson = Serialize(generated.Beneficios);
-            campanha.PerguntasFrequentesJson = Serialize(generated.PerguntasFrequentes);
+            campanha.PerguntasFrequentesJson = Serialize(generated.PerguntasFrequentes.Select(x => new FaqResponse(x.Pergunta, x.Resposta)).ToArray());
             campanha.PalavrasChaveJson = Serialize(generated.PalavrasChave);
             campanha.PalavrasChaveNegativasJson = Serialize(generated.PalavrasChaveNegativas);
             campanha.TitulosAnunciosJson = Serialize(generated.TitulosAnuncios);
@@ -60,13 +60,13 @@ public sealed class CampanhaService(
             await repository.SalvarAsync(cancellationToken);
             return CampanhaMapping.ToResponse(campanha);
         }
-        catch (Exception ex) when (ex is CampaignGenerationException or InvalidOperationException)
+        catch (Exception ex) when (ex is CampaignGenerationException or InvalidOperationException or ArgumentException)
         {
             campanha.Status = StatusCampanha.Erro;
             campanha.ErroGeracao = CampanhaText.Limitar(ex.Message, 500);
             campanha.DataAtualizacao = DateTime.UtcNow;
             await repository.SalvarAsync(cancellationToken);
-            throw new CampaignGenerationException("Não foi possível gerar a campanha. Verifique a configuração do provedor de IA.", ex);
+            throw new CampaignGenerationException("Nao foi possivel gerar a campanha. Verifique a configuracao do provedor de IA.", ex);
         }
     }
 
@@ -80,27 +80,6 @@ public sealed class CampanhaService(
     {
         var campanha = await repository.ObterPorIdAsync(id, cancellationToken);
         return campanha is null ? null : CampanhaMapping.ToResponse(campanha);
-    }
-
-    public async Task<CampanhaResponse> RevisarCampanhaAsync(Guid id, RevisarCampanhaRequest request, CancellationToken cancellationToken)
-    {
-        CampanhaValidator.ValidarRevisao(request);
-
-        var campanha = await repository.ObterPorIdAsync(id, cancellationToken)
-            ?? throw new KeyNotFoundException("Campanha não encontrada.");
-
-        campanha.Nome = request.Nome.Trim();
-        campanha.TituloLandingPage = request.TituloLandingPage.Trim();
-        campanha.SubtituloLandingPage = request.SubtituloLandingPage.Trim();
-        campanha.TextoBotao = request.TextoBotao.Trim();
-        campanha.MensagemWhatsApp = request.MensagemWhatsApp.Trim();
-        campanha.Slug = await EnsureUniqueSlugAsync(request.Slug, campanha.Id, cancellationToken);
-        campanha.Objetivo = CampanhaText.Limitar(request.Objetivo, 500);
-        campanha.Status = request.Status;
-        campanha.DataAtualizacao = DateTime.UtcNow;
-
-        await repository.SalvarAsync(cancellationToken);
-        return CampanhaMapping.ToResponse(campanha);
     }
 
     private async Task<string> EnsureUniqueSlugAsync(string value, Guid? ignorarId, CancellationToken cancellationToken)
@@ -128,7 +107,7 @@ public sealed class CampanhaService(
         return candidate;
     }
 
-    private static string Serialize<T>(IReadOnlyList<T> items)
+    private static string Serialize<T>(T items)
     {
         return JsonSerializer.Serialize(items);
     }

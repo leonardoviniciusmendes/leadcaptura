@@ -19,44 +19,52 @@ public sealed class CampaignGenerationResponseParser
         }
         catch (JsonException ex)
         {
-            throw new CampaignGenerationException("Resposta da IA não é um JSON válido.", ex);
+            throw new CampaignGenerationException("Resposta da IA nao e um JSON valido.", ex);
         }
 
         var nome = Required(parsed.Nome, "nome", 180);
-        var titulo = Required(parsed.TituloLandingPage, "tituloLandingPage", 180);
-        var subtitulo = Required(parsed.SubtituloLandingPage, "subtituloLandingPage", 300);
-        var textoBotao = Required(parsed.TextoBotao, "textoBotao", 80);
-        var mensagem = Required(parsed.MensagemWhatsApp, "mensagemWhatsApp", 500);
         var slugBase = Required(parsed.Slug, "slug", 180);
         var slug = CampanhaText.Slugify(slugBase);
         if (string.IsNullOrWhiteSpace(slug))
         {
-            throw new CampaignGenerationException("Slug retornado pela IA é inválido.");
+            throw new CampaignGenerationException("Slug retornado pela IA e invalido.");
         }
 
-        var beneficios = NormalizeList(parsed.Beneficios, "beneficios", 3, 6, 120);
-        var faq = NormalizeFaq(parsed.PerguntasFrequentes, 3, 6);
-        var palavrasChave = NormalizeList(parsed.PalavrasChave, "palavrasChave", 1, 30, 120);
-        var negativas = NormalizeList(parsed.PalavrasChaveNegativas, "palavrasChaveNegativas", 1, 40, 120);
-        var titulos = NormalizeList(parsed.TitulosAnuncios, "titulosAnuncios", 8, 12, 30);
-        var descricoes = NormalizeList(parsed.DescricoesAnuncios, "descricoesAnuncios", 3, 4, 90);
+        try
+        {
+            var conteudo = CampanhaValidator.NormalizarEValidarConteudo(
+                parsed.TituloLandingPage ?? string.Empty,
+                parsed.SubtituloLandingPage ?? string.Empty,
+                parsed.TextoBotao ?? string.Empty,
+                parsed.MensagemWhatsApp ?? string.Empty,
+                parsed.Beneficios,
+                parsed.PerguntasFrequentes?.Select(x => new FaqItemValidation(x.Pergunta ?? string.Empty, x.Resposta ?? string.Empty)),
+                parsed.PalavrasChave,
+                parsed.PalavrasChaveNegativas,
+                parsed.TitulosAnuncios,
+                parsed.DescricoesAnuncios);
 
-        return new CampaignGenerationResult(
-            nome,
-            titulo,
-            subtitulo,
-            textoBotao,
-            mensagem,
-            slug,
-            beneficios,
-            faq,
-            palavrasChave,
-            negativas,
-            titulos,
-            descricoes,
-            provider,
-            model,
-            durationMs);
+            return new CampaignGenerationResult(
+                nome,
+                conteudo.TituloLandingPage,
+                conteudo.SubtituloLandingPage,
+                conteudo.TextoBotao,
+                conteudo.MensagemWhatsApp,
+                slug,
+                conteudo.Beneficios,
+                conteudo.PerguntasFrequentes.Select(x => new FaqItem(x.Pergunta, x.Resposta)).ToArray(),
+                conteudo.PalavrasChave,
+                conteudo.PalavrasChaveNegativas,
+                conteudo.TitulosAnuncios,
+                conteudo.DescricoesAnuncios,
+                provider,
+                model,
+                durationMs);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new CampaignGenerationException(ex.Message, ex);
+        }
     }
 
     private static string StripCodeFence(string content)
@@ -88,45 +96,10 @@ public sealed class CampaignGenerationResponseParser
         var text = CampanhaText.Limitar(value, maxLength);
         if (string.IsNullOrWhiteSpace(text))
         {
-            throw new CampaignGenerationException($"Campo obrigatório ausente na resposta da IA: {field}.");
+            throw new CampaignGenerationException($"Campo obrigatorio ausente na resposta da IA: {field}.");
         }
 
         return text;
-    }
-
-    private static IReadOnlyList<string> NormalizeList(List<string>? values, string field, int min, int max, int itemMaxLength)
-    {
-        var items = (values ?? [])
-            .Select(x => CampanhaText.Limitar(x, itemMaxLength))
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Cast<string>()
-            .Take(max)
-            .ToArray();
-
-        if (items.Length < min)
-        {
-            throw new CampaignGenerationException($"Campo {field} deve conter entre {min} e {max} itens válidos.");
-        }
-
-        return items;
-    }
-
-    private static IReadOnlyList<FaqItem> NormalizeFaq(List<CampaignGenerationAiFaq>? values, int min, int max)
-    {
-        var items = (values ?? [])
-            .Select(x => new FaqItem(
-                Required(x.Pergunta, "perguntasFrequentes.pergunta", 180),
-                Required(x.Resposta, "perguntasFrequentes.resposta", 500)))
-            .Take(max)
-            .ToArray();
-
-        if (items.Length < min)
-        {
-            throw new CampaignGenerationException($"FAQ deve conter entre {min} e {max} itens válidos.");
-        }
-
-        return items;
     }
 
     private static JsonSerializerOptions JsonOptions() => new() { PropertyNameCaseInsensitive = true };

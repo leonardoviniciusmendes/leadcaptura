@@ -38,12 +38,27 @@ NovaCampanhaView
 -> CampanhasView
 ```
 
+Fluxo de revisão comercial:
+
+```text
+CampanhaRevisaoView
+-> GET /api/campanhas/{id}/revisao
+-> PUT /api/campanhas/{id}/revisao
+-> POST /api/campanhas/{id}/regenerar
+-> POST /api/campanhas/{id}/aprovar
+-> CampaignReviewService
+-> ICampaignSectionGenerationService quando ha regeneracao parcial
+-> CampanhaRevisao para auditoria
+-> MySQL
+```
+
 ## Domínio atual
 
 Entidade principal:
 
 ```text
 Campanha
+CampanhaRevisao
 ```
 
 Campos mantidos dentro de `Campanha` nesta etapa:
@@ -60,6 +75,7 @@ Campos mantidos dentro de `Campanha` nesta etapa:
 - provider/modelo da IA;
 - erro de geração;
 - duração e data da geração.
+- histórico de revisão em tabela separada.
 
 Entidades como `GrupoAnuncio`, `PalavraChave`, `Anuncio` e `LandingPage` ainda não foram criadas porque o fluxo atual não precisa delas como agregados separados.
 
@@ -75,6 +91,11 @@ Entidades como `GrupoAnuncio`, `PalavraChave`, `Anuncio` e `LandingPage` ainda n
 - Fallback para Fake só ocorre quando `CampaignGeneration:FallbackToFake` está explicitamente `true`.
 - Google Ads ainda não foi integrado.
 - O módulo antigo de leads permanece no código, mas não é o fluxo principal do produto.
+- A revisão manual não aceita status, provider, modelo, duração, id ou data de criação vindos do frontend.
+- `CampanhaSecao` é enum e o backend valida se a seção recebida é suportada antes de chamar IA.
+- Regeneração parcial chama OpenRouter apenas para a seção solicitada e aplica o resultado somente após validação da campanha completa.
+- Ao editar uma campanha já aprovada, o status volta para `Gerada`; não foi criado um status `EmRevisao` para manter a modelagem simples.
+- O histórico armazena conteúdo anterior e novo em JSON, mas a API pública de histórico retorna apenas resumo, origem, seção, provider e modelo.
 
 ## Persistência
 
@@ -84,6 +105,7 @@ Tabela principal:
 
 ```text
 Campanhas
+CampanhasRevisoes
 ```
 
 Regras relevantes:
@@ -93,6 +115,9 @@ Regras relevantes:
 - índice por `DataCriacao`;
 - índice por `Status`;
 - listas geradas armazenadas em colunas JSON dentro de `Campanha`.
+- `CampanhasRevisoes` referencia `Campanhas` com cascade delete;
+- `ConteudoAnterior` e `ConteudoNovo` ficam em colunas JSON;
+- prompts completos, API keys e respostas completas de provider não são expostos por endpoint de histórico.
 
 ## OpenRouter
 
@@ -117,3 +142,4 @@ Resiliência implementada:
 - sem retry para erros 4xx não transitórios;
 - logs sem expor chave;
 - erro controlado pela API.
+- falhas na regeneração parcial não apagam nem substituem o conteúdo atual.

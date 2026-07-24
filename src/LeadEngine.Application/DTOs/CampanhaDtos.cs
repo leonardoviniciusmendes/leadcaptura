@@ -18,9 +18,16 @@ public sealed record RevisarCampanhaRequest(
     string SubtituloLandingPage,
     string TextoBotao,
     string MensagemWhatsApp,
-    string Slug,
-    string? Objetivo,
-    StatusCampanha Status);
+    IReadOnlyList<string> Beneficios,
+    IReadOnlyList<FaqResponse> PerguntasFrequentes,
+    IReadOnlyList<string> PalavrasChave,
+    IReadOnlyList<string> PalavrasChaveNegativas,
+    IReadOnlyList<string> TitulosAnuncios,
+    IReadOnlyList<string> DescricoesAnuncios);
+
+public sealed record RegenerarCampanhaSecaoRequest(
+    CampanhaSecao Secao,
+    string? InstrucaoAdicional);
 
 public sealed record CampanhaResponse(
     Guid Id,
@@ -53,3 +60,11 @@ public sealed record CampanhaResponse(
     DateTime? DataAtualizacao);
 
 public sealed record FaqResponse(string Pergunta, string Resposta);
+
+public sealed record CampanhaRevisaoHistoricoResponse(
+    DateTime Data,
+    CampanhaSecao? Secao,
+    OrigemRevisaoCampanha Origem,
+    string ResumoAlteracao,
+    string? Provider,
+    string? Modelo);

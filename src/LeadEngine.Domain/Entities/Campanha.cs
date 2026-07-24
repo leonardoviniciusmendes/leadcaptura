@@ -32,4 +32,5 @@ public sealed class Campanha
     public long? DuracaoGeracaoMs { get; set; }
     public DateTime DataCriacao { get; set; }
     public DateTime? DataAtualizacao { get; set; }
+    public ICollection<CampanhaRevisao> Revisoes { get; set; } = [];
 }

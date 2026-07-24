@@ -7,6 +7,7 @@ namespace LeadEngine.Infrastructure.Persistence;
 public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> options) : DbContext(options)
 {
     public DbSet<Campanha> Campanhas => Set<Campanha>();
+    public DbSet<CampanhaRevisao> CampanhasRevisoes => Set<CampanhaRevisao>();
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<OrigemLead> OrigensLead => Set<OrigemLead>();
     public DbSet<TentativaCapturaLead> TentativasCapturaLead => Set<TentativaCapturaLead>();
@@ -44,6 +45,26 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
             entity.HasIndex(x => x.Slug).IsUnique();
             entity.HasIndex(x => x.DataCriacao);
             entity.HasIndex(x => x.Status);
+        });
+
+        modelBuilder.Entity<CampanhaRevisao>(entity =>
+        {
+            entity.ToTable("CampanhasRevisoes");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.TipoAlteracao).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Secao).HasConversion<int>();
+            entity.Property(x => x.ConteudoAnterior).HasColumnType("json").IsRequired();
+            entity.Property(x => x.ConteudoNovo).HasColumnType("json").IsRequired();
+            entity.Property(x => x.Origem).HasConversion<int>();
+            entity.Property(x => x.InstrucaoAdicional).HasMaxLength(500);
+            entity.Property(x => x.ProviderIa).HasMaxLength(40);
+            entity.Property(x => x.ModeloIa).HasMaxLength(120);
+            entity.HasIndex(x => x.CampanhaId);
+            entity.HasIndex(x => x.DataAlteracao);
+            entity.HasOne(x => x.Campanha)
+                .WithMany(x => x.Revisoes)
+                .HasForeignKey(x => x.CampanhaId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Lead>(entity =>

@@ -207,6 +207,16 @@ textarea:focus {
   font-size: 0.9rem;
 }
 
+.success {
+  margin: 0 0 12px;
+  border-radius: 6px;
+  background: #ecfdf5;
+  color: #0f766e;
+  padding: 10px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .grid-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
@@ -339,6 +349,128 @@ dd {
   overflow-wrap: anywhere;
 }
 
+.review-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.review-section {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.review-section-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 12px;
+}
+
+.review-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.header-actions {
+  grid-column: auto;
+  align-items: center;
+}
+
+.inline-edit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.faq-edit {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.mini-button {
+  min-height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  padding: 6px 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.narrow {
+  width: fit-content;
+}
+
+.counter,
+.unsaved {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.compact-list {
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 8px 12px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.42);
+  padding: 18px;
+  z-index: 20;
+}
+
+.modal {
+  width: min(560px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.history-panel {
+  position: fixed;
+  top: 72px;
+  right: 18px;
+  bottom: 18px;
+  width: min(420px, calc(100vw - 36px));
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 16px;
+  z-index: 10;
+}
+
+.between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-item {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 10px;
+}
+
+.history-item span,
+.history-item small {
+  color: #64748b;
+}
+
 @media (max-width: 900px) {
   .page-header.row,
   .topbar {
@@ -348,8 +480,15 @@ dd {
 
   .form-grid,
   .grid-layout,
-  .two-cols {
+  .two-cols,
+  .review-section-header,
+  .inline-edit,
+  .compact-list {
     grid-template-columns: 1fr;
+  }
+
+  .review-section-header {
+    display: grid;
   }
 
   .details {

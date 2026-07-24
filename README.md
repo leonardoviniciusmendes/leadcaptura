@@ -65,7 +65,11 @@ Briefing simples
 POST /api/campanhas/gerar
 GET  /api/campanhas
 GET  /api/campanhas/{id}
+GET  /api/campanhas/{id}/revisao
 PUT  /api/campanhas/{id}/revisao
+POST /api/campanhas/{id}/regenerar
+POST /api/campanhas/{id}/aprovar
+GET  /api/campanhas/{id}/historico-revisoes
 ```
 
 Endpoint disponível somente em Development:
@@ -123,6 +127,74 @@ POST /api/desenvolvimento/openrouter/testar
   "duracaoGeracaoMs": 1200
 }
 ```
+
+## Revisão comercial
+
+Depois da geração, o usuário pode revisar a campanha antes de uma futura publicação no Google Ads. Esta etapa não publica, não ativa e não integra OAuth Google.
+
+Fluxo atual:
+
+```text
+Campanha gerada
+-> revisão dos conteúdos
+-> edição manual
+-> regeneração parcial com OpenRouter
+-> aprovação
+-> status Revisada
+```
+
+Campos editáveis em `PUT /api/campanhas/{id}/revisao`:
+
+```json
+{
+  "nome": "Plano familiar RJ",
+  "tituloLandingPage": "Plano de saúde para famílias no RJ",
+  "subtituloLandingPage": "Compare opções conforme seu perfil.",
+  "textoBotao": "Falar no WhatsApp",
+  "mensagemWhatsApp": "Olá, quero comparar opções de plano de saúde.",
+  "beneficios": ["Atendimento consultivo", "Comparação por perfil", "Suporte na escolha"],
+  "perguntasFrequentes": [
+    { "pergunta": "O valor é fixo?", "resposta": "Não. Valores variam por idade, região e contratação." },
+    { "pergunta": "A rede é garantida?", "resposta": "Não. Rede e cobertura dependem do plano." },
+    { "pergunta": "Existe carência?", "resposta": "Carência depende das regras da operadora." }
+  ],
+  "palavrasChave": ["plano de saúde familiar", "cotação plano saúde", "plano saúde rj"],
+  "palavrasChaveNegativas": ["emprego", "boleto", "login"],
+  "titulosAnuncios": ["Plano Saúde RJ", "Cotação Familiar", "Fale no WhatsApp", "Compare Planos", "Atendimento RJ", "Plano por Perfil", "Consultoria Local", "Solicite Cotação"],
+  "descricoesAnuncios": ["Compare opções conforme seu perfil.", "Atendimento consultivo para planos de saúde.", "Solicite contato pelo WhatsApp."]
+}
+```
+
+Campos não editáveis pelo frontend: `id`, `dataCriacao`, `providerIa`, `modeloIa`, `duracaoGeracaoMs`, `status` e `slug`.
+
+Regeneração parcial:
+
+```http
+POST /api/campanhas/00000000-0000-0000-0000-000000000000/regenerar
+```
+
+```json
+{
+  "secao": "TitulosAnuncios",
+  "instrucaoAdicional": "Use uma abordagem mais voltada para famílias."
+}
+```
+
+Seções aceitas: `Nome`, `LandingPage`, `MensagemWhatsApp`, `Beneficios`, `PerguntasFrequentes`, `PalavrasChave`, `PalavrasChaveNegativas`, `TitulosAnuncios`, `DescricoesAnuncios`.
+
+Aprovação:
+
+```http
+POST /api/campanhas/00000000-0000-0000-0000-000000000000/aprovar
+```
+
+Histórico:
+
+```http
+GET /api/campanhas/00000000-0000-0000-0000-000000000000/historico-revisoes
+```
+
+Retorna data, seção, origem, resumo, provider e modelo. Conteúdo completo, prompts e chaves não são retornados.
 
 ## Configuração
 
@@ -228,7 +300,8 @@ Migrations criadas:
 
 ```text
 20260724151255_AddCampanhas
-20260724173721_AddCampaignGenerationDetails
+20260724173833_AddCampaignGenerationDetails
+20260724194341_AddCampanhaRevisoes
 ```
 
 Criar nova migration:

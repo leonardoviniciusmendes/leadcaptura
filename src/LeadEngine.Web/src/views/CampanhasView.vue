@@ -52,6 +52,7 @@
       <aside class="panel details" v-if="selected">
         <p class="eyebrow">Resultado</p>
         <h2>{{ selected.nome }}</h2>
+        <RouterLink class="button" :to="`/campanhas/${selected.id}`">Revisar campanha</RouterLink>
         <dl>
           <dt>Título da landing</dt>
           <dd>{{ selected.tituloLandingPage }}</dd>

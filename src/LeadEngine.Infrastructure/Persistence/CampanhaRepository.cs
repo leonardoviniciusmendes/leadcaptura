@@ -11,6 +11,11 @@ public sealed class CampanhaRepository(LeadEngineDbContext context) : ICampanhaR
         return context.Campanhas.AddAsync(campanha, cancellationToken).AsTask();
     }
 
+    public Task AdicionarRevisaoAsync(CampanhaRevisao revisao, CancellationToken cancellationToken)
+    {
+        return context.CampanhasRevisoes.AddAsync(revisao, cancellationToken).AsTask();
+    }
+
     public Task<bool> ExisteSlugAsync(string slug, Guid? ignorarId, CancellationToken cancellationToken)
     {
         return context.Campanhas.AnyAsync(x => x.Slug == slug && (ignorarId == null || x.Id != ignorarId), cancellationToken);
@@ -19,6 +24,14 @@ public sealed class CampanhaRepository(LeadEngineDbContext context) : ICampanhaR
     public Task<Campanha?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken)
     {
         return context.Campanhas.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<CampanhaRevisao>> ListarRevisoesAsync(Guid campanhaId, CancellationToken cancellationToken)
+    {
+        return await context.CampanhasRevisoes
+            .Where(x => x.CampanhaId == campanhaId)
+            .OrderByDescending(x => x.DataAlteracao)
+            .ToArrayAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Campanha>> ListarAsync(CancellationToken cancellationToken)

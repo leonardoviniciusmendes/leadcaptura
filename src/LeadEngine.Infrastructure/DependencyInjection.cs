@@ -23,8 +23,11 @@ public static class DependencyInjection
         services.AddScoped<ICampanhaRepository, CampanhaRepository>();
         services.AddScoped<CampaignPromptBuilder>();
         services.AddScoped<CampaignGenerationResponseParser>();
+        services.AddScoped<CampaignSectionPromptBuilder>();
+        services.AddScoped<CampaignSectionResponseParser>();
         services.AddScoped<FakeCampaignGenerationService>();
         services.AddScoped<OpenRouterCampaignGenerationService>();
+        services.AddScoped<ICampaignSectionGenerationService, OpenRouterCampaignSectionGenerationService>();
         services.AddScoped<ICampaignGenerationService, ConfiguredCampaignGenerationService>();
         services.Configure<CampaignGenerationOptions>(configuration.GetSection("CampaignGeneration"));
         services.Configure<OpenRouterOptions>(options =>

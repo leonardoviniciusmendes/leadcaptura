@@ -1,4 +1,5 @@
 using LeadEngine.Application.DTOs;
+using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,7 +7,7 @@ namespace LeadEngine.Api.Controllers;
 
 [ApiController]
 [Route("api/campanhas")]
-public sealed class CampanhasController(CampanhaService campanhaService) : ControllerBase
+public sealed class CampanhasController(CampanhaService campanhaService, ICampaignReviewService reviewService) : ControllerBase
 {
     [HttpPost("gerar")]
     public async Task<ActionResult<CampanhaResponse>> Gerar(GerarCampanhaRequest request, CancellationToken cancellationToken)
@@ -31,6 +32,31 @@ public sealed class CampanhasController(CampanhaService campanhaService) : Contr
     [HttpPut("{id:guid}/revisao")]
     public async Task<ActionResult<CampanhaResponse>> Revisar(Guid id, RevisarCampanhaRequest request, CancellationToken cancellationToken)
     {
-        return Ok(await campanhaService.RevisarCampanhaAsync(id, request, cancellationToken));
+        return Ok(await reviewService.RevisarCampanhaAsync(id, request, cancellationToken));
+    }
+
+    [HttpGet("{id:guid}/revisao")]
+    public async Task<ActionResult<CampanhaResponse>> ObterRevisao(Guid id, CancellationToken cancellationToken)
+    {
+        var campanha = await reviewService.ObterRevisaoAsync(id, cancellationToken);
+        return campanha is null ? NotFound() : Ok(campanha);
+    }
+
+    [HttpPost("{id:guid}/regenerar")]
+    public async Task<ActionResult<CampanhaResponse>> Regenerar(Guid id, RegenerarCampanhaSecaoRequest request, CancellationToken cancellationToken)
+    {
+        return Ok(await reviewService.RegenerarSecaoAsync(id, request, cancellationToken));
+    }
+
+    [HttpPost("{id:guid}/aprovar")]
+    public async Task<ActionResult<CampanhaResponse>> Aprovar(Guid id, CancellationToken cancellationToken)
+    {
+        return Ok(await reviewService.AprovarCampanhaAsync(id, cancellationToken));
+    }
+
+    [HttpGet("{id:guid}/historico-revisoes")]
+    public async Task<ActionResult<IReadOnlyList<CampanhaRevisaoHistoricoResponse>>> HistoricoRevisoes(Guid id, CancellationToken cancellationToken)
+    {
+        return Ok(await reviewService.ListarHistoricoAsync(id, cancellationToken));
     }
 }
