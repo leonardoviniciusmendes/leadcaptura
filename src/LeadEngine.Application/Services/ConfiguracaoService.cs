@@ -325,6 +325,13 @@ public sealed class ConfiguracaoService(
             }
 
             if (definition.Key == "ClientId" && value?.Length > 300) throw new ArgumentException("ClientId deve ter no maximo 300 caracteres.");
+            if (definition.Key == "DefaultDailyBudget" && (!decimal.TryParse(value, out var budget) || budget <= 0)) throw new ArgumentException("DefaultDailyBudget deve ser maior que zero.");
+            if (definition.Key == "DefaultCpcBid" && !string.IsNullOrWhiteSpace(value) && (!decimal.TryParse(value, out var cpc) || cpc <= 0)) throw new ArgumentException("DefaultCpcBid deve ser maior que zero.");
+            if (definition.Key == "DefaultCountryCode" && (string.IsNullOrWhiteSpace(value) || value.Length is < 2 or > 10)) throw new ArgumentException("DefaultCountryCode invalido.");
+            if (definition.Key == "DefaultLanguageCode" && (string.IsNullOrWhiteSpace(value) || value.Length is < 2 or > 10)) throw new ArgumentException("DefaultLanguageCode invalido.");
+            if (definition.Key == "DefaultCurrencyCode" && (string.IsNullOrWhiteSpace(value) || value.Length != 3)) throw new ArgumentException("DefaultCurrencyCode deve ter 3 caracteres.");
+            if (definition.Key == "DefaultKeywordMatchType" && !new[] { "Phrase", "Exact", "Broad" }.Contains(value, StringComparer.OrdinalIgnoreCase)) throw new ArgumentException("DefaultKeywordMatchType invalido.");
+            if (definition.Key == "DefaultCampaignStatus" && !string.Equals(value, "PAUSED", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("DefaultCampaignStatus deve ser PAUSED nesta etapa.");
             if (definition.Key == "LoginCustomerId")
             {
                 var digits = new string((value ?? string.Empty).Where(char.IsDigit).ToArray());

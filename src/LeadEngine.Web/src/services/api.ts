@@ -335,6 +335,63 @@ export interface GoogleAdsTeste {
   duracaoMs?: number;
 }
 
+export type StatusGoogleAdsPreview = 'Rascunho' | 'Valido' | 'Invalido' | 'Desatualizado' | 'Publicado' | 'Erro';
+
+export interface GoogleAdsPreview {
+  id: string;
+  campanhaId: string;
+  googleAdsContaId: string;
+  contaNome: string;
+  customerId: string;
+  nomeCampanha: string;
+  objetivo?: string;
+  status: StatusGoogleAdsPreview;
+  tipoRede: string;
+  orcamentoDiario: number;
+  orcamentoMicros: number;
+  codigoMoeda: string;
+  idioma: string;
+  pais: string;
+  urlFinal: string;
+  dataCriacao: string;
+  dataAtualizacao?: string;
+  dataValidacao?: string;
+  versao: number;
+  erros: string[];
+  avisos: string[];
+  desatualizado: boolean;
+  payload: GoogleAdsPreviewPayload;
+  contadores: { headlinesValidas: number; descriptionsValidas: number; keywords: number; negativas: number; erros: number; avisos: number };
+}
+
+export interface GoogleAdsPreviewPayload {
+  campaign: Record<string, unknown>;
+  budget: Record<string, unknown>;
+  adGroups: Array<{
+    name: string;
+    status: string;
+    cpcBid?: number;
+    keywords: Array<{ text: string; matchType: string; status: string; origem: string }>;
+    negativeKeywords: Array<{ text: string; matchType: string; origem: string }>;
+    responsiveSearchAd: {
+      headlines: string[];
+      descriptions: string[];
+      finalUrls: string[];
+      path1: string;
+      path2: string;
+      status: string;
+    };
+  }>;
+}
+
+export interface GoogleAdsSuggestion {
+  campo: string;
+  indice: number;
+  original: string;
+  sugestao: string;
+  limite: number;
+}
+
 export async function obterGoogleAdsStatus(): Promise<GoogleAdsStatus> {
   const { data } = await api.get<GoogleAdsStatus>('/api/googleads/status');
   return data;
@@ -363,4 +420,48 @@ export async function selecionarGoogleAdsConta(id: string): Promise<GoogleAdsCon
 export async function testarGoogleAds(contaId?: string): Promise<GoogleAdsTeste> {
   const { data } = await api.post<GoogleAdsTeste>('/api/googleads/testar', { contaId });
   return data;
+}
+
+export async function gerarGoogleAdsPreview(campanhaId: string): Promise<GoogleAdsPreview> {
+  const { data } = await api.post<GoogleAdsPreview>(`/api/googleads/preview/campanhas/${campanhaId}`);
+  return data;
+}
+
+export async function obterGoogleAdsPreview(id: string): Promise<GoogleAdsPreview> {
+  const { data } = await api.get<GoogleAdsPreview>(`/api/googleads/preview/${id}`);
+  return data;
+}
+
+export async function obterGoogleAdsPreviewPorCampanha(campanhaId: string): Promise<GoogleAdsPreview> {
+  const { data } = await api.get<GoogleAdsPreview>(`/api/googleads/preview/campanhas/${campanhaId}`);
+  return data;
+}
+
+export async function validarGoogleAdsPreview(id: string): Promise<GoogleAdsPreview> {
+  const { data } = await api.post<GoogleAdsPreview>(`/api/googleads/preview/${id}/validar`);
+  return data;
+}
+
+export async function atualizarGoogleAdsPreview(id: string, payload: Record<string, unknown>): Promise<GoogleAdsPreview> {
+  const { data } = await api.put<GoogleAdsPreview>(`/api/googleads/preview/${id}`, payload);
+  return data;
+}
+
+export async function sugerirAjustesGoogleAdsPreview(id: string, campos: string[] = ['headlines', 'descriptions']): Promise<{ previewId: string; sugestoes: GoogleAdsSuggestion[] }> {
+  const { data } = await api.post<{ previewId: string; sugestoes: GoogleAdsSuggestion[] }>(`/api/googleads/preview/${id}/sugerir-ajustes`, { campos });
+  return data;
+}
+
+export async function aplicarSugestaoGoogleAdsPreview(id: string, payload: { campo: string; indice: number; sugestao: string }): Promise<GoogleAdsPreview> {
+  const { data } = await api.post<GoogleAdsPreview>(`/api/googleads/preview/${id}/aplicar-sugestao`, payload);
+  return data;
+}
+
+export async function obterPayloadGoogleAdsPreview(id: string): Promise<GoogleAdsPreviewPayload> {
+  const { data } = await api.get<GoogleAdsPreviewPayload>(`/api/googleads/preview/${id}/payload`);
+  return data;
+}
+
+export async function excluirGoogleAdsPreview(id: string): Promise<void> {
+  await api.delete(`/api/googleads/preview/${id}`);
 }

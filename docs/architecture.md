@@ -125,6 +125,7 @@ Entidades como `GrupoAnuncio`, `PalavraChave`, `Anuncio` e `LandingPage` ainda n
 - O slug retornado pela IA nunca é confiado diretamente; ele é recriado com `CampanhaText.Slugify`.
 - Fallback para Fake só ocorre quando `CampaignGeneration:FallbackToFake` está explicitamente `true`.
 - Google Ads possui apenas infraestrutura de conexão OAuth, seleção de conta e teste de conectividade; publicação de campanhas continua fora do escopo.
+- Pré-publicação Google Ads gera apenas preview técnico persistido; não cria budget, campaign, ad group, keyword ou ad no Google Ads.
 - O módulo antigo de leads permanece no código, mas não é o fluxo principal do produto.
 - A revisão manual não aceita status, provider, modelo, duração, id ou data de criação vindos do frontend.
 - `CampanhaSecao` é enum e o backend valida se a seção recebida é suportada antes de chamar IA.
@@ -156,6 +157,7 @@ Leads
 ConfiguracoesSistema
 ConfiguracoesSistemaHistorico
 GoogleAdsContas
+GoogleAdsPlanosPublicacao
 ```
 
 Regras relevantes:
@@ -175,6 +177,8 @@ Regras relevantes:
 - `ConfiguracoesSistemaHistorico` mantém valores anteriores/novos apenas para configurações não sensíveis.
 - `GoogleAdsContas.CustomerId` é único;
 - tokens OAuth do Google Ads ficam protegidos em `AccessTokenProtegido` e `RefreshTokenProtegido`.
+- `GoogleAdsPlanosPublicacao.CampanhaId` é único para evitar previews duplicados por campanha;
+- `GoogleAdsPlanosPublicacao` mantém controle normalizado e payload técnico detalhado em JSON.
 
 ## Configurações
 
@@ -237,6 +241,48 @@ Status possíveis na UI:
 - `Nao conectado`;
 - `Conectado`;
 - `Token expirado`.
+
+## Pré-publicação Google Ads
+
+O módulo de preview técnico fica entre a campanha revisada/publicada e uma futura publicação real.
+
+Fluxo:
+
+1. `GoogleAdsPreviewService` carrega a campanha, a conta Google Ads padrão e configurações efetivas.
+2. `GoogleAdsValidationService` valida pendências de entrada.
+3. `GoogleAdsCampaignMappingService` monta campanha SEARCH, orçamento STANDARD, um ad group, keywords, negativas e Responsive Search Ad.
+4. O preview é validado e persistido em `GoogleAdsPlanosPublicacao`.
+5. O payload fica disponível por `GET /api/googleads/preview/{id}/payload`.
+
+Decisões:
+
+- apenas um ad group é gerado por campanha neste MVP, mas o payload já usa lista;
+- campanhas planejadas saem sempre como `PAUSED`;
+- Display Network fica sempre desativada;
+- orçamento é armazenado em decimal e convertido para micros no payload;
+- palavras principais usam `PHRASE`; palavras de intenção como cotação/preço/contratar usam `EXACT`;
+- `BROAD` não é gerado automaticamente, salvo configuração explícita;
+- paths são derivados do slug com `Slugify` e limite de 15 caracteres;
+- textos acima do limite não são truncados silenciosamente;
+- ajuste por IA retorna original/sugestão e exige aplicação manual.
+
+Status do plano:
+
+- `Rascunho`;
+- `Valido`;
+- `Invalido`;
+- `Desatualizado`;
+- `Publicado`;
+- `Erro`.
+
+Nesta etapa o sistema nunca define `Publicado`.
+
+Detecção de desatualização:
+
+- o serviço calcula SHA-256 sobre headlines, descriptions, keywords, negativas, slug, URL pública, orçamento, público, região, cidade/UF e benefícios;
+- se o hash atual divergir do salvo, a resposta marca o preview como `Desatualizado`.
+
+O payload técnico não inclui access token, refresh token, client secret, developer token, API key ou qualquer segredo.
 
 ## Captura pública
 

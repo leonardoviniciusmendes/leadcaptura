@@ -406,7 +406,15 @@ Configurações:
     "TokenEndpoint": "https://oauth2.googleapis.com/token",
     "UserInfoEndpoint": "https://openidconnect.googleapis.com/v1/userinfo",
     "ApiBaseUrl": "https://googleads.googleapis.com/v19",
-    "Scopes": "https://www.googleapis.com/auth/adwords openid email profile"
+    "Scopes": "https://www.googleapis.com/auth/adwords openid email profile",
+    "DefaultDailyBudget": 10.00,
+    "DefaultCountryCode": "BR",
+    "DefaultLanguageCode": "pt",
+    "DefaultCurrencyCode": "BRL",
+    "DefaultKeywordMatchType": "Phrase",
+    "DefaultCampaignStatus": "PAUSED",
+    "EnableBroadMatch": false,
+    "DefaultCpcBid": ""
   }
 }
 ```
@@ -420,6 +428,83 @@ Fluxo:
 5. Use `POST /api/googleads/testar` para validar a conexão.
 
 `AccessToken` e `RefreshToken` são protegidos por `ISecretProtector`. A API nunca retorna tokens.
+
+## Pré-publicação Google Ads
+
+O preview técnico transforma uma campanha revisada e com landing publicada em uma estrutura compatível com Google Ads, sem chamar endpoints de criação.
+
+Endpoints:
+
+```http
+POST /api/googleads/preview/campanhas/{campanhaId}
+GET /api/googleads/preview/{id}
+GET /api/googleads/preview/campanhas/{campanhaId}
+POST /api/googleads/preview/{id}/validar
+PUT /api/googleads/preview/{id}
+POST /api/googleads/preview/{id}/sugerir-ajustes
+POST /api/googleads/preview/{id}/aplicar-sugestao
+GET /api/googleads/preview/{id}/payload
+DELETE /api/googleads/preview/{id}
+```
+
+Exemplo de payload técnico:
+
+```json
+{
+  "campaign": {
+    "name": "Plano de Saúde Empresarial RJ",
+    "advertisingChannelType": "SEARCH",
+    "status": "PAUSED",
+    "includeDisplayNetwork": false
+  },
+  "budget": {
+    "amount": 10.00,
+    "amountMicros": 10000000,
+    "deliveryMethod": "STANDARD",
+    "shared": false
+  },
+  "adGroups": [
+    {
+      "name": "Plano Empresarial",
+      "keywords": [
+        { "text": "plano de saúde empresarial", "matchType": "PHRASE" }
+      ],
+      "responsiveSearchAd": {
+        "headlines": [],
+        "descriptions": [],
+        "finalUrls": []
+      }
+    }
+  ]
+}
+```
+
+Validações bloqueantes:
+
+- campanha inexistente ou não aprovada;
+- landing não publicada ou URL pública inválida;
+- conta Google Ads padrão ausente;
+- configuração Google Ads inválida;
+- orçamento menor ou igual a zero;
+- moeda ausente;
+- menos de 3 ou mais de 15 headlines;
+- menos de 2 ou mais de 4 descriptions;
+- headline acima de 30 caracteres;
+- description acima de 90 caracteres;
+- ausência de keywords.
+
+Avisos:
+
+- orçamento baixo;
+- poucas keywords;
+- ausência de negativas;
+- headline repetida;
+- descrição semelhante;
+- URL fora do domínio público configurado;
+- ausência de keyword Exact;
+- CPC não configurado.
+
+O preview usa hash SHA-256 dos campos relevantes da campanha para detectar conteúdo desatualizado. Ajustes por IA retornam apenas sugestões e não substituem texto automaticamente.
 
 ## Configuração
 
@@ -486,6 +571,14 @@ GOOGLE_ADS_CLIENT_ID=
 GOOGLE_ADS_CLIENT_SECRET=
 GOOGLE_ADS_DEVELOPER_TOKEN=
 GOOGLE_ADS_REDIRECT_URI=
+GOOGLE_ADS_DEFAULT_DAILY_BUDGET=10.00
+GOOGLE_ADS_DEFAULT_COUNTRY_CODE=BR
+GOOGLE_ADS_DEFAULT_LANGUAGE_CODE=pt
+GOOGLE_ADS_DEFAULT_CURRENCY_CODE=BRL
+GOOGLE_ADS_DEFAULT_KEYWORD_MATCH_TYPE=Phrase
+GOOGLE_ADS_DEFAULT_CAMPAIGN_STATUS=PAUSED
+GOOGLE_ADS_ENABLE_BROAD_MATCH=false
+GOOGLE_ADS_DEFAULT_CPC_BID=
 ```
 
 Nunca coloque chave real no repositório.
@@ -553,6 +646,7 @@ Migrations criadas:
 20260724203700_AddLandingPublicaCapturaLeads
 20260724210540_AddConfiguracoesSistema
 20260724212632_AddGoogleAdsIntegration
+20260724214217_AddGoogleAdsPreview
 ```
 
 Criar nova migration:

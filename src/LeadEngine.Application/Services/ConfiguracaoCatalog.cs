@@ -39,7 +39,15 @@ public static class ConfiguracaoCatalog
         new(CategoriaConfiguracao.GoogleAds, "TokenEndpoint", TipoConfiguracao.Url, false, "https://oauth2.googleapis.com/token", "GOOGLE_ADS_TOKEN_ENDPOINT", "GoogleAds:TokenEndpoint", "Endpoint de token OAuth."),
         new(CategoriaConfiguracao.GoogleAds, "UserInfoEndpoint", TipoConfiguracao.Url, false, "https://openidconnect.googleapis.com/v1/userinfo", "GOOGLE_ADS_USER_INFO_ENDPOINT", "GoogleAds:UserInfoEndpoint", "Endpoint de dados do usuario."),
         new(CategoriaConfiguracao.GoogleAds, "ApiBaseUrl", TipoConfiguracao.Url, false, "https://googleads.googleapis.com/v19", "GOOGLE_ADS_API_BASE_URL", "GoogleAds:ApiBaseUrl", "URL base da Google Ads API."),
-        new(CategoriaConfiguracao.GoogleAds, "Scopes", TipoConfiguracao.Texto, false, "https://www.googleapis.com/auth/adwords openid email profile", "GOOGLE_ADS_SCOPES", "GoogleAds:Scopes", "Escopos OAuth solicitados.")
+        new(CategoriaConfiguracao.GoogleAds, "Scopes", TipoConfiguracao.Texto, false, "https://www.googleapis.com/auth/adwords openid email profile", "GOOGLE_ADS_SCOPES", "GoogleAds:Scopes", "Escopos OAuth solicitados."),
+        new(CategoriaConfiguracao.GoogleAds, "DefaultDailyBudget", TipoConfiguracao.Decimal, false, "10.00", "GOOGLE_ADS_DEFAULT_DAILY_BUDGET", "GoogleAds:DefaultDailyBudget", "Orcamento diario padrao."),
+        new(CategoriaConfiguracao.GoogleAds, "DefaultCountryCode", TipoConfiguracao.Texto, false, "BR", "GOOGLE_ADS_DEFAULT_COUNTRY_CODE", "GoogleAds:DefaultCountryCode", "Pais padrao."),
+        new(CategoriaConfiguracao.GoogleAds, "DefaultLanguageCode", TipoConfiguracao.Texto, false, "pt", "GOOGLE_ADS_DEFAULT_LANGUAGE_CODE", "GoogleAds:DefaultLanguageCode", "Idioma padrao."),
+        new(CategoriaConfiguracao.GoogleAds, "DefaultCurrencyCode", TipoConfiguracao.Texto, false, "BRL", "GOOGLE_ADS_DEFAULT_CURRENCY_CODE", "GoogleAds:DefaultCurrencyCode", "Moeda padrao."),
+        new(CategoriaConfiguracao.GoogleAds, "DefaultKeywordMatchType", TipoConfiguracao.Texto, false, "Phrase", "GOOGLE_ADS_DEFAULT_KEYWORD_MATCH_TYPE", "GoogleAds:DefaultKeywordMatchType", "Correspondencia padrao."),
+        new(CategoriaConfiguracao.GoogleAds, "DefaultCampaignStatus", TipoConfiguracao.Texto, false, "PAUSED", "GOOGLE_ADS_DEFAULT_CAMPAIGN_STATUS", "GoogleAds:DefaultCampaignStatus", "Status planejado."),
+        new(CategoriaConfiguracao.GoogleAds, "EnableBroadMatch", TipoConfiguracao.Booleano, false, "false", "GOOGLE_ADS_ENABLE_BROAD_MATCH", "GoogleAds:EnableBroadMatch", "Permite broad match automatico."),
+        new(CategoriaConfiguracao.GoogleAds, "DefaultCpcBid", TipoConfiguracao.Decimal, false, "", "GOOGLE_ADS_DEFAULT_CPC_BID", "GoogleAds:DefaultCpcBid", "CPC inicial opcional.")
     ];
 
     public static ConfigDefinition Get(CategoriaConfiguracao categoria, string key)

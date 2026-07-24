@@ -10,6 +10,7 @@
         <RouterLink class="button secondary" to="/campanhas">Voltar</RouterLink>
         <button class="button secondary" :disabled="busy" @click="loadHistorico">Historico</button>
         <button class="button secondary" :disabled="busy || !campanha?.publicada" @click="copyPublicUrl">Copiar URL publica</button>
+        <RouterLink v-if="campanha?.status === 'Revisada' && campanha?.publicada" class="button secondary" :to="`/campanhas/${campanha.id}/googleads-preview`">Preview Google Ads</RouterLink>
         <button v-if="!campanha?.publicada" class="button secondary" :disabled="busy || !campanha" @click="publicar">{{ publishing ? 'Publicando...' : 'Publicar landing' }}</button>
         <button v-else class="button secondary" :disabled="busy || !campanha" @click="despublicar">{{ publishing ? 'Despublicando...' : 'Despublicar' }}</button>
         <button class="button" :disabled="busy || !campanha" @click="aprovar">{{ approving ? 'Aprovando...' : 'Aprovar campanha' }}</button>

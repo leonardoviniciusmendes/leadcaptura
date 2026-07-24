@@ -31,6 +31,11 @@ public static class DependencyInjection
         services.AddScoped<IGoogleAdsOAuthClient, GoogleAdsOAuthClient>();
         services.AddScoped<IGoogleAdsTokenService, GoogleAdsTokenService>();
         services.AddScoped<IGoogleAdsConnectionService, GoogleAdsConnectionService>();
+        services.AddScoped<IGoogleAdsPlanoPublicacaoRepository, GoogleAdsPlanoPublicacaoRepository>();
+        services.AddScoped<IGoogleAdsCampaignMappingService, GoogleAdsCampaignMappingService>();
+        services.AddScoped<IGoogleAdsValidationService, GoogleAdsValidationService>();
+        services.AddScoped<IGoogleAdsCopyAdjustmentService, OpenRouterGoogleAdsCopyAdjustmentService>();
+        services.AddScoped<IGoogleAdsPreviewService, GoogleAdsPreviewService>();
         services.AddMemoryCache();
         services.AddDataProtection();
         services.AddScoped<CampaignPromptBuilder>();

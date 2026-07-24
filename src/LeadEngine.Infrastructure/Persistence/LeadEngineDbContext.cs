@@ -11,6 +11,7 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
     public DbSet<ConfiguracaoSistema> ConfiguracoesSistema => Set<ConfiguracaoSistema>();
     public DbSet<ConfiguracaoSistemaHistorico> ConfiguracoesSistemaHistorico => Set<ConfiguracaoSistemaHistorico>();
     public DbSet<GoogleAdsConta> GoogleAdsContas => Set<GoogleAdsConta>();
+    public DbSet<GoogleAdsPlanoPublicacao> GoogleAdsPlanosPublicacao => Set<GoogleAdsPlanoPublicacao>();
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<OrigemLead> OrigensLead => Set<OrigemLead>();
     public DbSet<TentativaCapturaLead> TentativasCapturaLead => Set<TentativaCapturaLead>();
@@ -115,6 +116,36 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
             entity.HasIndex(x => x.CustomerId).IsUnique();
             entity.HasIndex(x => x.Padrao);
             entity.HasIndex(x => x.Ativa);
+        });
+
+        modelBuilder.Entity<GoogleAdsPlanoPublicacao>(entity =>
+        {
+            entity.ToTable("GoogleAdsPlanosPublicacao");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.NomeCampanha).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.Objetivo).HasMaxLength(500);
+            entity.Property(x => x.Status).HasConversion<int>();
+            entity.Property(x => x.TipoRede).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.OrcamentoDiario).HasPrecision(10, 2);
+            entity.Property(x => x.CodigoMoeda).HasMaxLength(3).IsRequired();
+            entity.Property(x => x.Idioma).HasMaxLength(10).IsRequired();
+            entity.Property(x => x.Pais).HasMaxLength(10).IsRequired();
+            entity.Property(x => x.UrlFinal).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.ConteudoHash).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.ErrosValidacaoJson).HasColumnType("json").IsRequired();
+            entity.Property(x => x.AvisosValidacaoJson).HasColumnType("json").IsRequired();
+            entity.Property(x => x.PayloadPreviewJson).HasColumnType("json").IsRequired();
+            entity.HasIndex(x => x.CampanhaId).IsUnique();
+            entity.HasIndex(x => x.GoogleAdsContaId);
+            entity.HasIndex(x => x.Status);
+            entity.HasOne(x => x.Campanha)
+                .WithMany()
+                .HasForeignKey(x => x.CampanhaId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.GoogleAdsConta)
+                .WithMany()
+                .HasForeignKey(x => x.GoogleAdsContaId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Lead>(entity =>
