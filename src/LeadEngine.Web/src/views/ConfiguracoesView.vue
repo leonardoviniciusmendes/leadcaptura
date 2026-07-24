@@ -47,7 +47,7 @@
               </div>
               <div v-if="item.sensivel" class="secret-control">
                 <span class="status" :class="item.configurado ? 'status-revisada' : 'status-erro'">
-                  {{ item.configurado ? 'Chave configurada' : 'Nao configurada' }}
+                  {{ item.configurado ? 'Configurado' : 'Nao configurado' }}
                 </span>
                 <input :id="item.chave" v-model="form[item.chave]" type="password" placeholder="Substituir segredo" autocomplete="new-password" />
                 <label class="remove-secret"><input v-model="removeFlags[item.chave]" type="checkbox" /> Remover</label>
@@ -140,7 +140,13 @@ onMounted(async () => {
   await handleGoogleCallback();
   await load();
 });
-watch(selected, hydrate);
+watch(selected, async () => {
+  if (!configs[selected.value]) {
+    await load();
+    return;
+  }
+  hydrate();
+});
 watch(selected, async (value) => {
   if (value === 'GoogleAds') {
     await loadGoogleAds();
@@ -162,7 +168,7 @@ async function load() {
       await loadGoogleAds();
     }
   } catch {
-    error.value = 'Nao foi possivel carregar as configuracoes.';
+    error.value = `Nao foi possivel carregar as configuracoes de ${labelCategoria(selected.value)}.`;
   } finally {
     loading.value = false;
   }

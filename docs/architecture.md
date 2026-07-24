@@ -126,6 +126,7 @@ Entidades como `GrupoAnuncio`, `PalavraChave`, `Anuncio` e `LandingPage` ainda n
 - Fallback para Fake só ocorre quando `CampaignGeneration:FallbackToFake` está explicitamente `true`.
 - Google Ads possui apenas infraestrutura de conexão OAuth, seleção de conta e teste de conectividade; publicação de campanhas continua fora do escopo.
 - Pré-publicação Google Ads gera apenas preview técnico persistido; não cria budget, campaign, ad group, keyword ou ad no Google Ads.
+- Publicação controlada Google Ads cria recursos SEARCH reais somente a partir de preview válido, sempre com status `PAUSED`.
 - O módulo antigo de leads permanece no código, mas não é o fluxo principal do produto.
 - A revisão manual não aceita status, provider, modelo, duração, id ou data de criação vindos do frontend.
 - `CampanhaSecao` é enum e o backend valida se a seção recebida é suportada antes de chamar IA.
@@ -158,6 +159,8 @@ ConfiguracoesSistema
 ConfiguracoesSistemaHistorico
 GoogleAdsContas
 GoogleAdsPlanosPublicacao
+GoogleAdsPublicacoes
+GoogleAdsRecursosPublicados
 ```
 
 Regras relevantes:
@@ -179,6 +182,8 @@ Regras relevantes:
 - tokens OAuth do Google Ads ficam protegidos em `AccessTokenProtegido` e `RefreshTokenProtegido`.
 - `GoogleAdsPlanosPublicacao.CampanhaId` é único para evitar previews duplicados por campanha;
 - `GoogleAdsPlanosPublicacao` mantém controle normalizado e payload técnico detalhado em JSON.
+- `GoogleAdsPublicacoes` possui índice único por plano, versão e hash do preview para idempotência;
+- `GoogleAdsRecursosPublicados` armazena resource names retornados pelo Google Ads.
 
 ## Configurações
 
@@ -283,6 +288,77 @@ Detecção de desatualização:
 - se o hash atual divergir do salvo, a resposta marca o preview como `Desatualizado`.
 
 O payload técnico não inclui access token, refresh token, client secret, developer token, API key ou qualquer segredo.
+
+## Publicação Controlada Google Ads
+
+O módulo de publicação recebe exclusivamente `GoogleAdsPlanoPublicacao` válido. Não aceita orçamento, texto ou keywords no endpoint de publicação.
+
+Componentes:
+
+- `IGoogleAdsPublishingService` orquestra pré-condições, validação remota, confirmação, idempotência e saga;
+- `IGoogleAdsMutationClient` isola chamadas externas;
+- `IGoogleAdsOperationBuilder` monta as operações técnicas em ordem lógica;
+- `IGoogleAdsGeoTargetResolver` e `IGoogleAdsLanguageResolver` resolvem códigos configurados para resource names;
+- `IGoogleAdsErrorTranslator` converte erros em mensagens operacionais;
+- `GoogleAdsPublicationRepository` persiste saga e recursos criados.
+
+SDK:
+
+- pacote oficial `Google.Ads.GoogleAds` versão `26.0.1`;
+- tipos do SDK ficam restritos à Infrastructure.
+
+Saga:
+
+- `Preparada`;
+- `ValidandoRemotamente`;
+- `Validada`;
+- `Publicando`;
+- `ParcialmentePublicada`;
+- `Publicada`;
+- `Falhou`;
+- `RequerIntervencao`.
+
+Pré-condições:
+
+- preview existe, está `Valido` e não está desatualizado;
+- campanha original segue aprovada;
+- landing segue publicada;
+- URL final é válida;
+- conta Google Ads existe e está ativa;
+- refresh/access token pode ser resolvido;
+- `DeveloperToken` configurado;
+- customer id definido;
+- combinação preview/versão/hash ainda não foi publicada.
+
+Operações planejadas:
+
+1. CampaignBudget;
+2. Campaign SEARCH;
+3. CampaignCriterion de localização;
+4. CampaignCriterion de idioma;
+5. negativas em nível de campanha;
+6. AdGroup;
+7. keywords;
+8. Responsive Search Ad.
+
+Todos os status compatíveis são forçados para `PAUSED`, mesmo que o preview contenha outro valor. A validação remota usa `validateOnly=true` e a publicação usa `partialFailure=false`.
+
+Idempotência:
+
+- se a publicação já estiver `Publicada`, a API retorna o registro existente;
+- se estiver `Publicando`, retorna conflito;
+- se estiver `ParcialmentePublicada` ou `RequerIntervencao`, bloqueia repetição e exige reconciliação.
+
+Conta de teste:
+
+- `GoogleAds.UseTestAccount=true` bloqueia publicação fora de `GoogleAds.TestCustomerId`;
+- a UI mostra indicador de conta teste quando a preparação retorna `teste=true`.
+
+Segurança:
+
+- tokens, client secret e developer token não são persistidos nas entidades de publicação;
+- customer id é mascarado nas respostas administrativas de confirmação;
+- logs devem usar IDs e requestId, sem payload integral sensível.
 
 ## Captura pública
 

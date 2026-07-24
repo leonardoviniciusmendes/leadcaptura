@@ -47,7 +47,9 @@ public static class ConfiguracaoCatalog
         new(CategoriaConfiguracao.GoogleAds, "DefaultKeywordMatchType", TipoConfiguracao.Texto, false, "Phrase", "GOOGLE_ADS_DEFAULT_KEYWORD_MATCH_TYPE", "GoogleAds:DefaultKeywordMatchType", "Correspondencia padrao."),
         new(CategoriaConfiguracao.GoogleAds, "DefaultCampaignStatus", TipoConfiguracao.Texto, false, "PAUSED", "GOOGLE_ADS_DEFAULT_CAMPAIGN_STATUS", "GoogleAds:DefaultCampaignStatus", "Status planejado."),
         new(CategoriaConfiguracao.GoogleAds, "EnableBroadMatch", TipoConfiguracao.Booleano, false, "false", "GOOGLE_ADS_ENABLE_BROAD_MATCH", "GoogleAds:EnableBroadMatch", "Permite broad match automatico."),
-        new(CategoriaConfiguracao.GoogleAds, "DefaultCpcBid", TipoConfiguracao.Decimal, false, "", "GOOGLE_ADS_DEFAULT_CPC_BID", "GoogleAds:DefaultCpcBid", "CPC inicial opcional.")
+        new(CategoriaConfiguracao.GoogleAds, "DefaultCpcBid", TipoConfiguracao.Decimal, false, "", "GOOGLE_ADS_DEFAULT_CPC_BID", "GoogleAds:DefaultCpcBid", "CPC inicial opcional."),
+        new(CategoriaConfiguracao.GoogleAds, "UseTestAccount", TipoConfiguracao.Booleano, false, "false", "GOOGLE_ADS_USE_TEST_ACCOUNT", "GoogleAds:UseTestAccount", "Bloqueia publicacao fora do customer de teste."),
+        new(CategoriaConfiguracao.GoogleAds, "TestCustomerId", TipoConfiguracao.Texto, false, "", "GOOGLE_ADS_TEST_CUSTOMER_ID", "GoogleAds:TestCustomerId", "Customer ID de teste.")
     ];
 
     public static ConfigDefinition Get(CategoriaConfiguracao categoria, string key)

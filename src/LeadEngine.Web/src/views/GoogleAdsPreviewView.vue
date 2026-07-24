@@ -9,6 +9,8 @@
       <div class="actions header-actions">
         <RouterLink class="button secondary" :to="`/campanhas/${campanhaId}`">Voltar</RouterLink>
         <button class="button secondary" :disabled="busy || !preview" @click="validar">Validar</button>
+        <button class="button secondary" :disabled="busy || !canRemoteValidate" @click="validarRemoto">Validar no Google Ads</button>
+        <button class="button secondary" :disabled="busy || !canPrepare" @click="prepararPublicacao">Preparar publicacao</button>
         <button class="button secondary" :disabled="busy || !preview" @click="sugerir">Sugerir ajustes</button>
         <button class="button secondary" :disabled="busy || !preview" @click="excluir">Excluir</button>
         <button class="button" :disabled="busy" @click="gerar">{{ preview ? 'Regenerar' : 'Gerar preview' }}</button>
@@ -35,6 +37,7 @@
       <section class="panel preview-notice">
         <span class="status" :class="statusClass(preview.status)">{{ preview.status }}</span>
         <p>As alteracoes feitas aqui afetam apenas o preview do Google Ads.</p>
+        <span v-if="preparacao?.teste" class="status status-gerando">Conta teste</span>
       </section>
 
       <section class="grid-layout">
@@ -139,6 +142,44 @@
         </article>
       </section>
 
+      <section v-if="validacaoRemota" class="panel">
+        <header class="section-heading"><h2>Validacao remota</h2></header>
+        <p>RequestId: {{ validacaoRemota.requestId || '-' }}</p>
+        <p>{{ validacaoRemota.valido ? 'Validacao remota aprovada.' : 'Validacao remota recusada.' }}</p>
+        <ul><li v-for="erro in validacaoRemota.erros" :key="`${erro.codigo}-${erro.campo}`">{{ erro.mensagem }}</li></ul>
+      </section>
+
+      <section v-if="preparacao" class="panel">
+        <header class="section-heading">
+          <div>
+            <h2>Publicacao preparada</h2>
+            <span>{{ preparacao.conta }} / {{ preparacao.customerIdMascarado }}</span>
+          </div>
+        </header>
+        <dl class="compact-list">
+          <dt>Campanha</dt><dd>{{ preparacao.nome }}</dd>
+          <dt>Orcamento</dt><dd>{{ money(preparacao.orcamentoDiario) }}</dd>
+          <dt>Status</dt><dd>{{ preparacao.statusPlanejado }}</dd>
+          <dt>Keywords</dt><dd>{{ preparacao.quantidadeKeywords }}</dd>
+          <dt>Anuncios</dt><dd>{{ preparacao.quantidadeAnuncios }}</dd>
+          <dt>URL</dt><dd>{{ preparacao.url }}</dd>
+        </dl>
+        <label class="remove-secret"><input v-model="confirmPaused" type="checkbox" /> Confirmo a criacao da campanha em estado pausado.</label>
+        <p class="subtitle">Esta operacao criara recursos reais na conta Google Ads selecionada. A campanha sera criada pausada e nao comecara a gerar cobrancas ate ser ativada manualmente.</p>
+        <button class="button" :disabled="busy || !confirmPaused || !preparacao.validacaoRemota" @click="publicar">Publicar como pausada</button>
+      </section>
+
+      <section v-if="publicacao" class="panel">
+        <header class="section-heading"><h2>Publicacao</h2></header>
+        <p>Status: <span class="status">{{ publicacao.status }}</span></p>
+        <p>RequestId: {{ publicacao.requestIdPublicacao || publicacao.requestIdValidacao || '-' }}</p>
+        <RouterLink class="button secondary narrow" :to="`/googleads/publicacoes/${publicacao.id}`">Ver historico</RouterLink>
+        <article v-for="resource in publicacao.recursos" :key="resource.resourceName" class="history-item">
+          <strong>{{ resource.tipoRecurso }}</strong>
+          <span>{{ resource.resourceName }}</span>
+        </article>
+      </section>
+
       <section class="panel">
         <header class="section-heading"><h2>Payload tecnico</h2></header>
         <pre class="payload-box">{{ JSON.stringify(preview.payload, null, 2) }}</pre>
@@ -148,7 +189,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import EmptyState from '../components/EmptyState.vue';
 import MetricCard from '../components/MetricCard.vue';
@@ -160,9 +201,15 @@ import {
   excluirGoogleAdsPreview,
   gerarGoogleAdsPreview,
   obterGoogleAdsPreviewPorCampanha,
+  prepararPublicacaoGoogleAds,
+  publicarGoogleAds,
   sugerirAjustesGoogleAdsPreview,
+  validarRemotamenteGoogleAds,
   validarGoogleAdsPreview,
   type GoogleAdsPreview,
+  type GoogleAdsPreparePublication,
+  type GoogleAdsPublication,
+  type GoogleAdsRemoteValidation,
   type GoogleAdsSuggestion,
   type StatusGoogleAdsPreview
 } from '../services/api';
@@ -171,6 +218,10 @@ const route = useRoute();
 const campanhaId = String(route.params.id);
 const preview = ref<GoogleAdsPreview | null>(null);
 const sugestoes = ref<GoogleAdsSuggestion[]>([]);
+const validacaoRemota = ref<GoogleAdsRemoteValidation | null>(null);
+const preparacao = ref<GoogleAdsPreparePublication | null>(null);
+const publicacao = ref<GoogleAdsPublication | null>(null);
+const confirmPaused = ref(false);
 const loading = ref(false);
 const busy = ref(false);
 const error = ref('');
@@ -188,6 +239,9 @@ const form = reactive({
 });
 
 onMounted(load);
+
+const canRemoteValidate = computed(() => preview.value?.status === 'Valido' && !preview.value?.desatualizado);
+const canPrepare = computed(() => Boolean(validacaoRemota.value?.valido && preview.value?.status === 'Valido' && !preview.value?.desatualizado));
 
 async function load() {
   loading.value = true;
@@ -273,6 +327,46 @@ async function sugerir() {
   }
 }
 
+async function validarRemoto() {
+  if (!preview.value) return;
+  busy.value = true;
+  try {
+    validacaoRemota.value = await validarRemotamenteGoogleAds(preview.value.id);
+    showToast({ type: validacaoRemota.value.valido ? 'success' : 'error', title: validacaoRemota.value.valido ? 'Validado no Google Ads' : 'Google Ads recusou' });
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel validar no Google Ads.');
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function prepararPublicacao() {
+  if (!preview.value) return;
+  busy.value = true;
+  try {
+    preparacao.value = await prepararPublicacaoGoogleAds(preview.value.id);
+    confirmPaused.value = false;
+    showToast({ type: 'success', title: 'Publicacao preparada' });
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel preparar a publicacao.');
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function publicar() {
+  if (!preview.value || !preparacao.value) return;
+  busy.value = true;
+  try {
+    publicacao.value = await publicarGoogleAds(preview.value.id, { confirmationToken: preparacao.value.confirmationToken, confirmarCriacaoPausada: confirmPaused.value });
+    showToast({ type: 'success', title: 'Campanha criada como pausada' });
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel publicar no Google Ads.');
+  } finally {
+    busy.value = false;
+  }
+}
+
 async function aplicar(item: GoogleAdsSuggestion) {
   if (!preview.value) return;
   preview.value = await aplicarSugestaoGoogleAdsPreview(preview.value.id, item);
@@ -292,6 +386,11 @@ async function excluir() {
 function statusClass(status: StatusGoogleAdsPreview) {
   return `status-${status.toLowerCase()}`;
 }
+
+function money(value: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
+
 
 function message(err: unknown, fallback: string) {
   const response = err as { response?: { data?: { mensagem?: string } } };

@@ -414,7 +414,9 @@ Configurações:
     "DefaultKeywordMatchType": "Phrase",
     "DefaultCampaignStatus": "PAUSED",
     "EnableBroadMatch": false,
-    "DefaultCpcBid": ""
+    "DefaultCpcBid": "",
+    "UseTestAccount": false,
+    "TestCustomerId": ""
   }
 }
 ```
@@ -506,6 +508,89 @@ Avisos:
 
 O preview usa hash SHA-256 dos campos relevantes da campanha para detectar conteúdo desatualizado. Ajustes por IA retornam apenas sugestões e não substituem texto automaticamente.
 
+## Publicação controlada Google Ads
+
+A publicação usa exclusivamente um `GoogleAdsPlanoPublicacao` válido como fonte. A campanha, o grupo e o anúncio são sempre criados como `PAUSED`; o sistema nunca ativa campanhas automaticamente.
+
+SDK oficial referenciado:
+
+```text
+Google.Ads.GoogleAds 26.0.1
+```
+
+Endpoints:
+
+```http
+POST /api/googleads/publicacoes/preview/{previewId}/validar-remotamente
+POST /api/googleads/publicacoes/preview/{previewId}/preparar
+POST /api/googleads/publicacoes/preview/{previewId}/publicar
+POST /api/googleads/publicacoes/{id}/reconciliar
+GET /api/googleads/publicacoes/{id}
+GET /api/googleads/publicacoes/campanha/{campanhaId}
+GET /api/googleads/publicacoes
+```
+
+Validação remota:
+
+```http
+POST /api/googleads/publicacoes/preview/{previewId}/validar-remotamente
+```
+
+Executa as mesmas operações planejadas com `validateOnly=true`, persiste `requestId`, erros traduzidos e não cria recursos.
+
+Preparação:
+
+```json
+{
+  "nome": "Plano de Saúde Empresarial RJ",
+  "customerIdMascarado": "12****90",
+  "orcamentoDiario": 10.0,
+  "statusPlanejado": "PAUSED",
+  "validacaoRemota": true,
+  "confirmationToken": "uso-unico"
+}
+```
+
+Publicação:
+
+```json
+{
+  "confirmationToken": "uso-unico",
+  "confirmarCriacaoPausada": true
+}
+```
+
+Resultado simplificado:
+
+```json
+{
+  "status": "Publicada",
+  "requestIdPublicacao": "abc",
+  "recursos": [
+    {
+      "tipoRecurso": "Campaign",
+      "resourceName": "customers/1234567890/campaigns/222",
+      "status": "PAUSED"
+    }
+  ]
+}
+```
+
+Idempotência:
+
+- índice único por `GoogleAdsPlanoPublicacaoId`, `PreviewVersao` e `PreviewHash`;
+- publicação já `Publicada` retorna o registro existente;
+- publicação `Publicando` retorna conflito;
+- publicação parcial exige reconciliação.
+
+Conta de teste:
+
+- `GoogleAds.UseTestAccount=true`;
+- `GoogleAds.TestCustomerId` obrigatório;
+- publicação é bloqueada quando o customer selecionado difere do customer de teste.
+
+Nenhum endpoint retorna access token, refresh token, client secret ou developer token.
+
 ## Configuração
 
 Provider padrão:
@@ -579,6 +664,8 @@ GOOGLE_ADS_DEFAULT_KEYWORD_MATCH_TYPE=Phrase
 GOOGLE_ADS_DEFAULT_CAMPAIGN_STATUS=PAUSED
 GOOGLE_ADS_ENABLE_BROAD_MATCH=false
 GOOGLE_ADS_DEFAULT_CPC_BID=
+GOOGLE_ADS_USE_TEST_ACCOUNT=false
+GOOGLE_ADS_TEST_CUSTOMER_ID=
 ```
 
 Nunca coloque chave real no repositório.
@@ -647,6 +734,7 @@ Migrations criadas:
 20260724210540_AddConfiguracoesSistema
 20260724212632_AddGoogleAdsIntegration
 20260724214217_AddGoogleAdsPreview
+20260724215939_AddGoogleAdsControlledPublishing
 ```
 
 Criar nova migration:

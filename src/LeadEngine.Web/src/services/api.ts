@@ -392,6 +392,17 @@ export interface GoogleAdsSuggestion {
   limite: number;
 }
 
+export type StatusGoogleAdsPublicacao = 'Preparada' | 'ValidandoRemotamente' | 'Validada' | 'Publicando' | 'ParcialmentePublicada' | 'Publicada' | 'Falhou' | 'RequerIntervencao';
+export interface GoogleAdsPublicationError { codigo: string; mensagem: string; operacao?: string; indiceOperacao?: number; campo?: string; valorRejeitado?: string; requestId?: string; recuperavel: boolean; acaoSugerida?: string }
+export interface GoogleAdsPublishedResource { tipoRecurso: string; resourceName: string; externalId?: string; nome?: string; status: string }
+export interface GoogleAdsRemoteValidation { valido: boolean; requestId?: string; erros: GoogleAdsPublicationError[]; avisos: string[]; dataValidacao: string }
+export interface GoogleAdsPreparePublication {
+  publicacaoId: string; confirmationToken: string; nome: string; conta: string; customerIdMascarado: string; orcamentoDiario: number; quantidadeGrupos: number; quantidadeKeywords: number; quantidadeNegativas: number; quantidadeAnuncios: number; url: string; statusPlanejado: string; hash: string; versao: number; validacaoLocal: boolean; validacaoRemota: boolean; teste: boolean;
+}
+export interface GoogleAdsPublication {
+  id: string; previewId: string; campanhaId: string; contaId: string; customerIdMascarado: string; previewVersao: number; previewHash: string; status: StatusGoogleAdsPublicacao; requestIdValidacao?: string; requestIdPublicacao?: string; erroCodigo?: string; erroMensagemControlada?: string; erros: GoogleAdsPublicationError[]; recursos: GoogleAdsPublishedResource[]; dataCriacao: string; dataAtualizacao?: string; teste: boolean;
+}
+
 export async function obterGoogleAdsStatus(): Promise<GoogleAdsStatus> {
   const { data } = await api.get<GoogleAdsStatus>('/api/googleads/status');
   return data;
@@ -464,4 +475,29 @@ export async function obterPayloadGoogleAdsPreview(id: string): Promise<GoogleAd
 
 export async function excluirGoogleAdsPreview(id: string): Promise<void> {
   await api.delete(`/api/googleads/preview/${id}`);
+}
+
+export async function validarRemotamenteGoogleAds(previewId: string): Promise<GoogleAdsRemoteValidation> {
+  const { data } = await api.post<GoogleAdsRemoteValidation>(`/api/googleads/publicacoes/preview/${previewId}/validar-remotamente`);
+  return data;
+}
+
+export async function prepararPublicacaoGoogleAds(previewId: string): Promise<GoogleAdsPreparePublication> {
+  const { data } = await api.post<GoogleAdsPreparePublication>(`/api/googleads/publicacoes/preview/${previewId}/preparar`);
+  return data;
+}
+
+export async function publicarGoogleAds(previewId: string, payload: { confirmationToken: string; confirmarCriacaoPausada: boolean }): Promise<GoogleAdsPublication> {
+  const { data } = await api.post<GoogleAdsPublication>(`/api/googleads/publicacoes/preview/${previewId}/publicar`, payload);
+  return data;
+}
+
+export async function obterPublicacaoGoogleAds(id: string): Promise<GoogleAdsPublication> {
+  const { data } = await api.get<GoogleAdsPublication>(`/api/googleads/publicacoes/${id}`);
+  return data;
+}
+
+export async function reconciliarPublicacaoGoogleAds(id: string): Promise<Record<string, unknown>> {
+  const { data } = await api.post(`/api/googleads/publicacoes/${id}/reconciliar`);
+  return data;
 }
