@@ -1,5 +1,25 @@
 # Arquitetura do LeadEngine
 
+## OAuth Google Ads
+
+O callback local configurado para a aplicacao Vue com base publica e `http://localhost:5173/leadcaptura/configuracoes?googleAdsCallback=1`. A UI captura `googleAdsCallback=1`, `code` e `state`, chama `POST /api/googleads/oauth/callback`, recarrega status/contas e limpa a URL com `router.replace({ path: '/configuracoes', query: {} })`, preservando o `BASE_URL` do Vue Router.
+
+O backend persiste `state` em `GoogleAdsOAuthStates` como hash SHA-256, com expiracao e uso unico. O callback valida o state antes de trocar o code por tokens. `RefreshToken` e `AccessToken` sao protegidos por `ISecretProtector`; nenhum segredo volta em DTO ou log. Depois do OAuth, mesmo sem conta padrao selecionada, `GET /api/googleads/status` retorna `conectado=true` e status `Conectado sem conta padrao`.
+
+## Endurecimento Google Ads
+
+A publicacao Google Ads continua isolada atras de `IGoogleAdsMutationClient`; nenhum tipo do SDK oficial sai da Infrastructure. A implementacao atual monta descritores internos com `GoogleAdsOperationBuilder` e converte para objetos tipados do SDK `Google.Ads.GoogleAds 26.0.1` em `GoogleAdsTypedOperationFactory`, incluindo `MutateOperation`, `CampaignBudget`, `Campaign`, `CampaignCriterion`, `AdGroup`, `AdGroupCriterion`, `AdGroupAd`, `ResponsiveSearchAdInfo` e `AdTextAsset`.
+
+`validate_only` e publicacao real usam a mesma lista ordenada de operacoes e mudam apenas flags de execucao (`ValidateOnly` e `PartialFailure=false`). `GoogleAdsRestMutateTransport` fica separado para reaproveitar tokens OAuth resolvidos dinamicamente, sem expor SDK ou credenciais para Application, Domain, controllers ou DTOs publicos.
+
+Nesta fase a publicacao real fica restrita a conta de teste: `GoogleAds.EnableRealPublishing=true`, `GoogleAds.UseTestAccount=true` e `GoogleAds.TestCustomerId` igual a conta selecionada. Conta de producao e customer divergente sao bloqueados antes de qualquer chamada de criacao. `GET /api/googleads/ambiente` centraliza o diagnostico para a UI.
+
+Auditoria:
+
+- `GoogleAdsPublicacaoHistoricos` registra transicoes da saga;
+- `GoogleAdsOperacoesPublicacao` registra uma entrada por operacao enviada, com indice, tipo, resource name temporario e definitivo quando retornado;
+- `IGoogleAdsResourceQueryClient` consulta recursos por `resource_name` na reconciliacao e nao recria recursos ausentes.
+
 ## Objetivo
 
 O LeadEngine é um assistente para gerar campanhas de Google Ads para planos de saúde. O usuário não precisa conhecer Google Ads; ele informa um briefing simples e o sistema gera o conteúdo inicial da campanha.
@@ -124,7 +144,7 @@ Entidades como `GrupoAnuncio`, `PalavraChave`, `Anuncio` e `LandingPage` ainda n
 - `CampaignGenerationResponseParser` valida e normaliza a resposta da IA antes da persistência final.
 - O slug retornado pela IA nunca é confiado diretamente; ele é recriado com `CampanhaText.Slugify`.
 - Fallback para Fake só ocorre quando `CampaignGeneration:FallbackToFake` está explicitamente `true`.
-- Google Ads possui apenas infraestrutura de conexão OAuth, seleção de conta e teste de conectividade; publicação de campanhas continua fora do escopo.
+- Google Ads possui infraestrutura de conexão OAuth, seleção de conta, teste de conectividade e publicação controlada apenas em conta de teste.
 - Pré-publicação Google Ads gera apenas preview técnico persistido; não cria budget, campaign, ad group, keyword ou ad no Google Ads.
 - Publicação controlada Google Ads cria recursos SEARCH reais somente a partir de preview válido, sempre com status `PAUSED`.
 - O módulo antigo de leads permanece no código, mas não é o fluxo principal do produto.

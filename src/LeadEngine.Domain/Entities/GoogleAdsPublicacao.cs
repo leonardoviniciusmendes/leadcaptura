@@ -27,6 +27,7 @@ public sealed class GoogleAdsPublicacao
     public string RecursosJson { get; set; } = "[]";
     public int Tentativas { get; set; }
     public bool Teste { get; set; }
+    public bool IsTestAccount { get; set; }
     public string? GeoTargetResourceName { get; set; }
     public string? LanguageResourceName { get; set; }
     public DateTime DataCriacao { get; set; }
@@ -36,4 +37,6 @@ public sealed class GoogleAdsPublicacao
     public Campanha? Campanha { get; set; }
     public GoogleAdsConta? GoogleAdsConta { get; set; }
     public ICollection<GoogleAdsRecursoPublicado> Recursos { get; set; } = [];
+    public ICollection<GoogleAdsPublicacaoHistorico> Historico { get; set; } = [];
+    public ICollection<GoogleAdsOperacaoPublicacao> Operacoes { get; set; } = [];
 }

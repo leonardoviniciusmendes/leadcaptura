@@ -9,7 +9,8 @@
       <div class="actions header-actions">
         <RouterLink class="button secondary" :to="`/campanhas/${campanhaId}`">Voltar</RouterLink>
         <button class="button secondary" :disabled="busy || !preview" @click="validar">Validar</button>
-        <button class="button secondary" :disabled="busy || !canRemoteValidate" @click="validarRemoto">Validar no Google Ads</button>
+        <button class="button secondary" :disabled="busy || !canRemoteValidate" @click="executarDryRun">Executar dry run</button>
+        <button class="button secondary" :disabled="busy || !canRemoteValidate || !dryRun?.valido" @click="validarRemoto">Validar no Google Ads</button>
         <button class="button secondary" :disabled="busy || !canPrepare" @click="prepararPublicacao">Preparar publicacao</button>
         <button class="button secondary" :disabled="busy || !preview" @click="sugerir">Sugerir ajustes</button>
         <button class="button secondary" :disabled="busy || !preview" @click="excluir">Excluir</button>
@@ -38,6 +39,19 @@
         <span class="status" :class="statusClass(preview.status)">{{ preview.status }}</span>
         <p>As alteracoes feitas aqui afetam apenas o preview do Google Ads.</p>
         <span v-if="preparacao?.teste" class="status status-gerando">Conta teste</span>
+      </section>
+
+      <section class="panel">
+        <header class="section-heading"><h2>Etapas</h2></header>
+        <div class="step-grid">
+          <span class="status status-revisada">1. Preview local</span>
+          <span class="status" :class="dryRun?.valido ? 'status-revisada' : 'status-gerada'">2. Dry run</span>
+          <span class="status" :class="validacaoRemota?.valido ? 'status-revisada' : 'status-gerada'">3. Validacao no Google</span>
+          <span class="status" :class="preparacao ? 'status-revisada' : 'status-gerada'">4. Preparacao</span>
+          <span class="status" :class="confirmPaused ? 'status-revisada' : 'status-gerada'">5. Confirmacao</span>
+          <span class="status" :class="publicacao ? 'status-revisada' : 'status-gerada'">6. Publicacao pausada</span>
+          <span class="status status-gerada">7. Reconciliacao</span>
+        </div>
       </section>
 
       <section class="grid-layout">
@@ -149,6 +163,15 @@
         <ul><li v-for="erro in validacaoRemota.erros" :key="`${erro.codigo}-${erro.campo}`">{{ erro.mensagem }}</li></ul>
       </section>
 
+      <section v-if="dryRun" class="panel">
+        <header class="section-heading"><h2>Dry run</h2></header>
+        <p>{{ dryRun.quantidadeOperacoes }} operacoes tipadas preparadas. Nenhuma chamada foi feita ao Google Ads.</p>
+        <article v-for="op in dryRun.operacoes" :key="`${op.indice}-${op.tipo}`" class="history-item">
+          <strong>#{{ op.indice }} {{ op.tipo }}</strong>
+          <span>{{ op.status }} {{ op.resourceNameTemporario || '' }}</span>
+        </article>
+      </section>
+
       <section v-if="preparacao" class="panel">
         <header class="section-heading">
           <div>
@@ -198,6 +221,7 @@ import { confirmAction, showToast } from '../components/uiEvents';
 import {
   aplicarSugestaoGoogleAdsPreview,
   atualizarGoogleAdsPreview,
+  dryRunGoogleAds,
   excluirGoogleAdsPreview,
   gerarGoogleAdsPreview,
   obterGoogleAdsPreviewPorCampanha,
@@ -207,6 +231,7 @@ import {
   validarRemotamenteGoogleAds,
   validarGoogleAdsPreview,
   type GoogleAdsPreview,
+  type GoogleAdsDryRun,
   type GoogleAdsPreparePublication,
   type GoogleAdsPublication,
   type GoogleAdsRemoteValidation,
@@ -219,6 +244,7 @@ const campanhaId = String(route.params.id);
 const preview = ref<GoogleAdsPreview | null>(null);
 const sugestoes = ref<GoogleAdsSuggestion[]>([]);
 const validacaoRemota = ref<GoogleAdsRemoteValidation | null>(null);
+const dryRun = ref<GoogleAdsDryRun | null>(null);
 const preparacao = ref<GoogleAdsPreparePublication | null>(null);
 const publicacao = ref<GoogleAdsPublication | null>(null);
 const confirmPaused = ref(false);
@@ -335,6 +361,19 @@ async function validarRemoto() {
     showToast({ type: validacaoRemota.value.valido ? 'success' : 'error', title: validacaoRemota.value.valido ? 'Validado no Google Ads' : 'Google Ads recusou' });
   } catch (err: unknown) {
     error.value = message(err, 'Nao foi possivel validar no Google Ads.');
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function executarDryRun() {
+  if (!preview.value) return;
+  busy.value = true;
+  try {
+    dryRun.value = await dryRunGoogleAds(preview.value.id);
+    showToast({ type: dryRun.value.valido ? 'success' : 'error', title: dryRun.value.valido ? 'Dry run concluido' : 'Dry run invalido' });
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel executar o dry run.');
   } finally {
     busy.value = false;
   }

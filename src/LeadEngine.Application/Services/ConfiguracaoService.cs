@@ -332,10 +332,17 @@ public sealed class ConfiguracaoService(
             if (definition.Key == "DefaultCurrencyCode" && (string.IsNullOrWhiteSpace(value) || value.Length != 3)) throw new ArgumentException("DefaultCurrencyCode deve ter 3 caracteres.");
             if (definition.Key == "DefaultKeywordMatchType" && !new[] { "Phrase", "Exact", "Broad" }.Contains(value, StringComparer.OrdinalIgnoreCase)) throw new ArgumentException("DefaultKeywordMatchType invalido.");
             if (definition.Key == "DefaultCampaignStatus" && !string.Equals(value, "PAUSED", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("DefaultCampaignStatus deve ser PAUSED nesta etapa.");
+            if (definition.Key == "ApiTimeoutSeconds" && (!int.TryParse(value, out var apiTimeout) || apiTimeout is < 10 or > 300)) throw new ArgumentException("ApiTimeoutSeconds deve estar entre 10 e 300.");
+            if (definition.Key == "DefaultBiddingStrategy" && !new[] { "ManualCpc" }.Contains(value, StringComparer.OrdinalIgnoreCase)) throw new ArgumentException("DefaultBiddingStrategy suporta apenas ManualCpc nesta etapa.");
             if (definition.Key == "LoginCustomerId")
             {
                 var digits = new string((value ?? string.Empty).Where(char.IsDigit).ToArray());
                 if (!string.IsNullOrWhiteSpace(value) && digits.Length is < 6 or > 20) throw new ArgumentException("LoginCustomerId invalido.");
+            }
+            if (definition.Key == "TestCustomerId")
+            {
+                var digits = new string((value ?? string.Empty).Where(char.IsDigit).ToArray());
+                if (!string.IsNullOrWhiteSpace(value) && digits.Length != 10) throw new ArgumentException("TestCustomerId deve ter 10 digitos.");
             }
         }
     }

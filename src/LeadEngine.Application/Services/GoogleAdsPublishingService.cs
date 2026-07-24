@@ -15,6 +15,7 @@ public sealed class GoogleAdsPublishingService(
     IGoogleAdsPublicationRepository publicationRepository,
     IGoogleAdsOperationBuilder operationBuilder,
     IGoogleAdsMutationClient mutationClient,
+    IGoogleAdsResourceQueryClient resourceQueryClient,
     IGoogleAdsTokenService tokenService,
     IConfigurationResolver resolver) : IGoogleAdsPublishingService
 {
@@ -24,7 +25,7 @@ public sealed class GoogleAdsPublishingService(
     {
         var context = await LoadAndValidateAsync(previewId, requireRemoteValidation: false, cancellationToken);
         var publication = await GetOrCreatePublicationAsync(context, StatusPublicacaoGoogleAds.ValidandoRemotamente, cancellationToken);
-        publication.Status = StatusPublicacaoGoogleAds.ValidandoRemotamente;
+        await SetStatusAsync(publication, StatusPublicacaoGoogleAds.ValidandoRemotamente, "ValidacaoRemota", null, null, cancellationToken);
         publication.DataAtualizacao = DateTime.UtcNow;
         await publicationRepository.SalvarAsync(cancellationToken);
 
@@ -33,18 +34,27 @@ public sealed class GoogleAdsPublishingService(
         var plan = await operationBuilder.BuildAsync(context.Preview, context.Conta.CustomerId, cancellationToken);
         publication.GeoTargetResourceName = plan.GeoTargetResourceName;
         publication.LanguageResourceName = plan.LanguageResourceName;
+        await AuditarOperacoesAsync(publication, plan, "ValidateOnly", cancellationToken);
 
         var result = await mutationClient.MutateAsync(context.Conta.CustomerId, accessToken, developerToken, plan, validateOnly: true, cancellationToken);
         publication.RequestIdValidacao = result.RequestId;
         publication.DataValidacaoRemota = DateTime.UtcNow;
         publication.ErrosJson = Serialize(result.Errors);
-        publication.Status = result.Success ? StatusPublicacaoGoogleAds.Validada : StatusPublicacaoGoogleAds.Falhou;
+        await SetStatusAsync(publication, result.Success ? StatusPublicacaoGoogleAds.Validada : StatusPublicacaoGoogleAds.Falhou, "ValidateOnly", result.Success ? "Validacao remota aprovada." : "Validacao remota falhou.", result.RequestId, cancellationToken);
         publication.ErroCodigo = result.Errors.FirstOrDefault()?.Codigo;
         publication.ErroMensagemControlada = result.Errors.FirstOrDefault()?.Mensagem;
         publication.DataAtualizacao = DateTime.UtcNow;
         await publicationRepository.SalvarAsync(cancellationToken);
 
         return new GoogleAdsRemoteValidationResponse(result.Success, result.RequestId, result.Errors, plan.Avisos, publication.DataValidacaoRemota.Value);
+    }
+
+    public async Task<GoogleAdsDryRunResponse> DryRunAsync(Guid previewId, CancellationToken cancellationToken)
+    {
+        var context = await LoadAndValidateAsync(previewId, requireRemoteValidation: false, cancellationToken);
+        var plan = await operationBuilder.BuildAsync(context.Preview, context.Conta.CustomerId, cancellationToken);
+        var operations = plan.Operations.Select((x, i) => new GoogleAdsDryRunOperationDto(i, x.TipoRecurso, "PAUSED", x.ResourceNameTemporario)).ToArray();
+        return new GoogleAdsDryRunResponse(operations, operations.Length, true, [], plan.Avisos);
     }
 
     public async Task<GoogleAdsPreparePublicationResponse> PrepararAsync(Guid previewId, CancellationToken cancellationToken)
@@ -55,7 +65,7 @@ public sealed class GoogleAdsPublishingService(
         publication.ConfirmationTokenHash = Hash(token);
         publication.ConfirmationExpiresAt = DateTime.UtcNow.AddMinutes(10);
         publication.DataPreparacao = DateTime.UtcNow;
-        publication.Status = publication.Status == StatusPublicacaoGoogleAds.Validada ? StatusPublicacaoGoogleAds.Validada : StatusPublicacaoGoogleAds.Preparada;
+        await SetStatusAsync(publication, publication.Status == StatusPublicacaoGoogleAds.Validada ? StatusPublicacaoGoogleAds.Validada : StatusPublicacaoGoogleAds.Preparada, "Preparacao", "Publicacao preparada com token de confirmacao.", null, cancellationToken);
         publication.DataAtualizacao = DateTime.UtcNow;
         await publicationRepository.SalvarAsync(cancellationToken);
 
@@ -88,6 +98,8 @@ public sealed class GoogleAdsPublishingService(
             throw new ArgumentException("Confirme a criacao da campanha em estado pausado.");
         }
 
+        await EnsureRealPublishingAllowedAsync(cancellationToken);
+
         var previewForIdempotency = await previewRepository.ObterPorIdAsync(previewId, cancellationToken) ?? throw new KeyNotFoundException("Preview Google Ads nao encontrado.");
         var existingPublished = await publicationRepository.ObterPorPreviewVersaoHashAsync(previewForIdempotency.Id, previewForIdempotency.Versao, previewForIdempotency.ConteudoHash, cancellationToken);
         if (existingPublished?.Status == StatusPublicacaoGoogleAds.Publicada)
@@ -115,7 +127,7 @@ public sealed class GoogleAdsPublishingService(
             throw new ArgumentException("Token de confirmacao invalido ou expirado.");
         }
 
-        publication.Status = StatusPublicacaoGoogleAds.Publicando;
+        await SetStatusAsync(publication, StatusPublicacaoGoogleAds.Publicando, "Publicacao", "Inicio da publicacao controlada em PAUSED.", null, cancellationToken);
         publication.DataInicioPublicacao = DateTime.UtcNow;
         publication.Tentativas++;
         publication.DataAtualizacao = DateTime.UtcNow;
@@ -124,6 +136,7 @@ public sealed class GoogleAdsPublishingService(
         try
         {
             var plan = await operationBuilder.BuildAsync(context.Preview, context.Conta.CustomerId, cancellationToken);
+            await AuditarOperacoesAsync(publication, plan, "Publicacao", cancellationToken);
             var accessToken = await tokenService.ObterAccessTokenValidoAsync(context.Conta, cancellationToken);
             var developerToken = await RequiredSecretAsync("DeveloperToken", cancellationToken);
             var result = await mutationClient.MutateAsync(context.Conta.CustomerId, accessToken, developerToken, plan, validateOnly: false, cancellationToken);
@@ -132,9 +145,10 @@ public sealed class GoogleAdsPublishingService(
             publication.RecursosJson = Serialize(result.Resources);
             publication.DataConclusao = DateTime.UtcNow;
             publication.DataAtualizacao = DateTime.UtcNow;
-            publication.Status = result.Success
+            var newStatus = result.Success
                 ? StatusPublicacaoGoogleAds.Publicada
                 : result.EvidenceOfPartialCreation ? StatusPublicacaoGoogleAds.ParcialmentePublicada : StatusPublicacaoGoogleAds.Falhou;
+            await SetStatusAsync(publication, newStatus, "Publicacao", result.Success ? "Recursos criados em PAUSED." : "Falha ao criar recursos.", result.RequestId, cancellationToken);
             publication.ErroCodigo = result.Errors.FirstOrDefault()?.Codigo;
             publication.ErroMensagemControlada = result.Errors.FirstOrDefault()?.Mensagem;
             foreach (var resource in result.Resources)
@@ -151,12 +165,13 @@ public sealed class GoogleAdsPublishingService(
                     DataCriacao = DateTime.UtcNow
                 }, cancellationToken);
             }
+            AtualizarAuditoriaComResultados(publication, result);
             await publicationRepository.SalvarAsync(cancellationToken);
             return ToResponse(publication);
         }
         catch (Exception ex)
         {
-            publication.Status = publication.Recursos.Any() ? StatusPublicacaoGoogleAds.RequerIntervencao : StatusPublicacaoGoogleAds.Falhou;
+            await SetStatusAsync(publication, publication.Recursos.Any() ? StatusPublicacaoGoogleAds.RequerIntervencao : StatusPublicacaoGoogleAds.Falhou, "ErroPublicacao", "Falha ao publicar no Google Ads.", null, cancellationToken);
             publication.ErroCodigo = "google_ads_error";
             publication.ErroMensagemControlada = "Falha ao publicar no Google Ads.";
             publication.ErrosJson = Serialize(new[] { new GoogleAdsPublicationErrorDto("google_ads_error", "Falha ao publicar no Google Ads.", null, null, null, null, null, true, "Valide a conta e tente novamente.") });
@@ -173,17 +188,27 @@ public sealed class GoogleAdsPublishingService(
         var accessToken = await tokenService.ObterAccessTokenValidoAsync(conta, cancellationToken);
         var developerToken = await RequiredSecretAsync("DeveloperToken", cancellationToken);
         var resources = DeserializeResources(publication.RecursosJson);
-        var checkedResources = await mutationClient.CheckResourcesAsync(conta.CustomerId, accessToken, developerToken, resources, cancellationToken);
-        publication.RecursosJson = Serialize(checkedResources);
-        publication.Status = checkedResources.Count == resources.Count && checkedResources.Count > 0 ? StatusPublicacaoGoogleAds.Publicada : StatusPublicacaoGoogleAds.RequerIntervencao;
+        var checkedResources = await resourceQueryClient.CheckResourcesAsync(conta.CustomerId, accessToken, developerToken, resources, cancellationToken);
+        var found = checkedResources.Where(x => x.Encontrado).Select(x => new GoogleAdsPublishedResourceDto(x.TipoRecurso, x.ResourceName, x.ExternalId, x.Nome, x.Status)).ToArray();
+        publication.RecursosJson = Serialize(found);
+        var newStatus = found.Length == resources.Count && found.Length > 0 ? StatusPublicacaoGoogleAds.Reconciliada : StatusPublicacaoGoogleAds.RequerIntervencao;
+        await SetStatusAsync(publication, newStatus, "Reconciliacao", "Reconciliação por resource name concluida.", null, cancellationToken);
         publication.DataAtualizacao = DateTime.UtcNow;
         await publicationRepository.SalvarAsync(cancellationToken);
-        return new GoogleAdsReconciliationResponse(publication.Id, publication.Status, checkedResources, "Nao cria recursos ausentes automaticamente. Revise no Google Ads antes de nova tentativa.");
+        var changes = checkedResources.Where(x => x.AlteradoExternamente || !x.Encontrado).Select(x => $"{x.TipoRecurso}: {x.Observacao ?? "alteracao detectada"}").ToArray();
+        return new GoogleAdsReconciliationResponse(publication.Id, publication.Status, found, "Nao cria recursos ausentes automaticamente. Revise no Google Ads antes de nova tentativa.", resources.Count, found.Length, resources.Count - found.Length, changes, publication.Status == StatusPublicacaoGoogleAds.RequerIntervencao);
     }
 
     public async Task<GoogleAdsPublicationResponse> ObterAsync(Guid id, CancellationToken cancellationToken)
     {
         return ToResponse(await publicationRepository.ObterPorIdAsync(id, cancellationToken) ?? throw new KeyNotFoundException("Publicacao Google Ads nao encontrada."));
+    }
+
+    public async Task<IReadOnlyList<GoogleAdsPublicationHistoryResponse>> HistoricoAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var exists = await publicationRepository.ObterPorIdAsync(id, cancellationToken) ?? throw new KeyNotFoundException("Publicacao Google Ads nao encontrada.");
+        var history = await publicationRepository.ListarHistoricoAsync(exists.Id, cancellationToken);
+        return history.Select(x => new GoogleAdsPublicationHistoryResponse(x.Id, x.StatusAnterior, x.StatusNovo, x.Operacao, x.MensagemControlada, x.RequestId, x.Data)).ToArray();
     }
 
     public async Task<IReadOnlyList<GoogleAdsPublicationResponse>> ListarPorCampanhaAsync(Guid campanhaId, CancellationToken cancellationToken)
@@ -211,8 +236,9 @@ public sealed class GoogleAdsPublishingService(
         if (!(await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "DeveloperToken", cancellationToken)).Configured) errors.Add("DeveloperToken nao configurado.");
         var useTest = bool.TryParse((await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "UseTestAccount", cancellationToken)).Value, out var test) && test;
         var testCustomer = (await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "TestCustomerId", cancellationToken)).Value;
-        if (useTest && string.IsNullOrWhiteSpace(testCustomer)) errors.Add("TestCustomerId obrigatorio quando UseTestAccount=true.");
-        if (useTest && Digits(testCustomer) != Digits(conta.CustomerId)) errors.Add("Modo teste bloqueia publicacao fora do TestCustomerId.");
+        if (useTest && !GoogleAdsCustomerId.TryNormalize(testCustomer, out var normalizedTestCustomer)) errors.Add("TestCustomerId obrigatorio quando UseTestAccount=true.");
+        if (!GoogleAdsCustomerId.TryNormalize(conta.CustomerId, out var normalizedConta)) errors.Add("CustomerId da conta Google Ads invalido.");
+        if (useTest && GoogleAdsCustomerId.TryNormalize(testCustomer, out normalizedTestCustomer) && normalizedConta != normalizedTestCustomer) errors.Add("Modo teste bloqueia publicacao fora do TestCustomerId.");
         var publication = await publicationRepository.ObterPorPreviewVersaoHashAsync(preview.Id, preview.Versao, currentHash, cancellationToken);
         if (requireRemoteValidation && publication?.Status != StatusPublicacaoGoogleAds.Validada) errors.Add("Validacao remota valida e atualizada obrigatoria.");
         if (errors.Count > 0) throw new ArgumentException(string.Join(" ", errors));
@@ -238,8 +264,87 @@ public sealed class GoogleAdsPublishingService(
             DataAtualizacao = DateTime.UtcNow,
             Teste = context.UseTestAccount
         };
+        publication.IsTestAccount = context.UseTestAccount;
         await publicationRepository.AdicionarAsync(publication, cancellationToken);
+        await SetStatusAsync(publication, status, "CriacaoRegistro", "Registro de publicacao criado.", null, cancellationToken);
         return publication;
+    }
+
+    private async Task EnsureRealPublishingAllowedAsync(CancellationToken cancellationToken)
+    {
+        var enabled = bool.TryParse((await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "EnableRealPublishing", cancellationToken)).Value, out var flag) && flag;
+        if (!enabled)
+        {
+            throw new UnauthorizedAccessException("Publicacao real Google Ads desabilitada por feature flag.");
+        }
+
+        var useTest = bool.TryParse((await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "UseTestAccount", cancellationToken)).Value, out var test) && test;
+        if (!useTest)
+        {
+            throw new UnauthorizedAccessException("Publicacao em conta de producao bloqueada nesta etapa.");
+        }
+    }
+
+    private async Task SetStatusAsync(GoogleAdsPublicacao publication, StatusPublicacaoGoogleAds status, string operation, string? message, string? requestId, CancellationToken cancellationToken)
+    {
+        var previous = publication.Status;
+        publication.Status = status;
+        publication.DataAtualizacao = DateTime.UtcNow;
+        if (previous == status && publication.Historico.Any(x => x.Operacao == operation && x.StatusNovo == status))
+        {
+            return;
+        }
+
+        await publicationRepository.AdicionarHistoricoAsync(new GoogleAdsPublicacaoHistorico
+        {
+            Id = Guid.NewGuid(),
+            GoogleAdsPublicacaoId = publication.Id,
+            StatusAnterior = previous == default ? null : previous,
+            StatusNovo = status,
+            Operacao = operation,
+            MensagemControlada = message,
+            RequestId = requestId,
+            Data = DateTime.UtcNow,
+            MetadadosJson = "{}"
+        }, cancellationToken);
+    }
+
+    private async Task AuditarOperacoesAsync(GoogleAdsPublicacao publication, GoogleAdsOperationPlan plan, string status, CancellationToken cancellationToken)
+    {
+        if (publication.Operacoes.Any(x => x.Status == status))
+        {
+            return;
+        }
+
+        var index = 0;
+        foreach (var operation in plan.Operations)
+        {
+            await publicationRepository.AdicionarOperacaoAsync(new GoogleAdsOperacaoPublicacao
+            {
+                Id = Guid.NewGuid(),
+                GoogleAdsPublicacaoId = publication.Id,
+                Indice = index++,
+                TipoOperacao = operation.Operation,
+                EntidadeOrigem = operation.TipoRecurso,
+                ResourceNameTemporario = operation.ResourceNameTemporario,
+                Status = status,
+                DataCriacao = DateTime.UtcNow
+            }, cancellationToken);
+        }
+    }
+
+    private static void AtualizarAuditoriaComResultados(GoogleAdsPublicacao publication, GoogleAdsMutationResult result)
+    {
+        var resources = result.Resources.ToArray();
+        foreach (var op in publication.Operacoes.Where(x => x.Status == "Publicacao"))
+        {
+            var resource = op.Indice < resources.Length ? resources[op.Indice] : null;
+            op.ResourceNameDefinitivo = resource?.ResourceName;
+            op.Status = result.Success && resource is not null ? "Concluida" : "Inconsistente";
+            op.CodigoErro = result.Errors.FirstOrDefault(x => x.IndiceOperacao == op.Indice)?.Codigo;
+            op.MensagemControlada = result.Errors.FirstOrDefault(x => x.IndiceOperacao == op.Indice)?.Mensagem;
+            op.DataConclusao = DateTime.UtcNow;
+        }
     }
 
     private async Task<string> RequiredSecretAsync(string key, CancellationToken cancellationToken)
@@ -276,8 +381,7 @@ public sealed class GoogleAdsPublishingService(
     }
 
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-    private static string MaskCustomerId(string value) => value.Length <= 4 ? "****" : $"{value[..2]}****{value[^2..]}";
-    private static string Digits(string? value) => new((value ?? string.Empty).Where(char.IsDigit).ToArray());
+    private static string MaskCustomerId(string value) => GoogleAdsCustomerId.Mask(value);
     private static GoogleAdsPreviewPayload Payload(GoogleAdsPlanoPublicacao preview) => JsonSerializer.Deserialize<GoogleAdsPreviewPayload>(preview.PayloadPreviewJson, JsonOptions)!;
     private static IReadOnlyList<GoogleAdsPublicationErrorDto> DeserializeErrors(string json) => JsonSerializer.Deserialize<IReadOnlyList<GoogleAdsPublicationErrorDto>>(json, JsonOptions) ?? [];
     private static IReadOnlyList<GoogleAdsPublishedResourceDto> DeserializeResources(string json) => JsonSerializer.Deserialize<IReadOnlyList<GoogleAdsPublishedResourceDto>>(json, JsonOptions) ?? [];

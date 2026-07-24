@@ -14,6 +14,7 @@
       <MetricCard label="Google Ads" :value="status.googleAds.status" />
     </section>
 
+    <p v-if="oauthLoading" class="status-line">Conectando Google Ads...</p>
     <p v-if="error" class="error">{{ error }}</p>
 
     <section class="settings-layout">
@@ -62,6 +63,18 @@
           </form>
 
           <section v-if="selected === 'GoogleAds'" class="google-ads-panel">
+            <article v-if="googleAmbiente" class="integration-banner">
+              <div>
+                <strong>Ambiente Google Ads: {{ googleAmbiente.modo }}</strong>
+                <span>CustomerId teste: {{ googleAmbiente.customerIdMascarado || '-' }}</span>
+              </div>
+              <span class="status" :class="googleAmbiente.publicacaoPermitida ? 'status-revisada' : 'status-erro'">
+                {{ googleAmbiente.publicacaoPermitida ? 'Publicacao real habilitada' : 'Publicacao real bloqueada' }}
+              </span>
+            </article>
+            <ul v-if="googleAmbiente?.pendencias.length" class="compact-errors">
+              <li v-for="pendencia in googleAmbiente.pendencias" :key="pendencia">{{ pendencia }}</li>
+            </ul>
             <header class="section-heading compact">
               <div>
                 <h3>Conexao Google Ads</h3>
@@ -81,7 +94,7 @@
               <article v-for="conta in googleContas" :key="conta.id" class="account-card">
                 <div>
                   <strong>{{ conta.nome }}</strong>
-                  <span>{{ conta.customerId }} <template v-if="conta.email">Â· {{ conta.email }}</template></span>
+                  <span>{{ conta.customerIdMascarado || conta.customerId }} · {{ conta.tipoConta }} <template v-if="conta.gerente">· gerente</template><template v-if="conta.email"> · {{ conta.email }}</template></span>
                 </div>
                 <button class="button secondary" :disabled="googleBusy || conta.padrao" @click="selecionarConta(conta.id)">
                   {{ conta.padrao ? 'Conta padrao' : 'Selecionar' }}
@@ -98,6 +111,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import MetricCard from '../components/MetricCard.vue';
 import SkeletonBlock from '../components/SkeletonBlock.vue';
 import EmptyState from '../components/EmptyState.vue';
@@ -106,6 +120,7 @@ import {
   concluirGoogleAdsOAuth,
   listarGoogleAdsContas,
   obterGoogleAdsAuthUrl,
+  obterGoogleAdsAmbiente,
   obterGoogleAdsStatus,
   obterConfiguracaoCategoria,
   obterStatusConfiguracoes,
@@ -116,20 +131,25 @@ import {
   type CategoriaConfiguracao,
   type ConfiguracaoCategoria,
   type ConfiguracoesStatus,
+  type GoogleAdsAmbiente,
   type GoogleAdsConta,
   type GoogleAdsStatus
 } from '../services/api';
 
 const categorias: CategoriaConfiguracao[] = ['OpenRouter', 'CampaignGeneration', 'WhatsApp', 'LeadCapture', 'ExternalLeadApi', 'Application', 'Landing', 'GoogleAds'];
+const route = useRoute();
+const router = useRouter();
 const selected = ref<CategoriaConfiguracao>('OpenRouter');
 const configs = reactive<Partial<Record<CategoriaConfiguracao, ConfiguracaoCategoria>>>({});
 const status = ref<ConfiguracoesStatus | null>(null);
 const googleStatus = ref<GoogleAdsStatus | null>(null);
+const googleAmbiente = ref<GoogleAdsAmbiente | null>(null);
 const googleContas = ref<GoogleAdsConta[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const testing = ref(false);
 const googleBusy = ref(false);
+const oauthLoading = ref(false);
 const error = ref('');
 const form = reactive<Record<string, string>>({});
 const removeFlags = reactive<Record<string, boolean>>({});
@@ -176,11 +196,13 @@ async function load() {
 
 async function loadGoogleAds() {
   try {
-    const [statusResult, contasResult] = await Promise.all([obterGoogleAdsStatus(), listarGoogleAdsContas()]);
+    const [statusResult, contasResult, ambienteResult] = await Promise.all([obterGoogleAdsStatus(), listarGoogleAdsContas(), obterGoogleAdsAmbiente()]);
     googleStatus.value = statusResult;
     googleContas.value = contasResult;
+    googleAmbiente.value = ambienteResult;
   } catch {
     googleStatus.value = { conectado: false, status: 'Erro' };
+    googleAmbiente.value = { modo: 'Indisponivel', contaCompativel: false, publicacaoPermitida: false, pendencias: ['Nao foi possivel carregar o ambiente Google Ads.'] };
     googleContas.value = [];
   }
 }
@@ -210,36 +232,45 @@ async function conectarGoogle() {
 }
 
 async function handleGoogleCallback() {
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
-  const googleCallback = params.get('googleAdsCallback');
-  if (!code || !googleCallback) return;
+  const googleCallback = route.query.googleAdsCallback;
+  const code = typeof route.query.code === 'string' ? route.query.code : '';
+  const state = typeof route.query.state === 'string' ? route.query.state : '';
+  if (googleCallback !== '1') return;
+  selected.value = 'GoogleAds';
+  if (!code || !state) {
+    error.value = 'Callback OAuth incompleto. Tente conectar novamente.';
+    await limparOAuthUrl();
+    return;
+  }
 
-  const state = params.get('state') || undefined;
   const expectedState = window.sessionStorage.getItem('googleAdsOAuthState');
-  if (expectedState && state && expectedState !== state) {
+  if (expectedState && expectedState !== state) {
+    error.value = 'State OAuth invalido. Tente conectar novamente.';
     showToast({ type: 'error', title: 'OAuth invalido', message: 'State recebido nao confere.' });
+    await limparOAuthUrl();
     return;
   }
 
   googleBusy.value = true;
-  selected.value = 'GoogleAds';
+  oauthLoading.value = true;
   try {
-    googleContas.value = await concluirGoogleAdsOAuth({
-      code,
-      state,
-      redirectUri: `${window.location.origin}${window.location.pathname}?googleAdsCallback=1`
-    });
-    googleStatus.value = await obterGoogleAdsStatus();
-    window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}`);
-    showToast({ type: 'success', title: 'Google Ads conectado' });
+    const result = await concluirGoogleAdsOAuth({ code, state });
+    googleContas.value = result.contas;
+    await Promise.all([loadGoogleAds(), load()]);
+    showToast({ type: 'success', title: result.mensagem || 'Google Ads conectado com sucesso' });
   } catch (err: unknown) {
     error.value = message(err, 'Nao foi possivel concluir a conexao Google Ads.');
     showToast({ type: 'error', title: 'Erro no OAuth', message: error.value });
   } finally {
     googleBusy.value = false;
+    oauthLoading.value = false;
     window.sessionStorage.removeItem('googleAdsOAuthState');
+    await limparOAuthUrl();
   }
+}
+
+async function limparOAuthUrl() {
+  await router.replace({ path: '/configuracoes', query: {} });
 }
 
 async function selecionarConta(id: string) {

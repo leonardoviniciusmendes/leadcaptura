@@ -320,12 +320,23 @@ export interface GoogleAdsAuthUrl {
 export interface GoogleAdsConta {
   id: string;
   customerId: string;
+  customerIdMascarado: string;
   nome: string;
   email?: string;
   ativa: boolean;
   padrao: boolean;
+  tipoConta: string;
+  gerente: boolean;
   dataConexao: string;
   accessTokenExpiraEm?: string;
+}
+
+export interface GoogleAdsOAuthCallback {
+  sucesso: boolean;
+  conectado: boolean;
+  contasEncontradas: number;
+  mensagem: string;
+  contas: GoogleAdsConta[];
 }
 
 export interface GoogleAdsTeste {
@@ -333,6 +344,20 @@ export interface GoogleAdsTeste {
   status: string;
   customerId?: string;
   duracaoMs?: number;
+  ambiente?: string;
+  customerIdMascarado?: string;
+  tokenRenovado: boolean;
+  contaAcessivel: boolean;
+  consultaExecutada: boolean;
+  pendencias?: string[];
+}
+
+export interface GoogleAdsAmbiente {
+  modo: string;
+  customerIdMascarado?: string;
+  contaCompativel: boolean;
+  publicacaoPermitida: boolean;
+  pendencias: string[];
 }
 
 export type StatusGoogleAdsPreview = 'Rascunho' | 'Valido' | 'Invalido' | 'Desatualizado' | 'Publicado' | 'Erro';
@@ -392,19 +417,26 @@ export interface GoogleAdsSuggestion {
   limite: number;
 }
 
-export type StatusGoogleAdsPublicacao = 'Preparada' | 'ValidandoRemotamente' | 'Validada' | 'Publicando' | 'ParcialmentePublicada' | 'Publicada' | 'Falhou' | 'RequerIntervencao';
+export type StatusGoogleAdsPublicacao = 'Preparada' | 'ValidandoRemotamente' | 'Validada' | 'Publicando' | 'ParcialmentePublicada' | 'Publicada' | 'Falhou' | 'RequerIntervencao' | 'Reconciliada';
 export interface GoogleAdsPublicationError { codigo: string; mensagem: string; operacao?: string; indiceOperacao?: number; campo?: string; valorRejeitado?: string; requestId?: string; recuperavel: boolean; acaoSugerida?: string }
 export interface GoogleAdsPublishedResource { tipoRecurso: string; resourceName: string; externalId?: string; nome?: string; status: string }
 export interface GoogleAdsRemoteValidation { valido: boolean; requestId?: string; erros: GoogleAdsPublicationError[]; avisos: string[]; dataValidacao: string }
+export interface GoogleAdsDryRun { operacoes: Array<{ indice: number; tipo: string; status: string; resourceNameTemporario?: string }>; quantidadeOperacoes: number; valido: boolean; erros: GoogleAdsPublicationError[]; avisos: string[] }
 export interface GoogleAdsPreparePublication {
   publicacaoId: string; confirmationToken: string; nome: string; conta: string; customerIdMascarado: string; orcamentoDiario: number; quantidadeGrupos: number; quantidadeKeywords: number; quantidadeNegativas: number; quantidadeAnuncios: number; url: string; statusPlanejado: string; hash: string; versao: number; validacaoLocal: boolean; validacaoRemota: boolean; teste: boolean;
 }
 export interface GoogleAdsPublication {
   id: string; previewId: string; campanhaId: string; contaId: string; customerIdMascarado: string; previewVersao: number; previewHash: string; status: StatusGoogleAdsPublicacao; requestIdValidacao?: string; requestIdPublicacao?: string; erroCodigo?: string; erroMensagemControlada?: string; erros: GoogleAdsPublicationError[]; recursos: GoogleAdsPublishedResource[]; dataCriacao: string; dataAtualizacao?: string; teste: boolean;
 }
+export interface GoogleAdsPublicationHistory { id: string; statusAnterior?: StatusGoogleAdsPublicacao; statusNovo: StatusGoogleAdsPublicacao; operacao: string; mensagemControlada?: string; requestId?: string; data: string }
 
 export async function obterGoogleAdsStatus(): Promise<GoogleAdsStatus> {
   const { data } = await api.get<GoogleAdsStatus>('/api/googleads/status');
+  return data;
+}
+
+export async function obterGoogleAdsAmbiente(): Promise<GoogleAdsAmbiente> {
+  const { data } = await api.get<GoogleAdsAmbiente>('/api/googleads/ambiente');
   return data;
 }
 
@@ -413,8 +445,8 @@ export async function obterGoogleAdsAuthUrl(): Promise<GoogleAdsAuthUrl> {
   return data;
 }
 
-export async function concluirGoogleAdsOAuth(payload: { code: string; state?: string; redirectUri?: string }): Promise<GoogleAdsConta[]> {
-  const { data } = await api.post<GoogleAdsConta[]>('/api/googleads/oauth/callback', payload);
+export async function concluirGoogleAdsOAuth(payload: { code: string; state?: string }): Promise<GoogleAdsOAuthCallback> {
+  const { data } = await api.post<GoogleAdsOAuthCallback>('/api/googleads/oauth/callback', payload);
   return data;
 }
 
@@ -482,6 +514,11 @@ export async function validarRemotamenteGoogleAds(previewId: string): Promise<Go
   return data;
 }
 
+export async function dryRunGoogleAds(previewId: string): Promise<GoogleAdsDryRun> {
+  const { data } = await api.post<GoogleAdsDryRun>(`/api/googleads/publicacoes/preview/${previewId}/dry-run`);
+  return data;
+}
+
 export async function prepararPublicacaoGoogleAds(previewId: string): Promise<GoogleAdsPreparePublication> {
   const { data } = await api.post<GoogleAdsPreparePublication>(`/api/googleads/publicacoes/preview/${previewId}/preparar`);
   return data;
@@ -499,5 +536,10 @@ export async function obterPublicacaoGoogleAds(id: string): Promise<GoogleAdsPub
 
 export async function reconciliarPublicacaoGoogleAds(id: string): Promise<Record<string, unknown>> {
   const { data } = await api.post(`/api/googleads/publicacoes/${id}/reconciliar`);
+  return data;
+}
+
+export async function historicoPublicacaoGoogleAds(id: string): Promise<GoogleAdsPublicationHistory[]> {
+  const { data } = await api.get<GoogleAdsPublicationHistory[]>(`/api/googleads/publicacoes/${id}/historico`);
   return data;
 }

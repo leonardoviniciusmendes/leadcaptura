@@ -67,6 +67,16 @@ public sealed record GoogleAdsPublishedResourceDto(
     string? Nome,
     string Status);
 
+public sealed record GoogleAdsPublishedResourceCheckDto(
+    string TipoRecurso,
+    string ResourceName,
+    string? ExternalId,
+    string? Nome,
+    string Status,
+    bool Encontrado,
+    bool AlteradoExternamente,
+    string? Observacao);
+
 public sealed record GoogleAdsPublicationQuery(
     StatusPublicacaoGoogleAds? Status,
     Guid? CampanhaId,
@@ -78,7 +88,34 @@ public sealed record GoogleAdsReconciliationResponse(
     Guid PublicacaoId,
     StatusPublicacaoGoogleAds Status,
     IReadOnlyList<GoogleAdsPublishedResourceDto> Recursos,
-    string Orientacao);
+    string Orientacao,
+    int RecursosEsperados = 0,
+    int RecursosEncontrados = 0,
+    int RecursosAusentes = 0,
+    IReadOnlyList<string>? AlteracoesExternas = null,
+    bool RequerIntervencao = false);
+
+public sealed record GoogleAdsDryRunResponse(
+    IReadOnlyList<GoogleAdsDryRunOperationDto> Operacoes,
+    int QuantidadeOperacoes,
+    bool Valido,
+    IReadOnlyList<GoogleAdsPublicationErrorDto> Erros,
+    IReadOnlyList<string> Avisos);
+
+public sealed record GoogleAdsDryRunOperationDto(
+    int Indice,
+    string Tipo,
+    string Status,
+    string? ResourceNameTemporario);
+
+public sealed record GoogleAdsPublicationHistoryResponse(
+    Guid Id,
+    StatusPublicacaoGoogleAds? StatusAnterior,
+    StatusPublicacaoGoogleAds StatusNovo,
+    string Operacao,
+    string? MensagemControlada,
+    string? RequestId,
+    DateTime Data);
 
 public sealed record GoogleAdsOperationPlan(
     string PreviewHash,
@@ -93,7 +130,8 @@ public sealed record GoogleAdsOperationItem(
     string TipoRecurso,
     string Nome,
     string Operation,
-    string PayloadJson);
+    string PayloadJson,
+    string? ResourceNameTemporario = null);
 
 public sealed record GoogleAdsMutationResult(
     bool Success,

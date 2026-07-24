@@ -15,16 +15,18 @@ public sealed class GoogleAdsTests
         var protector = new Protector();
         var oauth = new OAuth();
         var service = Service(repo, oauth, protector);
+        var auth = await service.GerarAuthUrlAsync(CancellationToken.None);
 
-        var contas = await service.ConcluirOAuthAsync(new GoogleAdsOAuthCallbackRequest("code", "state", null), CancellationToken.None);
+        var callback = await service.ConcluirOAuthAsync(new GoogleAdsOAuthCallbackRequest("code", auth.State, null), CancellationToken.None);
 
-        var conta = Assert.Single(contas);
+        Assert.True(callback.Sucesso);
+        var conta = Assert.Single(callback.Contas);
         Assert.Equal("1234567890", conta.CustomerId);
         var saved = Assert.Single(repo.Contas);
         Assert.NotEqual("access-token", saved.AccessTokenProtegido);
         Assert.NotEqual("refresh-token", saved.RefreshTokenProtegido);
         Assert.Equal("protected:access-token", saved.AccessTokenProtegido);
-        Assert.True(saved.Padrao);
+        Assert.False(saved.Padrao);
     }
 
     [Fact]
@@ -65,9 +67,35 @@ public sealed class GoogleAdsTests
         var repo = new Repo();
         var oauth = new OAuth { FailExchange = true };
         var service = Service(repo, oauth, new Protector());
+        var auth = await service.GerarAuthUrlAsync(CancellationToken.None);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ConcluirOAuthAsync(new GoogleAdsOAuthCallbackRequest("code", null, null), CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ConcluirOAuthAsync(new GoogleAdsOAuthCallbackRequest("code", auth.State, null), CancellationToken.None));
         Assert.Empty(repo.Contas);
+    }
+
+    [Fact]
+    public async Task OAuth_StateInvalidoOuReutilizadoBloqueia()
+    {
+        var service = Service(new Repo(), new OAuth(), new Protector());
+        var auth = await service.GerarAuthUrlAsync(CancellationToken.None);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ConcluirOAuthAsync(new GoogleAdsOAuthCallbackRequest("code", "state-invalido", null), CancellationToken.None));
+        await service.ConcluirOAuthAsync(new GoogleAdsOAuthCallbackRequest("code", auth.State, null), CancellationToken.None);
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => service.ConcluirOAuthAsync(new GoogleAdsOAuthCallbackRequest("code", auth.State, null), CancellationToken.None));
+
+        Assert.Contains("ja utilizado", ex.Message);
+    }
+
+    [Fact]
+    public async Task Status_ConectadoSemContaPadrao()
+    {
+        var repo = new Repo();
+        repo.Contas.Add(Conta(padrao: false));
+        var result = await Service(repo, new OAuth(), new Protector()).ObterStatusAsync(CancellationToken.None);
+
+        Assert.True(result.Conectado);
+        Assert.Equal("Conectado sem conta padrao", result.Status);
+        Assert.Null(result.ContaPadraoId);
     }
 
     [Fact]
@@ -96,7 +124,7 @@ public sealed class GoogleAdsTests
             ["ClientId"] = "client-id",
             ["ClientSecret"] = "client-secret",
             ["DeveloperToken"] = "developer-token",
-            ["RedirectUri"] = "http://localhost:5173/configuracoes?googleAdsCallback=1",
+            ["RedirectUri"] = "http://localhost:5173/leadcaptura/configuracoes?googleAdsCallback=1",
             ["AuthEndpoint"] = "https://accounts.google.com/o/oauth2/v2/auth",
             ["TokenEndpoint"] = "https://oauth2.googleapis.com/token",
             ["UserInfoEndpoint"] = "https://openidconnect.googleapis.com/v1/userinfo",
@@ -104,10 +132,10 @@ public sealed class GoogleAdsTests
             ["Scopes"] = "https://www.googleapis.com/auth/adwords openid email profile"
         });
         var token = new GoogleAdsTokenService(oauth, protector, repo);
-        return new GoogleAdsConnectionService(resolver, repo, oauth, token, protector);
+        return new GoogleAdsConnectionService(resolver, repo, new StateRepo(), oauth, token, protector);
     }
 
-    private static GoogleAdsConta Conta()
+    private static GoogleAdsConta Conta(bool padrao = true)
     {
         return new GoogleAdsConta
         {
@@ -116,7 +144,7 @@ public sealed class GoogleAdsTests
             Nome = "Conta teste",
             Email = "user@example.com",
             Ativa = true,
-            Padrao = true,
+            Padrao = padrao,
             DataConexao = DateTime.UtcNow,
             AccessTokenProtegido = "protected:access-token",
             RefreshTokenProtegido = "protected:refresh-token",
@@ -149,6 +177,14 @@ public sealed class GoogleAdsTests
         public Task<GoogleAdsConta?> ObterPadraoAsync(CancellationToken cancellationToken) => Task.FromResult(Contas.FirstOrDefault(x => x.Padrao && x.Ativa));
         public Task<IReadOnlyList<GoogleAdsConta>> ListarAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<GoogleAdsConta>>(Contas);
         public Task AdicionarAsync(GoogleAdsConta conta, CancellationToken cancellationToken) { Contas.Add(conta); return Task.CompletedTask; }
+        public Task SalvarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class StateRepo : IGoogleAdsOAuthStateRepository
+    {
+        private readonly List<GoogleAdsOAuthState> states = [];
+        public Task AdicionarAsync(GoogleAdsOAuthState state, CancellationToken cancellationToken) { states.Add(state); return Task.CompletedTask; }
+        public Task<GoogleAdsOAuthState?> ObterPorHashAsync(string stateHash, CancellationToken cancellationToken) => Task.FromResult(states.FirstOrDefault(x => x.StateHash == stateHash));
         public Task SalvarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 

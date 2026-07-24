@@ -120,11 +120,49 @@ public sealed class GoogleAdsPublishingTests
 
         var reconciled = await service.ReconciliarAsync(published.Id, CancellationToken.None);
 
-        Assert.Equal(StatusPublicacaoGoogleAds.Publicada, reconciled.Status);
+        Assert.Equal(StatusPublicacaoGoogleAds.Reconciliada, reconciled.Status);
         Assert.Equal(published.Recursos.Count, reconciled.Recursos.Count);
     }
 
-    private static TestContext Context(bool useTest = false)
+    [Fact]
+    public async Task DryRunNaoChamaGoogleENaoCriaPublicacao()
+    {
+        var ctx = Context();
+
+        var dryRun = await Service(ctx).DryRunAsync(ctx.Preview.Id, CancellationToken.None);
+
+        Assert.True(dryRun.Valido);
+        Assert.Equal(4, dryRun.QuantidadeOperacoes);
+        Assert.Equal(0, ctx.Mutation.MutateCalls);
+        Assert.Empty(ctx.Publicacoes.Items);
+    }
+
+    [Fact]
+    public async Task FeatureFlagDesligadaBloqueiaPublicacaoReal()
+    {
+        var ctx = Context(enableRealPublishing: false);
+        var service = Service(ctx);
+        await service.ValidarRemotamenteAsync(ctx.Preview.Id, CancellationToken.None);
+        var prepared = await service.PrepararAsync(ctx.Preview.Id, CancellationToken.None);
+
+        var ex = await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.PublicarAsync(ctx.Preview.Id, new GoogleAdsPublishRequest(prepared.ConfirmationToken, true), CancellationToken.None));
+
+        Assert.Contains("desabilitada", ex.Message);
+    }
+
+    [Fact]
+    public async Task HistoricoRegistraTransicoes()
+    {
+        var ctx = Context();
+        var service = Service(ctx);
+        await service.ValidarRemotamenteAsync(ctx.Preview.Id, CancellationToken.None);
+
+        var history = await service.HistoricoAsync(ctx.Publicacoes.Items.Single().Id, CancellationToken.None);
+
+        Assert.Contains(history, x => x.StatusNovo == StatusPublicacaoGoogleAds.Validada);
+    }
+
+    private static TestContext Context(bool useTest = true, bool enableRealPublishing = true)
     {
         var campanha = new Campanha { Id = Guid.NewGuid(), Status = StatusCampanha.Revisada, Publicada = true, Ativo = true };
         var conta = new GoogleAdsConta { Id = Guid.NewGuid(), CustomerId = "1234567890", Nome = "Conta", Ativa = true, Padrao = true, AccessTokenProtegido = "protected:access", RefreshTokenProtegido = "protected:refresh", AccessTokenExpiraEm = DateTime.UtcNow.AddHours(1) };
@@ -133,15 +171,15 @@ public sealed class GoogleAdsPublishingTests
             new GoogleAdsBudgetPlan("Budget", 10, 10_000_000, "STANDARD", false),
             [new GoogleAdsAdGroupPlan("Grupo", "ENABLED", null, null, [new("plano saude", "PHRASE", "PAUSED", "Campanha")], [new("emprego", "PHRASE", "Campanha")], new(["Titulo Um", "Titulo Dois", "Titulo Tres"], ["Descricao um", "Descricao dois"], ["https://leadengine.test/lp/x"], "plano", "saude", "ENABLED"))]);
         var preview = new GoogleAdsPlanoPublicacao { Id = Guid.NewGuid(), CampanhaId = campanha.Id, GoogleAdsContaId = conta.Id, NomeCampanha = "Campanha", Status = StatusPlanoPublicacaoGoogleAds.Valido, OrcamentoDiario = 10, CodigoMoeda = "BRL", Idioma = "pt", Pais = "BR", UrlFinal = "https://leadengine.test/lp/x", Versao = 1, ConteudoHash = "HASH", PayloadPreviewJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web)), DataCriacao = DateTime.UtcNow };
-        return new TestContext(campanha, conta, preview, new Campanhas(campanha), new Contas(conta), new Previews(preview), new Publicacoes(), new Mutation(), new Resolver(useTest));
+        return new TestContext(campanha, conta, preview, new Campanhas(campanha), new Contas(conta), new Previews(preview), new Publicacoes(), new Mutation(), new Query(), new Resolver(useTest, enableRealPublishing));
     }
 
     private static GoogleAdsPublishingService Service(TestContext ctx)
     {
-        return new GoogleAdsPublishingService(ctx.Previews, ctx.Campanhas, ctx.Contas, ctx.Publicacoes, new Builder(), ctx.Mutation, new Token(), ctx.Resolver);
+        return new GoogleAdsPublishingService(ctx.Previews, ctx.Campanhas, ctx.Contas, ctx.Publicacoes, new Builder(), ctx.Mutation, ctx.Query, new Token(), ctx.Resolver);
     }
 
-    private sealed record TestContext(Campanha Campanha, GoogleAdsConta Conta, GoogleAdsPlanoPublicacao Preview, Campanhas Campanhas, Contas Contas, Previews Previews, Publicacoes Publicacoes, Mutation Mutation, Resolver Resolver);
+    private sealed record TestContext(Campanha Campanha, GoogleAdsConta Conta, GoogleAdsPlanoPublicacao Preview, Campanhas Campanhas, Contas Contas, Previews Previews, Publicacoes Publicacoes, Mutation Mutation, Query Query, Resolver Resolver);
 
     private sealed class Builder : IGoogleAdsOperationBuilder
     {
@@ -178,11 +216,19 @@ public sealed class GoogleAdsPublishingTests
         public Task<IReadOnlyList<GoogleAdsPublishedResourceDto>> CheckResourcesAsync(string customerId, string accessToken, string developerToken, IReadOnlyList<GoogleAdsPublishedResourceDto> resources, CancellationToken cancellationToken) => Task.FromResult(resources);
     }
 
-    private sealed class Resolver(bool useTest) : IConfigurationResolver
+    private sealed class Query : IGoogleAdsResourceQueryClient
+    {
+        public Task<IReadOnlyList<GoogleAdsPublishedResourceCheckDto>> CheckResourcesAsync(string customerId, string accessToken, string developerToken, IReadOnlyList<GoogleAdsPublishedResourceDto> resources, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<GoogleAdsPublishedResourceCheckDto>>(resources.Select(x => new GoogleAdsPublishedResourceCheckDto(x.TipoRecurso, x.ResourceName, x.ExternalId, x.Nome, x.Status, true, false, "ok")).ToArray());
+        }
+    }
+
+    private sealed class Resolver(bool useTest, bool enableRealPublishing) : IConfigurationResolver
     {
         public Task<ResolvedConfigurationValue> ResolveAsync(CategoriaConfiguracao categoria, string chave, CancellationToken cancellationToken)
         {
-            var value = chave switch { "DeveloperToken" => "dev", "UseTestAccount" => useTest.ToString(), "TestCustomerId" => "1234567890", _ => "" };
+            var value = chave switch { "DeveloperToken" => "dev", "UseTestAccount" => useTest.ToString(), "EnableRealPublishing" => enableRealPublishing.ToString(), "TestCustomerId" => "1234567890", _ => "" };
             return Task.FromResult(new ResolvedConfigurationValue(value, !string.IsNullOrWhiteSpace(value), OrigemConfiguracao.Banco, chave.Contains("Token")));
         }
         public Task InvalidateAsync(CategoriaConfiguracao categoria, CancellationToken cancellationToken) => Task.CompletedTask;
@@ -208,8 +254,11 @@ public sealed class GoogleAdsPublishingTests
         public Task<GoogleAdsPublicacao?> ObterPorPreviewVersaoHashAsync(Guid previewId, int versao, string hash, CancellationToken cancellationToken) => Task.FromResult(Items.FirstOrDefault(x => x.GoogleAdsPlanoPublicacaoId == previewId && x.PreviewVersao == versao && x.PreviewHash == hash));
         public Task<IReadOnlyList<GoogleAdsPublicacao>> ListarPorCampanhaAsync(Guid campanhaId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<GoogleAdsPublicacao>>(Items.Where(x => x.CampanhaId == campanhaId).ToArray());
         public Task<IReadOnlyList<GoogleAdsPublicacao>> ListarAsync(GoogleAdsPublicationQuery query, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<GoogleAdsPublicacao>>(Items);
+        public Task<IReadOnlyList<GoogleAdsPublicacaoHistorico>> ListarHistoricoAsync(Guid publicacaoId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<GoogleAdsPublicacaoHistorico>>(Items.Single(x => x.Id == publicacaoId).Historico.ToArray());
         public Task AdicionarAsync(GoogleAdsPublicacao publicacao, CancellationToken cancellationToken) { Items.Add(publicacao); return Task.CompletedTask; }
         public Task AdicionarRecursoAsync(GoogleAdsRecursoPublicado recurso, CancellationToken cancellationToken) { Items.Single(x => x.Id == recurso.GoogleAdsPublicacaoId).Recursos.Add(recurso); return Task.CompletedTask; }
+        public Task AdicionarHistoricoAsync(GoogleAdsPublicacaoHistorico historico, CancellationToken cancellationToken) { Items.Single(x => x.Id == historico.GoogleAdsPublicacaoId).Historico.Add(historico); return Task.CompletedTask; }
+        public Task AdicionarOperacaoAsync(GoogleAdsOperacaoPublicacao operacao, CancellationToken cancellationToken) { Items.Single(x => x.Id == operacao.GoogleAdsPublicacaoId).Operacoes.Add(operacao); return Task.CompletedTask; }
         public Task SalvarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

@@ -1,5 +1,44 @@
 # LeadEngine
 
+## Endurecimento Google Ads para conta de teste
+
+A publicacao controlada usa `GoogleAdsPlanoPublicacao` valido como fonte unica e foi reforcada para validacao em conta de teste real. `GET /api/googleads/ambiente` informa modo, CustomerId mascarado, pendencias e se a publicacao real esta permitida. `POST /api/googleads/publicacoes/preview/{previewId}/dry-run` monta as operacoes tipadas e nao chama o Google Ads. `validateOnly=true` e `partialFailure=false` usam a mesma lista tipada da publicacao.
+
+Nesta fase, publicacao real exige `GoogleAds.EnableRealPublishing=true`, `GoogleAds.UseTestAccount=true` e `GoogleAds.TestCustomerId` igual a conta selecionada. Publicacao em producao continua bloqueada. As operacoes sao montadas por `GoogleAdsTypedOperationFactory` com tipos do SDK `Google.Ads.GoogleAds 26.0.1`; o transporte REST fica isolado em `GoogleAdsRestMutateTransport`.
+
+## Callback OAuth Google Ads
+
+Redirect URI local:
+
+```text
+http://localhost:5173/leadcaptura/configuracoes?googleAdsCallback=1
+```
+
+Quando o Google retorna `code` e `state`, o frontend chama:
+
+```http
+POST /api/googleads/oauth/callback
+```
+
+```json
+{
+  "code": "codigo-retornado-pelo-google",
+  "state": "state-retornado-pelo-google"
+}
+```
+
+O backend valida `state` persistido com expiracao e uso unico, troca o code por tokens, protege os tokens e grava as contas encontradas. A URL e limpa para `/leadcaptura/configuracoes` apos sucesso ou erro. Apos OAuth sem conta padrao selecionada, o status esperado e:
+
+```json
+{
+  "conectado": true,
+  "status": "Conectado sem conta padrao",
+  "contaPadraoId": null,
+  "customerId": null,
+  "nome": null
+}
+```
+
 Assistente para gerar campanhas de Google Ads para planos de saúde sem exigir conhecimento técnico de mídia paga.
 
 O usuário informa:
@@ -26,7 +65,7 @@ Não implementar nesta fase:
 - CRM;
 - propostas;
 - contratos;
-- Google Ads real;
+- Google Ads real em producao;
 - landing pública;
 - leads;
 - métricas.
@@ -385,6 +424,7 @@ Endpoints:
 
 ```http
 GET /api/googleads/status
+GET /api/googleads/ambiente
 GET /api/googleads/auth-url
 POST /api/googleads/oauth/callback
 GET /api/googleads/contas
@@ -401,11 +441,11 @@ Configurações:
     "ClientSecret": "",
     "DeveloperToken": "",
     "LoginCustomerId": "",
-    "RedirectUri": "http://localhost:5173/configuracoes?googleAdsCallback=1",
+    "RedirectUri": "http://localhost:5173/leadcaptura/configuracoes?googleAdsCallback=1",
     "AuthEndpoint": "https://accounts.google.com/o/oauth2/v2/auth",
     "TokenEndpoint": "https://oauth2.googleapis.com/token",
     "UserInfoEndpoint": "https://openidconnect.googleapis.com/v1/userinfo",
-    "ApiBaseUrl": "https://googleads.googleapis.com/v19",
+    "ApiBaseUrl": "https://googleads.googleapis.com/v22",
     "Scopes": "https://www.googleapis.com/auth/adwords openid email profile",
     "DefaultDailyBudget": 10.00,
     "DefaultCountryCode": "BR",
@@ -415,6 +455,9 @@ Configurações:
     "DefaultCampaignStatus": "PAUSED",
     "EnableBroadMatch": false,
     "DefaultCpcBid": "",
+    "DefaultBiddingStrategy": "ManualCpc",
+    "ApiTimeoutSeconds": 60,
+    "EnableRealPublishing": false,
     "UseTestAccount": false,
     "TestCustomerId": ""
   }
@@ -522,10 +565,12 @@ Endpoints:
 
 ```http
 POST /api/googleads/publicacoes/preview/{previewId}/validar-remotamente
+POST /api/googleads/publicacoes/preview/{previewId}/dry-run
 POST /api/googleads/publicacoes/preview/{previewId}/preparar
 POST /api/googleads/publicacoes/preview/{previewId}/publicar
 POST /api/googleads/publicacoes/{id}/reconciliar
 GET /api/googleads/publicacoes/{id}
+GET /api/googleads/publicacoes/{id}/historico
 GET /api/googleads/publicacoes/campanha/{campanhaId}
 GET /api/googleads/publicacoes
 ```
@@ -735,6 +780,7 @@ Migrations criadas:
 20260724212632_AddGoogleAdsIntegration
 20260724214217_AddGoogleAdsPreview
 20260724215939_AddGoogleAdsControlledPublishing
+20260724222003_AddGoogleAdsTypedPublishingAudit
 ```
 
 Criar nova migration:

@@ -4,6 +4,7 @@ using LeadEngine.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LeadEngine.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(LeadEngineDbContext))]
-    partial class LeadEngineDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260724222003_AddGoogleAdsTypedPublishingAudit")]
+    partial class AddGoogleAdsTypedPublishingAudit
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -365,41 +368,6 @@ namespace LeadEngine.Infrastructure.Persistence.Migrations
                     b.HasIndex("Padrao");
 
                     b.ToTable("GoogleAdsContas", (string)null);
-                });
-
-            modelBuilder.Entity("LeadEngine.Domain.Entities.GoogleAdsOAuthState", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("char(36)");
-
-                    b.Property<DateTime>("DataCriacao")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime?>("DataUtilizacao")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime>("ExpiraEm")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("StateHash")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
-
-                    b.Property<bool>("Utilizado")
-                        .HasColumnType("tinyint(1)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ExpiraEm");
-
-                    b.HasIndex("StateHash")
-                        .IsUnique();
-
-                    b.HasIndex("Utilizado");
-
-                    b.ToTable("GoogleAdsOAuthStates", (string)null);
                 });
 
             modelBuilder.Entity("LeadEngine.Domain.Entities.GoogleAdsOperacaoPublicacao", b =>

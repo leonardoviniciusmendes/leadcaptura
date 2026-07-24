@@ -14,6 +14,12 @@ public sealed class GoogleAdsController(IGoogleAdsConnectionService service) : C
         return Ok(await service.ObterStatusAsync(cancellationToken));
     }
 
+    [HttpGet("ambiente")]
+    public async Task<ActionResult<GoogleAdsAmbienteResponse>> Ambiente(CancellationToken cancellationToken)
+    {
+        return Ok(await service.ObterAmbienteAsync(cancellationToken));
+    }
+
     [HttpGet("auth-url")]
     public async Task<ActionResult<GoogleAdsAuthUrlResponse>> AuthUrl(CancellationToken cancellationToken)
     {
@@ -21,9 +27,20 @@ public sealed class GoogleAdsController(IGoogleAdsConnectionService service) : C
     }
 
     [HttpPost("oauth/callback")]
-    public async Task<ActionResult<IReadOnlyList<GoogleAdsContaResponse>>> OAuthCallback(GoogleAdsOAuthCallbackRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<GoogleAdsOAuthCallbackResponse>> OAuthCallback(GoogleAdsOAuthCallbackRequest request, CancellationToken cancellationToken)
     {
-        return Ok(await service.ConcluirOAuthAsync(request, cancellationToken));
+        try
+        {
+            return Ok(await service.ConcluirOAuthAsync(request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { sucesso = false, mensagem = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { sucesso = false, mensagem = ex.Message });
+        }
     }
 
     [HttpGet("contas")]

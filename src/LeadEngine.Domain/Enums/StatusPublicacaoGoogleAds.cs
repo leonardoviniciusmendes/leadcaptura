@@ -9,5 +9,6 @@ public enum StatusPublicacaoGoogleAds
     ParcialmentePublicada = 5,
     Publicada = 6,
     Falhou = 7,
-    RequerIntervencao = 8
+    RequerIntervencao = 8,
+    Reconciliada = 9
 }

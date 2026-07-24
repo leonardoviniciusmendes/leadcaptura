@@ -25,6 +25,7 @@ public static class DependencyInjection
         services.AddScoped<ICampanhaRepository, CampanhaRepository>();
         services.AddScoped<IConfiguracaoRepository, ConfiguracaoRepository>();
         services.AddScoped<IGoogleAdsContaRepository, GoogleAdsContaRepository>();
+        services.AddScoped<IGoogleAdsOAuthStateRepository, GoogleAdsOAuthStateRepository>();
         services.AddScoped<ISecretProtector, DataProtectionSecretProtector>();
         services.AddScoped<IConfigurationResolver, ConfigurationResolver>();
         services.AddScoped<IConfiguracaoService, ConfiguracaoService>();
@@ -41,7 +42,10 @@ public static class DependencyInjection
         services.AddScoped<IGoogleAdsLanguageResolver, GoogleAdsLanguageResolver>();
         services.AddScoped<IGoogleAdsOperationBuilder, GoogleAdsOperationBuilder>();
         services.AddScoped<IGoogleAdsErrorTranslator, GoogleAdsErrorTranslator>();
+        services.AddScoped<GoogleAdsTypedOperationFactory>();
+        services.AddScoped<GoogleAdsRestMutateTransport>();
         services.AddScoped<IGoogleAdsMutationClient, GoogleAdsMutationClient>();
+        services.AddScoped<IGoogleAdsResourceQueryClient, GoogleAdsResourceQueryClient>();
         services.AddScoped<IGoogleAdsRemoteValidationService, GoogleAdsRemoteValidationService>();
         services.AddScoped<IGoogleAdsPublishingService, GoogleAdsPublishingService>();
         services.AddMemoryCache();

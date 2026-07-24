@@ -25,10 +25,9 @@
       <article class="panel">
         <h2>Timeline</h2>
         <ol class="timeline">
-          <li>Preparada</li>
-          <li>Validada</li>
-          <li>Publicando</li>
-          <li>{{ publicacao.status }}</li>
+          <li v-for="item in historico" :key="item.id">
+            {{ item.statusNovo }} <small>{{ item.operacao }} - {{ formatDate(item.data) }}</small>
+          </li>
         </ol>
       </article>
       <article class="panel">
@@ -52,10 +51,11 @@ import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import SkeletonBlock from '../components/SkeletonBlock.vue';
 import { showToast } from '../components/uiEvents';
-import { obterPublicacaoGoogleAds, reconciliarPublicacaoGoogleAds, type GoogleAdsPublication } from '../services/api';
+import { historicoPublicacaoGoogleAds, obterPublicacaoGoogleAds, reconciliarPublicacaoGoogleAds, type GoogleAdsPublication, type GoogleAdsPublicationHistory } from '../services/api';
 
 const route = useRoute();
 const publicacao = ref<GoogleAdsPublication | null>(null);
+const historico = ref<GoogleAdsPublicationHistory[]>([]);
 const loading = ref(false);
 const busy = ref(false);
 const error = ref('');
@@ -66,6 +66,7 @@ async function load() {
   loading.value = true;
   try {
     publicacao.value = await obterPublicacaoGoogleAds(String(route.params.id));
+    historico.value = await historicoPublicacaoGoogleAds(String(route.params.id));
   } catch {
     error.value = 'Nao foi possivel carregar a publicacao.';
   } finally {
@@ -83,5 +84,9 @@ async function reconciliar() {
   } finally {
     busy.value = false;
   }
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 </script>

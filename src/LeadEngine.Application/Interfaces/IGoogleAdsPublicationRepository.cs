@@ -9,7 +9,10 @@ public interface IGoogleAdsPublicationRepository
     Task<GoogleAdsPublicacao?> ObterPorPreviewVersaoHashAsync(Guid previewId, int versao, string hash, CancellationToken cancellationToken);
     Task<IReadOnlyList<GoogleAdsPublicacao>> ListarPorCampanhaAsync(Guid campanhaId, CancellationToken cancellationToken);
     Task<IReadOnlyList<GoogleAdsPublicacao>> ListarAsync(GoogleAdsPublicationQuery query, CancellationToken cancellationToken);
+    Task<IReadOnlyList<GoogleAdsPublicacaoHistorico>> ListarHistoricoAsync(Guid publicacaoId, CancellationToken cancellationToken);
     Task AdicionarAsync(GoogleAdsPublicacao publicacao, CancellationToken cancellationToken);
     Task AdicionarRecursoAsync(GoogleAdsRecursoPublicado recurso, CancellationToken cancellationToken);
+    Task AdicionarHistoricoAsync(GoogleAdsPublicacaoHistorico historico, CancellationToken cancellationToken);
+    Task AdicionarOperacaoAsync(GoogleAdsOperacaoPublicacao operacao, CancellationToken cancellationToken);
     Task SalvarAsync(CancellationToken cancellationToken);
 }

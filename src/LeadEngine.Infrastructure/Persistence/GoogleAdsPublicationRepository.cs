@@ -9,12 +9,12 @@ public sealed class GoogleAdsPublicationRepository(LeadEngineDbContext context) 
 {
     public Task<GoogleAdsPublicacao?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken)
     {
-        return context.GoogleAdsPublicacoes.Include(x => x.Recursos).FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        return context.GoogleAdsPublicacoes.Include(x => x.Recursos).Include(x => x.Operacoes).FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
     public Task<GoogleAdsPublicacao?> ObterPorPreviewVersaoHashAsync(Guid previewId, int versao, string hash, CancellationToken cancellationToken)
     {
-        return context.GoogleAdsPublicacoes.Include(x => x.Recursos)
+        return context.GoogleAdsPublicacoes.Include(x => x.Recursos).Include(x => x.Operacoes)
             .FirstOrDefaultAsync(x => x.GoogleAdsPlanoPublicacaoId == previewId && x.PreviewVersao == versao && x.PreviewHash == hash, cancellationToken);
     }
 
@@ -37,6 +37,14 @@ public sealed class GoogleAdsPublicationRepository(LeadEngineDbContext context) 
         return await q.OrderByDescending(x => x.DataCriacao).Take(200).ToArrayAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<GoogleAdsPublicacaoHistorico>> ListarHistoricoAsync(Guid publicacaoId, CancellationToken cancellationToken)
+    {
+        return await context.GoogleAdsPublicacaoHistoricos
+            .Where(x => x.GoogleAdsPublicacaoId == publicacaoId)
+            .OrderBy(x => x.Data)
+            .ToArrayAsync(cancellationToken);
+    }
+
     public Task AdicionarAsync(GoogleAdsPublicacao publicacao, CancellationToken cancellationToken)
     {
         return context.GoogleAdsPublicacoes.AddAsync(publicacao, cancellationToken).AsTask();
@@ -45,6 +53,16 @@ public sealed class GoogleAdsPublicationRepository(LeadEngineDbContext context) 
     public Task AdicionarRecursoAsync(GoogleAdsRecursoPublicado recurso, CancellationToken cancellationToken)
     {
         return context.GoogleAdsRecursosPublicados.AddAsync(recurso, cancellationToken).AsTask();
+    }
+
+    public Task AdicionarHistoricoAsync(GoogleAdsPublicacaoHistorico historico, CancellationToken cancellationToken)
+    {
+        return context.GoogleAdsPublicacaoHistoricos.AddAsync(historico, cancellationToken).AsTask();
+    }
+
+    public Task AdicionarOperacaoAsync(GoogleAdsOperacaoPublicacao operacao, CancellationToken cancellationToken)
+    {
+        return context.GoogleAdsOperacoesPublicacao.AddAsync(operacao, cancellationToken).AsTask();
     }
 
     public Task SalvarAsync(CancellationToken cancellationToken) => context.SaveChangesAsync(cancellationToken);

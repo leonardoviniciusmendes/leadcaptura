@@ -15,6 +15,12 @@ public sealed class GoogleAdsPublicacoesController(IGoogleAdsPublishingService s
         return Ok(await service.ValidarRemotamenteAsync(previewId, cancellationToken));
     }
 
+    [HttpPost("preview/{previewId:guid}/dry-run")]
+    public async Task<ActionResult<GoogleAdsDryRunResponse>> DryRun(Guid previewId, CancellationToken cancellationToken)
+    {
+        return Ok(await service.DryRunAsync(previewId, cancellationToken));
+    }
+
     [HttpPost("preview/{previewId:guid}/preparar")]
     public async Task<ActionResult<GoogleAdsPreparePublicationResponse>> Preparar(Guid previewId, CancellationToken cancellationToken)
     {
@@ -32,6 +38,10 @@ public sealed class GoogleAdsPublicacoesController(IGoogleAdsPublishingService s
         {
             return Conflict(new { sucesso = false, code = "google_ads_publication_conflict", mensagem = ex.Message });
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { sucesso = false, code = "google_ads_publication_disabled", mensagem = ex.Message });
+        }
     }
 
     [HttpPost("{id:guid}/reconciliar")]
@@ -44,6 +54,12 @@ public sealed class GoogleAdsPublicacoesController(IGoogleAdsPublishingService s
     public async Task<ActionResult<GoogleAdsPublicationResponse>> Obter(Guid id, CancellationToken cancellationToken)
     {
         return Ok(await service.ObterAsync(id, cancellationToken));
+    }
+
+    [HttpGet("{id:guid}/historico")]
+    public async Task<ActionResult<IReadOnlyList<GoogleAdsPublicationHistoryResponse>>> Historico(Guid id, CancellationToken cancellationToken)
+    {
+        return Ok(await service.HistoricoAsync(id, cancellationToken));
     }
 
     [HttpGet("campanha/{campanhaId:guid}")]

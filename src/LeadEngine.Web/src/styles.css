@@ -289,6 +289,17 @@ input:focus, select:focus, textarea:focus {
   color: #047857;
 }
 
+.status-line {
+  background: #eef6ff;
+  border-radius: 7px;
+  color: #1d4ed8;
+  font-size: 0.9rem;
+  font-weight: 700;
+  grid-column: 1 / -1;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+}
+
 .dashboard-grid,
 .grid-layout {
   display: grid;
@@ -911,6 +922,37 @@ dd {
   justify-content: space-between;
 }
 
+.integration-banner {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding: 12px;
+}
+
+.integration-banner span {
+  color: #6b7280;
+  display: block;
+  margin-top: 4px;
+}
+
+.compact-errors,
+.step-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.compact-errors {
+  color: #b42318;
+  margin: 0 0 16px;
+  padding-left: 18px;
+}
+
 .payload-box {
   background: #0f172a;
   border-radius: 8px;
@@ -984,6 +1026,7 @@ dd {
   }
 
   .account-card,
+  .integration-banner,
   .preview-notice,
   .suggestion-row,
   .actions.inline {

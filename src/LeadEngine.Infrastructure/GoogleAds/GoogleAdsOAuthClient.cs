@@ -100,7 +100,8 @@ public sealed class GoogleAdsOAuthClient(
         using var response = await httpClientFactory.CreateClient("googleads").PostAsync(tokenEndpoint, content, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            throw new InvalidOperationException("Falha na autenticacao Google Ads.");
+            var text = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException(FriendlyOAuthError(text));
         }
 
         using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -158,5 +159,26 @@ public sealed class GoogleAdsOAuthClient(
     private static int? ReadInt(JsonElement element, string property)
     {
         return element.TryGetProperty(property, out var value) && value.TryGetInt32(out var result) ? result : null;
+    }
+
+    private static string FriendlyOAuthError(string body)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
+            var error = ReadString(json.RootElement, "error");
+            return error switch
+            {
+                "invalid_grant" => "Codigo OAuth invalido, expirado ou ja utilizado.",
+                "redirect_uri_mismatch" => "Redirect URI do Google Ads nao confere com a configuracao.",
+                "invalid_client" => "ClientId ou ClientSecret do Google Ads invalido.",
+                "access_denied" => "Acesso ao Google Ads negado pelo usuario.",
+                _ => "Falha na autenticacao Google Ads."
+            };
+        }
+        catch
+        {
+            return "Falha na autenticacao Google Ads.";
+        }
     }
 }

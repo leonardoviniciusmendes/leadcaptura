@@ -34,7 +34,7 @@ public static class ConfiguracaoCatalog
         new(CategoriaConfiguracao.GoogleAds, "ClientSecret", TipoConfiguracao.Segredo, true, null, "GOOGLE_ADS_CLIENT_SECRET", "GoogleAds:ClientSecret", "Client secret OAuth do Google."),
         new(CategoriaConfiguracao.GoogleAds, "DeveloperToken", TipoConfiguracao.Segredo, true, null, "GOOGLE_ADS_DEVELOPER_TOKEN", "GoogleAds:DeveloperToken", "Developer token do Google Ads."),
         new(CategoriaConfiguracao.GoogleAds, "LoginCustomerId", TipoConfiguracao.Texto, false, "", "GOOGLE_ADS_LOGIN_CUSTOMER_ID", "GoogleAds:LoginCustomerId", "Customer ID gerente opcional."),
-        new(CategoriaConfiguracao.GoogleAds, "RedirectUri", TipoConfiguracao.Url, false, "http://localhost:5173/configuracoes?googleAdsCallback=1", "GOOGLE_ADS_REDIRECT_URI", "GoogleAds:RedirectUri", "URL de callback OAuth."),
+        new(CategoriaConfiguracao.GoogleAds, "RedirectUri", TipoConfiguracao.Url, false, "http://localhost:5173/leadcaptura/configuracoes?googleAdsCallback=1", "GOOGLE_ADS_REDIRECT_URI", "GoogleAds:RedirectUri", "URL de callback OAuth."),
         new(CategoriaConfiguracao.GoogleAds, "AuthEndpoint", TipoConfiguracao.Url, false, "https://accounts.google.com/o/oauth2/v2/auth", "GOOGLE_ADS_AUTH_ENDPOINT", "GoogleAds:AuthEndpoint", "Endpoint de autorizacao OAuth."),
         new(CategoriaConfiguracao.GoogleAds, "TokenEndpoint", TipoConfiguracao.Url, false, "https://oauth2.googleapis.com/token", "GOOGLE_ADS_TOKEN_ENDPOINT", "GoogleAds:TokenEndpoint", "Endpoint de token OAuth."),
         new(CategoriaConfiguracao.GoogleAds, "UserInfoEndpoint", TipoConfiguracao.Url, false, "https://openidconnect.googleapis.com/v1/userinfo", "GOOGLE_ADS_USER_INFO_ENDPOINT", "GoogleAds:UserInfoEndpoint", "Endpoint de dados do usuario."),
@@ -49,7 +49,10 @@ public static class ConfiguracaoCatalog
         new(CategoriaConfiguracao.GoogleAds, "EnableBroadMatch", TipoConfiguracao.Booleano, false, "false", "GOOGLE_ADS_ENABLE_BROAD_MATCH", "GoogleAds:EnableBroadMatch", "Permite broad match automatico."),
         new(CategoriaConfiguracao.GoogleAds, "DefaultCpcBid", TipoConfiguracao.Decimal, false, "", "GOOGLE_ADS_DEFAULT_CPC_BID", "GoogleAds:DefaultCpcBid", "CPC inicial opcional."),
         new(CategoriaConfiguracao.GoogleAds, "UseTestAccount", TipoConfiguracao.Booleano, false, "false", "GOOGLE_ADS_USE_TEST_ACCOUNT", "GoogleAds:UseTestAccount", "Bloqueia publicacao fora do customer de teste."),
-        new(CategoriaConfiguracao.GoogleAds, "TestCustomerId", TipoConfiguracao.Texto, false, "", "GOOGLE_ADS_TEST_CUSTOMER_ID", "GoogleAds:TestCustomerId", "Customer ID de teste.")
+        new(CategoriaConfiguracao.GoogleAds, "TestCustomerId", TipoConfiguracao.Texto, false, "", "GOOGLE_ADS_TEST_CUSTOMER_ID", "GoogleAds:TestCustomerId", "Customer ID de teste."),
+        new(CategoriaConfiguracao.GoogleAds, "EnableRealPublishing", TipoConfiguracao.Booleano, false, "false", "GOOGLE_ADS_ENABLE_REAL_PUBLISHING", "GoogleAds:EnableRealPublishing", "Habilita criacao real, apenas em conta de teste nesta fase."),
+        new(CategoriaConfiguracao.GoogleAds, "ApiTimeoutSeconds", TipoConfiguracao.Numero, false, "60", "GOOGLE_ADS_API_TIMEOUT_SECONDS", "GoogleAds:ApiTimeoutSeconds", "Timeout das chamadas Google Ads."),
+        new(CategoriaConfiguracao.GoogleAds, "DefaultBiddingStrategy", TipoConfiguracao.Texto, false, "ManualCpc", "GOOGLE_ADS_DEFAULT_BIDDING_STRATEGY", "GoogleAds:DefaultBiddingStrategy", "Estrategia de lance padrao.")
     ];
 
     public static ConfigDefinition Get(CategoriaConfiguracao categoria, string key)
