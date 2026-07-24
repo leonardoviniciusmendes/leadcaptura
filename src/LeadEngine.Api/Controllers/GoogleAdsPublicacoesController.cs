@@ -7,7 +7,7 @@ namespace LeadEngine.Api.Controllers;
 
 [ApiController]
 [Route("api/googleads/publicacoes")]
-public sealed class GoogleAdsPublicacoesController(IGoogleAdsPublishingService service) : ControllerBase
+public sealed class GoogleAdsPublicacoesController(IGoogleAdsPublishingService service, IGoogleAdsSynchronizationService synchronizationService) : ControllerBase
 {
     [HttpPost("preview/{previewId:guid}/validar-remotamente")]
     public async Task<ActionResult<GoogleAdsRemoteValidationResponse>> ValidarRemotamente(Guid previewId, CancellationToken cancellationToken)
@@ -48,6 +48,42 @@ public sealed class GoogleAdsPublicacoesController(IGoogleAdsPublishingService s
     public async Task<ActionResult<GoogleAdsReconciliationResponse>> Reconciliar(Guid id, CancellationToken cancellationToken)
     {
         return Ok(await service.ReconciliarAsync(id, cancellationToken));
+    }
+
+    [HttpPost("{id:guid}/sincronizar")]
+    public async Task<ActionResult<GoogleAdsSincronizacaoResponse>> Sincronizar(Guid id, CancellationToken cancellationToken)
+    {
+        return Ok(await synchronizationService.SincronizarPublicacaoAsync(id, cancellationToken));
+    }
+
+    [HttpGet("{id:guid}/status-remoto")]
+    public async Task<ActionResult<GoogleAdsStatusRemotoResponse>> StatusRemoto(Guid id, CancellationToken cancellationToken)
+    {
+        return Ok(await synchronizationService.ObterStatusRemotoAsync(id, cancellationToken));
+    }
+
+    [HttpPost("sincronizar")]
+    public async Task<ActionResult<IReadOnlyList<GoogleAdsSincronizacaoResponse>>> SincronizarTodas(CancellationToken cancellationToken)
+    {
+        return Ok(await synchronizationService.SincronizarTodasAsync(cancellationToken));
+    }
+
+    [HttpPost("{id:guid}/pausar")]
+    public async Task<ActionResult<GoogleAdsPublicationResponse>> Pausar(Guid id, CancellationToken cancellationToken)
+    {
+        return Ok(await synchronizationService.PausarAsync(id, cancellationToken));
+    }
+
+    [HttpPost("{id:guid}/ativar")]
+    public async Task<ActionResult<GoogleAdsPublicationResponse>> Ativar(Guid id, GoogleAdsStatusActionRequest request, CancellationToken cancellationToken)
+    {
+        return Ok(await synchronizationService.AtivarAsync(id, request, cancellationToken));
+    }
+
+    [HttpPost("{id:guid}/atualizar")]
+    public ActionResult Atualizar(Guid id, GoogleAdsAtualizacaoRequest request)
+    {
+        return BadRequest(new { sucesso = false, mensagem = "Atualizacao remota suportara inicialmente orcamento e RSA apos validacao dedicada. Nesta versao, gere novo preview e execute dry run/validate_only." });
     }
 
     [HttpGet("{id:guid}")]

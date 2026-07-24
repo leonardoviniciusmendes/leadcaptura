@@ -429,6 +429,10 @@ export interface GoogleAdsPublication {
   id: string; previewId: string; campanhaId: string; contaId: string; customerIdMascarado: string; previewVersao: number; previewHash: string; status: StatusGoogleAdsPublicacao; requestIdValidacao?: string; requestIdPublicacao?: string; erroCodigo?: string; erroMensagemControlada?: string; erros: GoogleAdsPublicationError[]; recursos: GoogleAdsPublishedResource[]; dataCriacao: string; dataAtualizacao?: string; teste: boolean;
 }
 export interface GoogleAdsPublicationHistory { id: string; statusAnterior?: StatusGoogleAdsPublicacao; statusNovo: StatusGoogleAdsPublicacao; operacao: string; mensagemControlada?: string; requestId?: string; data: string }
+export interface GoogleAdsDashboardResumo { campanhasPublicadas: number; campanhasAtivas: number; campanhasPausadas: number; impressoes: number; cliques: number; ctr: number; custo: number; cpcMedio: number; conversoes: number; valorConversoes: number; leads: number; custoPorLead: number; taxaConversao: number; roas: number; ultimaSincronizacao?: string; qualidadeAtribuicao: string }
+export interface GoogleAdsDashboardCampanha { publicacaoId: string; campanha: string; status: string; impressoes: number; cliques: number; ctr: number; custo: number; conversoes: number; leads: number; custoPorLead: number; ultimaSincronizacao?: string }
+export interface GoogleAdsEvolucao { data: string; cliques: number; custo: number; conversoes: number; leads: number }
+export interface GoogleAdsAnalise { id: string; publicacaoId: string; resumo: string; resultado: { diagnostico: string[]; pontosFortes: string[]; problemas: string[]; headlinesSugeridas: string[]; descriptionsSugeridas: string[]; keywordsSugeridas: string[]; negativasSugeridas: string[]; acoesPrioritarias: string[]; nivelConfianca: number }; aplicada: boolean; dataCriacao: string }
 
 export async function obterGoogleAdsStatus(): Promise<GoogleAdsStatus> {
   const { data } = await api.get<GoogleAdsStatus>('/api/googleads/status');
@@ -541,5 +545,30 @@ export async function reconciliarPublicacaoGoogleAds(id: string): Promise<Record
 
 export async function historicoPublicacaoGoogleAds(id: string): Promise<GoogleAdsPublicationHistory[]> {
   const { data } = await api.get<GoogleAdsPublicationHistory[]>(`/api/googleads/publicacoes/${id}/historico`);
+  return data;
+}
+
+export async function obterGoogleAdsDashboard(params: Record<string, string | undefined> = {}): Promise<GoogleAdsDashboardResumo> {
+  const { data } = await api.get<GoogleAdsDashboardResumo>('/api/googleads/dashboard', { params });
+  return data;
+}
+
+export async function obterGoogleAdsDashboardCampanhas(params: Record<string, string | undefined> = {}): Promise<GoogleAdsDashboardCampanha[]> {
+  const { data } = await api.get<GoogleAdsDashboardCampanha[]>('/api/googleads/dashboard/campanhas', { params });
+  return data;
+}
+
+export async function obterGoogleAdsDashboardEvolucao(params: Record<string, string | undefined> = {}): Promise<GoogleAdsEvolucao[]> {
+  const { data } = await api.get<GoogleAdsEvolucao[]>('/api/googleads/dashboard/evolucao', { params });
+  return data;
+}
+
+export async function sincronizarGoogleAdsMetricas(dataInicial?: string, dataFinal?: string): Promise<unknown> {
+  const { data } = await api.post('/api/googleads/metricas/sincronizar', { dataInicial, dataFinal });
+  return data;
+}
+
+export async function analisarGoogleAdsPublicacao(id: string, dataInicial?: string, dataFinal?: string): Promise<GoogleAdsAnalise> {
+  const { data } = await api.post<GoogleAdsAnalise>(`/api/googleads/publicacoes/${id}/analisar`, { dataInicial, dataFinal });
   return data;
 }

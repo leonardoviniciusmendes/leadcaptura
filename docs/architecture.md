@@ -6,6 +6,21 @@ O callback local configurado para a aplicacao Vue com base publica e `http://loc
 
 O backend persiste `state` em `GoogleAdsOAuthStates` como hash SHA-256, com expiracao e uso unico. O callback valida o state antes de trocar o code por tokens. `RefreshToken` e `AccessToken` sao protegidos por `ISecretProtector`; nenhum segredo volta em DTO ou log. Depois do OAuth, mesmo sem conta padrao selecionada, `GET /api/googleads/status` retorna `conectado=true` e status `Conectado sem conta padrao`.
 
+## Metricas, sincronizacao e IA Google Ads
+
+As consultas GAQL ficam centralizadas na Infrastructure (`GoogleAdsGaqlQueries`, `GoogleAdsMetricsQueryClient`, `GoogleAdsSynchronizationQueryClient`). Controllers nao recebem strings GAQL. A sincronizacao usa apenas publicacoes registradas no LeadEngine com resource names definitivos.
+
+Persistencia nova:
+
+- `GoogleAdsMetricasDiarias`: upsert por publicacao, campaign externo e data;
+- `GoogleAdsSincronizacoes`: historico de execucao manual/worker;
+- `GoogleAdsAnalisesIa`: resultado estruturado da analise, sem prompt sensivel;
+- campos de atribuicao em `Leads`: `TipoAtribuicao`, `GoogleAdsPublicacaoId`, `DataAtribuicao`.
+
+O dashboard calcula CTR, CPC medio, CPL, taxa de conversao e ROAS com divisoes protegidas. Resultado invalido como `NaN` ou `Infinity` nao deve ser retornado.
+
+Ativacao remota continua bloqueada por padrao. Para conta de teste exige `EnableRealPublishing=true`, `UseTestAccount=true`, `AllowTestAccountActivation=true` e `TestCustomerId` igual ao CustomerId selecionado. Producao segue bloqueada nesta etapa.
+
 ## Endurecimento Google Ads
 
 A publicacao Google Ads continua isolada atras de `IGoogleAdsMutationClient`; nenhum tipo do SDK oficial sai da Infrastructure. A implementacao atual monta descritores internos com `GoogleAdsOperationBuilder` e converte para objetos tipados do SDK `Google.Ads.GoogleAds 26.0.1` em `GoogleAdsTypedOperationFactory`, incluindo `MutateOperation`, `CampaignBudget`, `Campaign`, `CampaignCriterion`, `AdGroup`, `AdGroupCriterion`, `AdGroupAd`, `ResponsiveSearchAdInfo` e `AdTextAsset`.

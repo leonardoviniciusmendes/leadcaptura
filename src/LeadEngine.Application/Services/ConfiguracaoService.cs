@@ -334,6 +334,8 @@ public sealed class ConfiguracaoService(
             if (definition.Key == "DefaultCampaignStatus" && !string.Equals(value, "PAUSED", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("DefaultCampaignStatus deve ser PAUSED nesta etapa.");
             if (definition.Key == "ApiTimeoutSeconds" && (!int.TryParse(value, out var apiTimeout) || apiTimeout is < 10 or > 300)) throw new ArgumentException("ApiTimeoutSeconds deve estar entre 10 e 300.");
             if (definition.Key == "DefaultBiddingStrategy" && !new[] { "ManualCpc" }.Contains(value, StringComparer.OrdinalIgnoreCase)) throw new ArgumentException("DefaultBiddingStrategy suporta apenas ManualCpc nesta etapa.");
+            if (definition.Key == "MetricsSyncIntervalMinutes" && (!int.TryParse(value, out var interval) || interval is < 5 or > 10080)) throw new ArgumentException("MetricsSyncIntervalMinutes invalido.");
+            if (definition.Key is "MetricsSyncDays" or "MetricsDefaultPeriodDays" && (!int.TryParse(value, out var days) || days is < 1 or > 90)) throw new ArgumentException($"{definition.Key} deve estar entre 1 e 90.");
             if (definition.Key == "LoginCustomerId")
             {
                 var digits = new string((value ?? string.Empty).Where(char.IsDigit).ToArray());

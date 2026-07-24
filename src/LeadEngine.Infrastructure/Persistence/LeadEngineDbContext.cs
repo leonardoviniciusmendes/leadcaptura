@@ -17,6 +17,9 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
     public DbSet<GoogleAdsRecursoPublicado> GoogleAdsRecursosPublicados => Set<GoogleAdsRecursoPublicado>();
     public DbSet<GoogleAdsPublicacaoHistorico> GoogleAdsPublicacaoHistoricos => Set<GoogleAdsPublicacaoHistorico>();
     public DbSet<GoogleAdsOperacaoPublicacao> GoogleAdsOperacoesPublicacao => Set<GoogleAdsOperacaoPublicacao>();
+    public DbSet<GoogleAdsMetricaDiaria> GoogleAdsMetricasDiarias => Set<GoogleAdsMetricaDiaria>();
+    public DbSet<GoogleAdsSincronizacao> GoogleAdsSincronizacoes => Set<GoogleAdsSincronizacao>();
+    public DbSet<GoogleAdsAnaliseIa> GoogleAdsAnalisesIa => Set<GoogleAdsAnaliseIa>();
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<OrigemLead> OrigensLead => Set<OrigemLead>();
     public DbSet<TentativaCapturaLead> TentativasCapturaLead => Set<TentativaCapturaLead>();
@@ -235,6 +238,58 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
             entity.HasOne(x => x.Publicacao).WithMany(x => x.Operacoes).HasForeignKey(x => x.GoogleAdsPublicacaoId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<GoogleAdsMetricaDiaria>(entity =>
+        {
+            entity.ToTable("GoogleAdsMetricasDiarias");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.CampaignResourceName).HasMaxLength(300).IsRequired();
+            entity.Property(x => x.CampaignExternalId).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Custo).HasPrecision(12, 2);
+            entity.Property(x => x.Ctr).HasPrecision(12, 6);
+            entity.Property(x => x.CpcMedio).HasPrecision(12, 2);
+            entity.Property(x => x.Conversoes).HasPrecision(12, 2);
+            entity.Property(x => x.ValorConversoes).HasPrecision(12, 2);
+            entity.Property(x => x.TaxaConversao).HasPrecision(12, 6);
+            entity.Property(x => x.ParcelaImpressoesPesquisa).HasPrecision(12, 6);
+            entity.Property(x => x.TaxaTopoPagina).HasPrecision(12, 6);
+            entity.Property(x => x.TaxaTopoAbsoluto).HasPrecision(12, 6);
+            entity.HasIndex(x => new { x.GoogleAdsPublicacaoId, x.CampaignExternalId, x.Data }).IsUnique();
+            entity.HasIndex(x => x.GoogleAdsContaId);
+            entity.HasIndex(x => x.Data);
+            entity.HasOne(x => x.Publicacao).WithMany().HasForeignKey(x => x.GoogleAdsPublicacaoId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.GoogleAdsConta).WithMany().HasForeignKey(x => x.GoogleAdsContaId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<GoogleAdsSincronizacao>(entity =>
+        {
+            entity.ToTable("GoogleAdsSincronizacoes");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Tipo).HasConversion<int>();
+            entity.Property(x => x.Status).HasConversion<int>();
+            entity.Property(x => x.RequestId).HasMaxLength(120);
+            entity.Property(x => x.ErroCodigo).HasMaxLength(120);
+            entity.Property(x => x.ErroMensagemControlada).HasMaxLength(500);
+            entity.HasIndex(x => x.GoogleAdsPublicacaoId);
+            entity.HasIndex(x => x.GoogleAdsContaId);
+            entity.HasIndex(x => x.DataInicio);
+            entity.HasOne(x => x.Publicacao).WithMany().HasForeignKey(x => x.GoogleAdsPublicacaoId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.GoogleAdsConta).WithMany().HasForeignKey(x => x.GoogleAdsContaId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<GoogleAdsAnaliseIa>(entity =>
+        {
+            entity.ToTable("GoogleAdsAnalisesIa");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Modelo).HasMaxLength(120);
+            entity.Property(x => x.Provider).HasMaxLength(40);
+            entity.Property(x => x.Resumo).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.ResultadoJson).HasColumnType("json").IsRequired();
+            entity.Property(x => x.CustoEstimado).HasPrecision(12, 6);
+            entity.HasIndex(x => x.GoogleAdsPublicacaoId);
+            entity.HasIndex(x => x.DataCriacao);
+            entity.HasOne(x => x.Publicacao).WithMany().HasForeignKey(x => x.GoogleAdsPublicacaoId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<Lead>(entity =>
         {
             entity.ToTable("Leads");
@@ -269,6 +324,9 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
             entity.Property(x => x.UtmContent).HasMaxLength(180);
             entity.Property(x => x.Gclid).HasMaxLength(180);
             entity.Property(x => x.Fbclid).HasMaxLength(180);
+            entity.Property(x => x.TipoAtribuicao).HasConversion<int>();
+            entity.HasIndex(x => x.GoogleAdsPublicacaoId);
+            entity.HasIndex(x => x.TipoAtribuicao);
             entity.Property(x => x.StatusEnvioExterno).HasMaxLength(40);
             entity.Property(x => x.UltimoErroEnvioExterno).HasMaxLength(500);
             entity.Property(x => x.ErroEnvio).HasMaxLength(500);

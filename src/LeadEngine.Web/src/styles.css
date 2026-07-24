@@ -953,6 +953,35 @@ dd {
   padding-left: 18px;
 }
 
+.chart-bars {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(28px, 1fr));
+  min-height: 160px;
+}
+
+.chart-day {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: end;
+}
+
+.chart-day span {
+  background: #111827;
+  border-radius: 4px 4px 0 0;
+  display: block;
+  min-height: 8px;
+  width: 100%;
+}
+
+.chart-day small {
+  color: #6b7280;
+  font-size: 11px;
+}
+
 .payload-box {
   background: #0f172a;
   border-radius: 8px;

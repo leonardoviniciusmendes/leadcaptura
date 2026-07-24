@@ -34,6 +34,9 @@ public static class DependencyInjection
         services.AddScoped<IGoogleAdsConnectionService, GoogleAdsConnectionService>();
         services.AddScoped<IGoogleAdsPlanoPublicacaoRepository, GoogleAdsPlanoPublicacaoRepository>();
         services.AddScoped<IGoogleAdsPublicationRepository, GoogleAdsPublicationRepository>();
+        services.AddScoped<IGoogleAdsMetricsRepository, GoogleAdsMetricsRepository>();
+        services.AddScoped<IGoogleAdsSynchronizationRepository, GoogleAdsSynchronizationRepository>();
+        services.AddScoped<IGoogleAdsAnalysisRepository, GoogleAdsAnalysisRepository>();
         services.AddScoped<IGoogleAdsCampaignMappingService, GoogleAdsCampaignMappingService>();
         services.AddScoped<IGoogleAdsValidationService, GoogleAdsValidationService>();
         services.AddScoped<IGoogleAdsCopyAdjustmentService, OpenRouterGoogleAdsCopyAdjustmentService>();
@@ -46,8 +49,16 @@ public static class DependencyInjection
         services.AddScoped<GoogleAdsRestMutateTransport>();
         services.AddScoped<IGoogleAdsMutationClient, GoogleAdsMutationClient>();
         services.AddScoped<IGoogleAdsResourceQueryClient, GoogleAdsResourceQueryClient>();
+        services.AddScoped<GoogleAdsGaqlClient>();
+        services.AddScoped<IGoogleAdsMetricsQueryClient, GoogleAdsMetricsQueryClient>();
+        services.AddScoped<IGoogleAdsSynchronizationQueryClient, GoogleAdsSynchronizationQueryClient>();
         services.AddScoped<IGoogleAdsRemoteValidationService, GoogleAdsRemoteValidationService>();
         services.AddScoped<IGoogleAdsPublishingService, GoogleAdsPublishingService>();
+        services.AddScoped<ILeadAttributionService, LeadAttributionService>();
+        services.AddScoped<IGoogleAdsMetricsService, GoogleAdsMetricsService>();
+        services.AddScoped<IGoogleAdsSynchronizationService, GoogleAdsSynchronizationService>();
+        services.AddScoped<IGoogleAdsOptimizationService, OpenRouterGoogleAdsOptimizationService>();
+        services.AddHostedService<GoogleAdsMetricsSyncWorker>();
         services.AddMemoryCache();
         services.AddDataProtection();
         services.AddScoped<CampaignPromptBuilder>();

@@ -42,6 +42,9 @@ public class Lead
     public string? UtmContent { get; set; }
     public string? Gclid { get; set; }
     public string? Fbclid { get; set; }
+    public TipoAtribuicaoLead TipoAtribuicao { get; set; } = TipoAtribuicaoLead.NaoAtribuida;
+    public Guid? GoogleAdsPublicacaoId { get; set; }
+    public DateTime? DataAtribuicao { get; set; }
     public string? StatusEnvioExterno { get; set; }
     public int TentativasEnvioExterno { get; set; }
     public string? UltimoErroEnvioExterno { get; set; }

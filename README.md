@@ -27,6 +27,78 @@ POST /api/googleads/oauth/callback
 }
 ```
 
+## Metricas e otimizacao Google Ads
+
+A etapa atual adiciona sincronizacao e leitura operacional sem liberar producao. O fluxo fica:
+
+```text
+Preview -> dry run -> validate_only -> publicacao pausada em conta de teste -> sincronizacao -> metricas -> dashboard -> analise IA -> sugestoes -> novo preview manual
+```
+
+Endpoints principais:
+
+```http
+POST /api/googleads/publicacoes/{id}/sincronizar
+GET  /api/googleads/publicacoes/{id}/status-remoto
+POST /api/googleads/publicacoes/sincronizar
+POST /api/googleads/publicacoes/{id}/pausar
+POST /api/googleads/publicacoes/{id}/ativar
+POST /api/googleads/publicacoes/{id}/atualizar
+POST /api/googleads/metricas/publicacoes/{publicacaoId}/sincronizar
+POST /api/googleads/metricas/sincronizar
+GET  /api/googleads/metricas/publicacoes/{publicacaoId}
+GET  /api/googleads/metricas/campanhas/{campanhaId}
+GET  /api/googleads/metricas/resumo
+GET  /api/googleads/metricas/evolucao
+GET  /api/googleads/metricas/ranking
+GET  /api/googleads/dashboard
+GET  /api/googleads/dashboard/evolucao
+GET  /api/googleads/dashboard/campanhas
+GET  /api/googleads/dashboard/atribuicao
+POST /api/googleads/publicacoes/{id}/analisar
+GET  /api/googleads/publicacoes/{id}/analises
+GET  /api/googleads/analises/{id}
+POST /api/googleads/analises/{id}/criar-preview
+```
+
+Exemplo de sincronizacao:
+
+```json
+{
+  "dataInicial": "2026-07-01",
+  "dataFinal": "2026-07-24"
+}
+```
+
+Metricas diarias usam upsert por publicacao, campaign id externo e data. Divisoes por zero retornam `0`, nunca `NaN` ou `Infinity`.
+
+Analise IA:
+
+```json
+{
+  "resumo": "...",
+  "headlinesSugeridas": [],
+  "descriptionsSugeridas": [],
+  "keywordsSugeridas": [],
+  "negativasSugeridas": [],
+  "nivelConfianca": 0.75
+}
+```
+
+Sugestoes de IA nao sao aplicadas no Google Ads. `POST /api/googleads/analises/{id}/criar-preview` cria/atualiza preview e exige novo dry run, novo validate_only e confirmacao futura.
+
+Novas configuracoes:
+
+```text
+GOOGLE_ADS_METRICS_SYNC_ENABLED=false
+GOOGLE_ADS_METRICS_SYNC_INTERVAL_MINUTES=1440
+GOOGLE_ADS_METRICS_SYNC_DAYS=7
+GOOGLE_ADS_METRICS_DEFAULT_PERIOD_DAYS=30
+GOOGLE_ADS_ALLOW_TEST_ACCOUNT_ACTIVATION=false
+GOOGLE_ADS_ENABLE_OPTIMIZATION_AI=true
+GOOGLE_ADS_OPTIMIZATION_MODEL=
+```
+
 O backend valida `state` persistido com expiracao e uso unico, troca o code por tokens, protege os tokens e grava as contas encontradas. A URL e limpa para `/leadcaptura/configuracoes` apos sucesso ou erro. Apos OAuth sem conta padrao selecionada, o status esperado e:
 
 ```json
@@ -781,6 +853,8 @@ Migrations criadas:
 20260724214217_AddGoogleAdsPreview
 20260724215939_AddGoogleAdsControlledPublishing
 20260724222003_AddGoogleAdsTypedPublishingAudit
+20260724225644_AddGoogleAdsOAuthStates
+20260724232555_AddGoogleAdsMetricsOptimization
 ```
 
 Criar nova migration:

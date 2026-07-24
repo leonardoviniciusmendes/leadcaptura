@@ -52,7 +52,14 @@ public static class ConfiguracaoCatalog
         new(CategoriaConfiguracao.GoogleAds, "TestCustomerId", TipoConfiguracao.Texto, false, "", "GOOGLE_ADS_TEST_CUSTOMER_ID", "GoogleAds:TestCustomerId", "Customer ID de teste."),
         new(CategoriaConfiguracao.GoogleAds, "EnableRealPublishing", TipoConfiguracao.Booleano, false, "false", "GOOGLE_ADS_ENABLE_REAL_PUBLISHING", "GoogleAds:EnableRealPublishing", "Habilita criacao real, apenas em conta de teste nesta fase."),
         new(CategoriaConfiguracao.GoogleAds, "ApiTimeoutSeconds", TipoConfiguracao.Numero, false, "60", "GOOGLE_ADS_API_TIMEOUT_SECONDS", "GoogleAds:ApiTimeoutSeconds", "Timeout das chamadas Google Ads."),
-        new(CategoriaConfiguracao.GoogleAds, "DefaultBiddingStrategy", TipoConfiguracao.Texto, false, "ManualCpc", "GOOGLE_ADS_DEFAULT_BIDDING_STRATEGY", "GoogleAds:DefaultBiddingStrategy", "Estrategia de lance padrao.")
+        new(CategoriaConfiguracao.GoogleAds, "DefaultBiddingStrategy", TipoConfiguracao.Texto, false, "ManualCpc", "GOOGLE_ADS_DEFAULT_BIDDING_STRATEGY", "GoogleAds:DefaultBiddingStrategy", "Estrategia de lance padrao."),
+        new(CategoriaConfiguracao.GoogleAds, "MetricsSyncEnabled", TipoConfiguracao.Booleano, false, "false", "GOOGLE_ADS_METRICS_SYNC_ENABLED", "GoogleAds:MetricsSyncEnabled", "Habilita worker de metricas."),
+        new(CategoriaConfiguracao.GoogleAds, "MetricsSyncIntervalMinutes", TipoConfiguracao.Numero, false, "1440", "GOOGLE_ADS_METRICS_SYNC_INTERVAL_MINUTES", "GoogleAds:MetricsSyncIntervalMinutes", "Intervalo do worker de metricas."),
+        new(CategoriaConfiguracao.GoogleAds, "MetricsSyncDays", TipoConfiguracao.Numero, false, "7", "GOOGLE_ADS_METRICS_SYNC_DAYS", "GoogleAds:MetricsSyncDays", "Dias sincronizados pelo worker."),
+        new(CategoriaConfiguracao.GoogleAds, "MetricsDefaultPeriodDays", TipoConfiguracao.Numero, false, "30", "GOOGLE_ADS_METRICS_DEFAULT_PERIOD_DAYS", "GoogleAds:MetricsDefaultPeriodDays", "Periodo padrao de metricas."),
+        new(CategoriaConfiguracao.GoogleAds, "AllowTestAccountActivation", TipoConfiguracao.Booleano, false, "false", "GOOGLE_ADS_ALLOW_TEST_ACCOUNT_ACTIVATION", "GoogleAds:AllowTestAccountActivation", "Permite ativacao em conta de teste."),
+        new(CategoriaConfiguracao.GoogleAds, "EnableOptimizationAi", TipoConfiguracao.Booleano, false, "true", "GOOGLE_ADS_ENABLE_OPTIMIZATION_AI", "GoogleAds:EnableOptimizationAi", "Habilita analise IA."),
+        new(CategoriaConfiguracao.GoogleAds, "OptimizationModel", TipoConfiguracao.Texto, false, "", "GOOGLE_ADS_OPTIMIZATION_MODEL", "GoogleAds:OptimizationModel", "Modelo opcional para analise IA.")
     ];
 
     public static ConfigDefinition Get(CategoriaConfiguracao categoria, string key)
