@@ -6,7 +6,7 @@ using LeadEngine.Domain.Enums;
 
 namespace LeadEngine.Application.Services;
 
-public sealed class CampaignPublicationService(ICampanhaRepository repository) : ICampaignPublicationService
+public sealed class CampaignPublicationService(ICampanhaRepository repository, IConfigurationResolver? resolver = null) : ICampaignPublicationService
 {
     public async Task<CampanhaPublicacaoResponse> PublicarAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -26,7 +26,7 @@ public sealed class CampaignPublicationService(ICampanhaRepository repository) :
         campanha.Ativo = true;
         campanha.DataPublicacao ??= DateTime.UtcNow;
         campanha.DataDespublicacao = null;
-        campanha.UrlPublica = $"/lp/{campanha.Slug}";
+        campanha.UrlPublica = await PublicUrlAsync(campanha.Slug, cancellationToken);
         await repository.SalvarAsync(cancellationToken);
         return ToResponse(campanha);
     }
@@ -79,5 +79,13 @@ public sealed class CampaignPublicationService(ICampanhaRepository repository) :
             campanha.DataDespublicacao,
             campanha.Slug,
             campanha.UrlPublica);
+    }
+
+    private async Task<string> PublicUrlAsync(string slug, CancellationToken cancellationToken)
+    {
+        var baseUrl = resolver is null ? null : (await resolver.ResolveAsync(CategoriaConfiguracao.Application, "PublicBaseUrl", cancellationToken)).Value;
+        return string.IsNullOrWhiteSpace(baseUrl)
+            ? $"/lp/{slug}"
+            : $"{baseUrl.TrimEnd('/')}/lp/{slug}";
     }
 }

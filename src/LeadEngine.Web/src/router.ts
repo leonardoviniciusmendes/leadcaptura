@@ -5,6 +5,7 @@ import LeadsView from './views/LeadsView.vue';
 import NovaCampanhaView from './views/NovaCampanhaView.vue';
 import PublicLandingView from './views/PublicLandingView.vue';
 import DashboardView from './views/DashboardView.vue';
+import ConfiguracoesView from './views/ConfiguracoesView.vue';
 
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -14,6 +15,7 @@ export const router = createRouter({
     { path: '/campanhas/nova', component: NovaCampanhaView, meta: { title: 'Nova campanha', subtitle: 'Briefing de geracao' } },
     { path: '/campanhas/:id', component: CampanhaRevisaoView, props: true, meta: { title: 'Revisao', subtitle: 'Conteudo comercial e landing' } },
     { path: '/leads', component: LeadsView, meta: { title: 'Leads', subtitle: 'Capturas da landing page' } },
+    { path: '/configuracoes', component: ConfiguracoesView, meta: { title: 'Configuracoes', subtitle: 'Operacao e integracoes' } },
     { path: '/lp/:slug', component: PublicLandingView, meta: { public: true } }
   ]
 });

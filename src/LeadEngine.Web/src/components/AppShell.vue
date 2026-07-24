@@ -14,6 +14,7 @@
         <RouterLink to="/campanhas">Campanhas</RouterLink>
         <RouterLink to="/campanhas/nova">Nova campanha</RouterLink>
         <RouterLink to="/leads">Leads</RouterLink>
+        <RouterLink to="/configuracoes">Configuracoes</RouterLink>
       </nav>
     </aside>
 

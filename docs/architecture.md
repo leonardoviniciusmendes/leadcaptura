@@ -67,6 +67,18 @@ Campanha Revisada
 -> redirecionamento controlado para WhatsApp
 ```
 
+Fluxo de configurações:
+
+```text
+ConfiguracoesView
+-> /api/configuracoes
+-> ConfiguracaoService
+-> ConfigurationResolver
+-> Banco -> Variavel de ambiente -> AppSettings -> Padrao
+-> DataProtectionSecretProtector para segredos
+-> cache curto por categoria/chave
+```
+
 ## Domínio atual
 
 Entidade principal:
@@ -75,6 +87,8 @@ Entidade principal:
 Campanha
 CampanhaRevisao
 Lead
+ConfiguracaoSistema
+ConfiguracaoSistemaHistorico
 ```
 
 Campos mantidos dentro de `Campanha` nesta etapa:
@@ -95,6 +109,8 @@ Campos mantidos dentro de `Campanha` nesta etapa:
 - publicação da landing na própria `Campanha`;
 - vínculo opcional de `Lead` com `Campanha`;
 - UTMs e status de envio externo preparados para integração futura.
+- configurações operacionais em `ConfiguracaoSistema`;
+- histórico de alteração sem armazenamento de segredos.
 
 Entidades como `GrupoAnuncio`, `PalavraChave`, `Anuncio` e `LandingPage` ainda não foram criadas porque o fluxo atual não precisa delas como agregados separados.
 
@@ -121,6 +137,11 @@ Entidades como `GrupoAnuncio`, `PalavraChave`, `Anuncio` e `LandingPage` ainda n
 - A captura pública não envia para API externa nesta etapa; `StatusEnvioExterno` fica preparado como `Pendente`.
 - Duplicidade é verificada por consulta usando campanha, telefone normalizado e janela configurável, sem índice único para não bloquear casos legítimos.
 - O WhatsApp é apenas URL gerada; não há envio automático.
+- OpenRouter, geração, WhatsApp, LeadCapture, URL pública e landing passam por um resolver único de configuração efetiva.
+- Segredos usam `ISecretProtector`; a implementação atual é `DataProtectionSecretProtector`.
+- A prioridade efetiva é Banco > variáveis de ambiente > appsettings > padrão seguro.
+- O cache de configuração evita leitura do banco em toda resolução e é invalidado ao atualizar uma categoria.
+- Configurações sensíveis não são devolvidas ao frontend e não entram no histórico.
 
 ## Persistência
 
@@ -132,6 +153,8 @@ Tabela principal:
 Campanhas
 CampanhasRevisoes
 Leads
+ConfiguracoesSistema
+ConfiguracoesSistemaHistorico
 ```
 
 Regras relevantes:
@@ -147,6 +170,39 @@ Regras relevantes:
 - `Campanhas` possui `Publicada`, `Ativo`, `DataPublicacao`, `DataDespublicacao` e `UrlPublica`;
 - `Leads` possui índice em `CampanhaId` e índice composto em `CampanhaId`, `WhatsAppNormalizado`, `CriadoEm` para duplicidade por janela;
 - IP puro não é armazenado na captura pública; o contexto expõe hash.
+- `ConfiguracoesSistema.Chave` é única;
+- `ConfiguracoesSistemaHistorico` mantém valores anteriores/novos apenas para configurações não sensíveis.
+
+## Configurações
+
+Categorias fixas:
+
+```text
+OpenRouter
+CampaignGeneration
+WhatsApp
+LeadCapture
+ExternalLeadApi
+Application
+Landing
+```
+
+Serviços que usam configuração efetiva:
+
+- `OpenRouterCampaignGenerationService`;
+- `OpenRouterCampaignSectionGenerationService`;
+- `ConfiguredCampaignGenerationService`;
+- `WhatsAppUrlBuilder`;
+- `LeadService`;
+- `CampaignPublicationService`.
+
+Valores sensíveis:
+
+- `OpenRouter.ApiKey`;
+- `ExternalLeadApi.ApiKey`;
+- futuros tokens, senhas e client secrets.
+
+Limitação atual: o rate limiter global do ASP.NET Core é configurado na inicialização; os demais valores operacionais resolvidos pelos serviços passam a valer sem reiniciar após invalidação de cache.
 
 ## Captura pública
 

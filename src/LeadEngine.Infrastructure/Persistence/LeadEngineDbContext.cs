@@ -8,6 +8,8 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
 {
     public DbSet<Campanha> Campanhas => Set<Campanha>();
     public DbSet<CampanhaRevisao> CampanhasRevisoes => Set<CampanhaRevisao>();
+    public DbSet<ConfiguracaoSistema> ConfiguracoesSistema => Set<ConfiguracaoSistema>();
+    public DbSet<ConfiguracaoSistemaHistorico> ConfiguracoesSistemaHistorico => Set<ConfiguracaoSistemaHistorico>();
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<OrigemLead> OrigensLead => Set<OrigemLead>();
     public DbSet<TentativaCapturaLead> TentativasCapturaLead => Set<TentativaCapturaLead>();
@@ -66,6 +68,37 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
             entity.HasOne(x => x.Campanha)
                 .WithMany(x => x.Revisoes)
                 .HasForeignKey(x => x.CampanhaId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ConfiguracaoSistema>(entity =>
+        {
+            entity.ToTable("ConfiguracoesSistema");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Chave).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Categoria).HasConversion<int>();
+            entity.Property(x => x.Valor).HasMaxLength(2000);
+            entity.Property(x => x.ValorProtegido).HasMaxLength(4000);
+            entity.Property(x => x.Descricao).HasMaxLength(500);
+            entity.HasIndex(x => x.Chave).IsUnique();
+            entity.HasIndex(x => x.Categoria);
+        });
+
+        modelBuilder.Entity<ConfiguracaoSistemaHistorico>(entity =>
+        {
+            entity.ToTable("ConfiguracoesSistemaHistorico");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Chave).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Categoria).HasConversion<int>();
+            entity.Property(x => x.ValorAnterior).HasMaxLength(2000);
+            entity.Property(x => x.ValorNovo).HasMaxLength(2000);
+            entity.Property(x => x.OrigemAlteracao).HasMaxLength(80).IsRequired();
+            entity.HasIndex(x => x.Categoria);
+            entity.HasIndex(x => x.Chave);
+            entity.HasIndex(x => x.DataAlteracao);
+            entity.HasOne(x => x.ConfiguracaoSistema)
+                .WithMany(x => x.Historico)
+                .HasForeignKey(x => x.ConfiguracaoSistemaId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

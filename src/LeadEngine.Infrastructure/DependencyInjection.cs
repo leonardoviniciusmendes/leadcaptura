@@ -1,5 +1,6 @@
 using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
+using LeadEngine.Infrastructure.Configuration;
 using LeadEngine.Infrastructure.CampaignGeneration;
 using LeadEngine.Infrastructure.Integrations;
 using LeadEngine.Infrastructure.Persistence;
@@ -21,6 +22,12 @@ public static class DependencyInjection
 
         services.AddScoped<ILeadRepository, LeadRepository>();
         services.AddScoped<ICampanhaRepository, CampanhaRepository>();
+        services.AddScoped<IConfiguracaoRepository, ConfiguracaoRepository>();
+        services.AddScoped<ISecretProtector, DataProtectionSecretProtector>();
+        services.AddScoped<IConfigurationResolver, ConfigurationResolver>();
+        services.AddScoped<IConfiguracaoService, ConfiguracaoService>();
+        services.AddMemoryCache();
+        services.AddDataProtection();
         services.AddScoped<CampaignPromptBuilder>();
         services.AddScoped<CampaignGenerationResponseParser>();
         services.AddScoped<CampaignSectionPromptBuilder>();

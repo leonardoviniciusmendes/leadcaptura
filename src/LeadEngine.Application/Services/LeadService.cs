@@ -13,7 +13,8 @@ public sealed class LeadService(
     ILeadRepository leadRepository,
     IWhatsAppUrlBuilder whatsAppUrlBuilder,
     IRequestContext requestContext,
-    IOptions<LeadCaptureOptions> options) : ILeadService
+    IOptions<LeadCaptureOptions> options,
+    IConfigurationResolver? resolver = null) : ILeadService
 {
     public async Task<CampanhaPublicaResponse?> ObterCampanhaPublicaAsync(string slug, CancellationToken cancellationToken)
     {
@@ -35,7 +36,8 @@ public sealed class LeadService(
         Validate(request);
 
         var telefone = LeadSanitizer.Digitos(request.Telefone);
-        var janela = DateTime.UtcNow.AddHours(-Math.Max(1, options.Value.DuplicateWindowHours));
+        var leadOptions = await EffectiveOptionsAsync(cancellationToken);
+        var janela = DateTime.UtcNow.AddHours(-Math.Max(1, leadOptions.DuplicateWindowHours));
         var duplicado = await leadRepository.ObterDuplicadoRecenteAsync(campanha.Id, telefone, janela, cancellationToken);
         if (duplicado is not null)
         {
@@ -74,7 +76,7 @@ public sealed class LeadService(
             Status = StatusLead.Recebido,
             ConsentimentoContato = true,
             ConsentimentoEm = now,
-            TextoConsentimentoVersao = options.Value.ConsentVersion,
+            TextoConsentimentoVersao = EffectiveOptionsSync().ConsentVersion,
             CriadoEm = now,
             OrigemCaptura = "LandingPage",
             IpHash = requestContext.IpHash,
@@ -129,7 +131,7 @@ public sealed class LeadService(
         }
 
         var opened = DateTimeOffset.FromUnixTimeMilliseconds(request.FormOpenedAt.Value);
-        if (DateTimeOffset.UtcNow - opened < TimeSpan.FromSeconds(Math.Max(0, options.Value.MinimumFormSeconds)))
+        if (DateTimeOffset.UtcNow - opened < TimeSpan.FromSeconds(Math.Max(0, EffectiveOptionsSync().MinimumFormSeconds)))
         {
             throw new ArgumentException("Nao foi possivel registrar a solicitacao.");
         }
@@ -236,6 +238,29 @@ public sealed class LeadService(
             _ => TipoLead.PessoaFisica
         };
     }
+
+    private LeadCaptureOptions EffectiveOptionsSync()
+    {
+        return EffectiveOptionsAsync(CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    private async Task<LeadCaptureOptions> EffectiveOptionsAsync(CancellationToken cancellationToken)
+    {
+        var current = options.Value;
+        if (resolver is null)
+        {
+            return current;
+        }
+        return new LeadCaptureOptions
+        {
+            ConsentVersion = (await resolver.ResolveAsync(CategoriaConfiguracao.LeadCapture, "ConsentVersion", cancellationToken)).Value ?? current.ConsentVersion,
+            MinimumFormSeconds = ParseInt((await resolver.ResolveAsync(CategoriaConfiguracao.LeadCapture, "MinimumFormSeconds", cancellationToken)).Value, current.MinimumFormSeconds),
+            MaxLeadsPerIpPerHour = ParseInt((await resolver.ResolveAsync(CategoriaConfiguracao.LeadCapture, "MaxLeadsPerIpPerHour", cancellationToken)).Value, current.MaxLeadsPerIpPerHour),
+            DuplicateWindowHours = ParseInt((await resolver.ResolveAsync(CategoriaConfiguracao.LeadCapture, "DuplicateWindowHours", cancellationToken)).Value, current.DuplicateWindowHours)
+        };
+    }
+
+    private static int ParseInt(string? value, int fallback) => int.TryParse(value, out var parsed) ? parsed : fallback;
 
     private static string NormalizeSlug(string slug)
     {

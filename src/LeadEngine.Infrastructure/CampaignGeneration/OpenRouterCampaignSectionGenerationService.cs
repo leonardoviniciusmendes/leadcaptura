@@ -18,7 +18,8 @@ public sealed class OpenRouterCampaignSectionGenerationService(
     IOptions<OpenRouterOptions> options,
     CampaignSectionPromptBuilder promptBuilder,
     CampaignSectionResponseParser parser,
-    ILogger<OpenRouterCampaignSectionGenerationService> logger) : ICampaignSectionGenerationService
+    ILogger<OpenRouterCampaignSectionGenerationService> logger,
+    IConfigurationResolver? resolver = null) : ICampaignSectionGenerationService
 {
     private const string ClientName = "openrouter";
 
@@ -28,7 +29,7 @@ public sealed class OpenRouterCampaignSectionGenerationService(
         string? instrucaoAdicional,
         CancellationToken cancellationToken)
     {
-        var config = options.Value;
+        var config = await EffectiveOptionsAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(config.ApiKey))
         {
             throw new CampaignGenerationException("OpenRouter ApiKey nao configurada.");
@@ -59,6 +60,25 @@ public sealed class OpenRouterCampaignSectionGenerationService(
         var content = ExtractContent(responseText);
         var parsed = parser.Parse(content, secao, CampanhaContentSnapshot.From(campanha));
         return new CampaignSectionGenerationResult(secao, parsed, "OpenRouter", config.Model);
+    }
+
+    private async Task<OpenRouterOptions> EffectiveOptionsAsync(CancellationToken cancellationToken)
+    {
+        var current = options.Value;
+        return new OpenRouterOptions
+        {
+            ApiKey = await ResolveValueAsync("ApiKey", current.ApiKey, cancellationToken) ?? string.Empty,
+            Model = await ResolveValueAsync("Model", current.Model, cancellationToken) ?? string.Empty,
+            BaseUrl = await ResolveValueAsync("BaseUrl", current.BaseUrl, cancellationToken) ?? "https://openrouter.ai/api/v1",
+            TimeoutSeconds = int.TryParse(await ResolveValueAsync("TimeoutSeconds", current.TimeoutSeconds.ToString(), cancellationToken), out var timeout) ? timeout : current.TimeoutSeconds,
+            MaxRetries = int.TryParse(await ResolveValueAsync("MaxRetries", current.MaxRetries.ToString(), cancellationToken), out var retries) ? retries : current.MaxRetries,
+            Temperature = double.TryParse(await ResolveValueAsync("Temperature", current.Temperature.ToString(), cancellationToken), out var temp) ? temp : current.Temperature
+        };
+    }
+
+    private async Task<string?> ResolveValueAsync(string key, string? fallback, CancellationToken cancellationToken)
+    {
+        return resolver is null ? fallback : (await resolver.ResolveAsync(CategoriaConfiguracao.OpenRouter, key, cancellationToken)).Value ?? fallback;
     }
 
     private async Task<string> SendWithRetryAsync(OpenRouterOptions config, object body, CancellationToken cancellationToken)
@@ -114,7 +134,7 @@ public sealed class OpenRouterCampaignSectionGenerationService(
 
     private static HttpRequestMessage CreateRequest(OpenRouterOptions config, object body)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, "chat/completions");
+        var request = new HttpRequestMessage(HttpMethod.Post, $"{config.BaseUrl.TrimEnd('/')}/chat/completions");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.ApiKey);
         request.Headers.TryAddWithoutValidation("HTTP-Referer", "https://leadengine.local");
         request.Headers.TryAddWithoutValidation("X-Title", "LeadEngine");

@@ -78,6 +78,12 @@ GET  /api/publico/campanhas/{slug}
 POST /api/publico/campanhas/{slug}/leads
 GET  /api/leads
 GET  /api/leads/{id}
+GET  /api/configuracoes
+GET  /api/configuracoes/{categoria}
+PUT  /api/configuracoes/{categoria}
+POST /api/configuracoes/{categoria}/testar
+GET  /api/configuracoes/status
+GET  /api/configuracoes/historico
 ```
 
 Endpoint disponível somente em Development:
@@ -283,6 +289,90 @@ Proteção anti-spam do MVP:
 - tempo mínimo entre abrir e enviar o formulário;
 - User-Agent obrigatório no contexto da requisição.
 
+## Configurações e integrações
+
+O módulo de configurações permite administrar pela interface valores operacionais que antes dependiam apenas de `appsettings` e variáveis de ambiente.
+
+Categorias suportadas:
+
+```text
+OpenRouter
+CampaignGeneration
+WhatsApp
+LeadCapture
+ExternalLeadApi
+Application
+Landing
+```
+
+Prioridade da configuração efetiva:
+
+```text
+1. Banco
+2. Variável de ambiente
+3. AppSettings
+4. Padrão seguro
+```
+
+Leitura:
+
+```http
+GET /api/configuracoes/OpenRouter
+```
+
+Resposta para segredo:
+
+```json
+{
+  "chave": "ApiKey",
+  "valor": null,
+  "sensivel": true,
+  "configurado": true,
+  "origem": "Banco"
+}
+```
+
+Atualização:
+
+```http
+PUT /api/configuracoes/OpenRouter
+```
+
+```json
+{
+  "apiKey": "nova-chave",
+  "model": "openai/gpt-4o-mini",
+  "baseUrl": "https://openrouter.ai/api/v1",
+  "timeoutSeconds": 60,
+  "maxRetries": 2,
+  "temperature": 0.3
+}
+```
+
+Se `apiKey` não for enviada, o segredo atual é mantido. Para remover:
+
+```json
+{
+  "removerApiKey": true
+}
+```
+
+Teste:
+
+```http
+POST /api/configuracoes/WhatsApp/testar
+```
+
+Retorna uma URL de exemplo e não envia mensagem.
+
+Valores sensíveis nesta etapa:
+
+- `OpenRouter.ApiKey`;
+- `ExternalLeadApi.ApiKey`;
+- futuros tokens, senhas e client secrets.
+
+Segredos são protegidos com ASP.NET Core Data Protection antes de persistir. Eles não são retornados pela API nem gravados em histórico.
+
 ## Configuração
 
 Provider padrão:
@@ -409,6 +499,7 @@ Migrations criadas:
 20260724173833_AddCampaignGenerationDetails
 20260724194341_AddCampanhaRevisoes
 20260724203700_AddLandingPublicaCapturaLeads
+20260724210540_AddConfiguracoesSistema
 ```
 
 Criar nova migration:

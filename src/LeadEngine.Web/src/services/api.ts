@@ -152,6 +152,47 @@ export interface Lead {
   statusEnvioExterno?: string;
 }
 
+export type CategoriaConfiguracao =
+  | 'OpenRouter'
+  | 'CampaignGeneration'
+  | 'WhatsApp'
+  | 'LeadCapture'
+  | 'ExternalLeadApi'
+  | 'Application'
+  | 'Landing';
+
+export interface ConfiguracaoItem {
+  chave: string;
+  valor?: string | null;
+  sensivel: boolean;
+  configurado: boolean;
+  origem: 'Banco' | 'VariavelAmbiente' | 'AppSettings' | 'Padrao';
+  descricao?: string;
+}
+
+export interface ConfiguracaoCategoria {
+  categoria: CategoriaConfiguracao;
+  configuracoes: ConfiguracaoItem[];
+}
+
+export interface ConfiguracoesStatus {
+  openRouter: { configurado: boolean; status: string };
+  geracaoIa: { configurado: boolean; status: string };
+  whatsApp: { configurado: boolean; status: string };
+  capturaLeads: { configurado: boolean; status: string };
+  externalLeadApi: { configurado: boolean; status: string };
+  urlPublica: { configurado: boolean; status: string };
+  pendencias: string[];
+}
+
+export interface TesteConfiguracao {
+  sucesso: boolean;
+  status: string;
+  modelo?: string;
+  duracaoMs?: number;
+  urlExemplo?: string;
+}
+
 export interface HistoricoRevisao {
   data: string;
   secao?: CampanhaSecao;
@@ -233,5 +274,30 @@ export async function listarLeads(params: Record<string, string | number | undef
 
 export async function obterLead(id: string): Promise<Record<string, unknown>> {
   const { data } = await api.get(`/api/leads/${id}`);
+  return data;
+}
+
+export async function listarConfiguracoes(): Promise<ConfiguracaoCategoria[]> {
+  const { data } = await api.get<ConfiguracaoCategoria[]>('/api/configuracoes');
+  return data;
+}
+
+export async function obterConfiguracaoCategoria(categoria: CategoriaConfiguracao): Promise<ConfiguracaoCategoria> {
+  const { data } = await api.get<ConfiguracaoCategoria>(`/api/configuracoes/${categoria}`);
+  return data;
+}
+
+export async function salvarConfiguracaoCategoria(categoria: CategoriaConfiguracao, payload: Record<string, unknown>): Promise<ConfiguracaoCategoria> {
+  const { data } = await api.put<ConfiguracaoCategoria>(`/api/configuracoes/${categoria}`, payload);
+  return data;
+}
+
+export async function testarConfiguracao(categoria: CategoriaConfiguracao): Promise<TesteConfiguracao> {
+  const { data } = await api.post<TesteConfiguracao>(`/api/configuracoes/${categoria}/testar`);
+  return data;
+}
+
+export async function obterStatusConfiguracoes(): Promise<ConfiguracoesStatus> {
+  const { data } = await api.get<ConfiguracoesStatus>('/api/configuracoes/status');
   return data;
 }
