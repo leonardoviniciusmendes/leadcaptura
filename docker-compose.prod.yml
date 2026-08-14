@@ -1,0 +1,114 @@
+services:
+  leadengine-mysql:
+    image: mysql:8.0
+    container_name: leadengine-mysql
+    environment:
+      MYSQL_DATABASE: leadengine
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - leadengine-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - leadengine_internal
+
+  leadengine-api:
+    build:
+      context: .
+      dockerfile: src/LeadEngine.Api/Dockerfile
+    container_name: leadengine-api
+    depends_on:
+      leadengine-mysql:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Server=leadengine-mysql;Port=3306;Database=leadengine;User=${MYSQL_USER};Password=${MYSQL_PASSWORD};
+      Database__ApplyMigrationsOnStartup: "true"
+      Cors__AllowedOrigins__0: https://planos.consultoriadev.com
+      APPLICATION_PUBLIC_BASE_URL: ${APPLICATION_PUBLIC_BASE_URL}
+      CAMPAIGN_GENERATION_PROVIDER: ${CAMPAIGN_GENERATION_PROVIDER:-OpenRouter}
+      CAMPAIGN_GENERATION_FALLBACK_TO_FAKE: ${CAMPAIGN_GENERATION_FALLBACK_TO_FAKE:-false}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-}
+      OPENROUTER_TIMEOUT_SECONDS: ${OPENROUTER_TIMEOUT_SECONDS:-}
+      OPENROUTER_MAX_RETRIES: ${OPENROUTER_MAX_RETRIES:-}
+      OPENROUTER_TEMPERATURE: ${OPENROUTER_TEMPERATURE:-}
+      WHATSAPP_NUMERO: ${WHATSAPP_NUMERO:-}
+      WHATSAPP_MENSAGEM_PADRAO: ${WHATSAPP_MENSAGEM_PADRAO:-}
+      LEAD_CAPTURE_CONSENT_VERSION: ${LEAD_CAPTURE_CONSENT_VERSION:-1.0}
+      LEAD_CAPTURE_MINIMUM_FORM_SECONDS: ${LEAD_CAPTURE_MINIMUM_FORM_SECONDS:-2}
+      LEAD_CAPTURE_MAX_LEADS_PER_IP_PER_HOUR: ${LEAD_CAPTURE_MAX_LEADS_PER_IP_PER_HOUR:-10}
+      LEAD_CAPTURE_DUPLICATE_WINDOW_HOURS: ${LEAD_CAPTURE_DUPLICATE_WINDOW_HOURS:-24}
+      EXTERNAL_LEAD_API_ENABLED: ${EXTERNAL_LEAD_API_ENABLED:-false}
+      EXTERNAL_LEAD_API_BASE_URL: ${EXTERNAL_LEAD_API_BASE_URL:-}
+      EXTERNAL_LEAD_API_API_KEY: ${EXTERNAL_LEAD_API_API_KEY:-}
+      EXTERNAL_LEAD_API_TIMEOUT_SECONDS: ${EXTERNAL_LEAD_API_TIMEOUT_SECONDS:-20}
+      EXTERNAL_LEAD_API_MAX_RETRIES: ${EXTERNAL_LEAD_API_MAX_RETRIES:-2}
+      LANDING_DEFAULT_FOOTER_TEXT: ${LANDING_DEFAULT_FOOTER_TEXT:-}
+      LANDING_PRIVACY_POLICY_URL: ${LANDING_PRIVACY_POLICY_URL:-}
+      GOOGLE_ADS_CLIENT_ID: ${GOOGLE_ADS_CLIENT_ID:-}
+      GOOGLE_ADS_CLIENT_SECRET: ${GOOGLE_ADS_CLIENT_SECRET:-}
+      GOOGLE_ADS_DEVELOPER_TOKEN: ${GOOGLE_ADS_DEVELOPER_TOKEN:-}
+      GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${GOOGLE_ADS_LOGIN_CUSTOMER_ID:-}
+      GOOGLE_ADS_REDIRECT_URI: ${GOOGLE_ADS_REDIRECT_URI:-https://planos.consultoriadev.com/configuracoes?googleAdsCallback=1}
+      GOOGLE_ADS_AUTH_ENDPOINT: ${GOOGLE_ADS_AUTH_ENDPOINT:-https://accounts.google.com/o/oauth2/v2/auth}
+      GOOGLE_ADS_TOKEN_ENDPOINT: ${GOOGLE_ADS_TOKEN_ENDPOINT:-https://oauth2.googleapis.com/token}
+      GOOGLE_ADS_USER_INFO_ENDPOINT: ${GOOGLE_ADS_USER_INFO_ENDPOINT:-https://openidconnect.googleapis.com/v1/userinfo}
+      GOOGLE_ADS_API_BASE_URL: ${GOOGLE_ADS_API_BASE_URL:-https://googleads.googleapis.com/v22}
+      GOOGLE_ADS_SCOPES: ${GOOGLE_ADS_SCOPES:-https://www.googleapis.com/auth/adwords openid email profile}
+      GOOGLE_ADS_DEFAULT_DAILY_BUDGET: ${GOOGLE_ADS_DEFAULT_DAILY_BUDGET:-10.00}
+      GOOGLE_ADS_DEFAULT_COUNTRY_CODE: ${GOOGLE_ADS_DEFAULT_COUNTRY_CODE:-BR}
+      GOOGLE_ADS_DEFAULT_LANGUAGE_CODE: ${GOOGLE_ADS_DEFAULT_LANGUAGE_CODE:-pt}
+      GOOGLE_ADS_DEFAULT_CURRENCY_CODE: ${GOOGLE_ADS_DEFAULT_CURRENCY_CODE:-BRL}
+      GOOGLE_ADS_DEFAULT_KEYWORD_MATCH_TYPE: ${GOOGLE_ADS_DEFAULT_KEYWORD_MATCH_TYPE:-Phrase}
+      GOOGLE_ADS_DEFAULT_CAMPAIGN_STATUS: ${GOOGLE_ADS_DEFAULT_CAMPAIGN_STATUS:-PAUSED}
+      GOOGLE_ADS_ENABLE_BROAD_MATCH: ${GOOGLE_ADS_ENABLE_BROAD_MATCH:-false}
+      GOOGLE_ADS_DEFAULT_CPC_BID: ${GOOGLE_ADS_DEFAULT_CPC_BID:-}
+      GOOGLE_ADS_DEFAULT_BIDDING_STRATEGY: ${GOOGLE_ADS_DEFAULT_BIDDING_STRATEGY:-ManualCpc}
+      GOOGLE_ADS_API_TIMEOUT_SECONDS: ${GOOGLE_ADS_API_TIMEOUT_SECONDS:-60}
+      GOOGLE_ADS_ENABLE_REAL_PUBLISHING: ${GOOGLE_ADS_ENABLE_REAL_PUBLISHING:-false}
+      GOOGLE_ADS_USE_TEST_ACCOUNT: ${GOOGLE_ADS_USE_TEST_ACCOUNT:-false}
+      GOOGLE_ADS_TEST_CUSTOMER_ID: ${GOOGLE_ADS_TEST_CUSTOMER_ID:-}
+      GOOGLE_ADS_METRICS_SYNC_ENABLED: ${GOOGLE_ADS_METRICS_SYNC_ENABLED:-false}
+      GOOGLE_ADS_METRICS_SYNC_INTERVAL_MINUTES: ${GOOGLE_ADS_METRICS_SYNC_INTERVAL_MINUTES:-1440}
+      GOOGLE_ADS_METRICS_SYNC_DAYS: ${GOOGLE_ADS_METRICS_SYNC_DAYS:-7}
+      GOOGLE_ADS_METRICS_DEFAULT_PERIOD_DAYS: ${GOOGLE_ADS_METRICS_DEFAULT_PERIOD_DAYS:-30}
+      GOOGLE_ADS_ALLOW_TEST_ACCOUNT_ACTIVATION: ${GOOGLE_ADS_ALLOW_TEST_ACCOUNT_ACTIVATION:-false}
+      GOOGLE_ADS_ENABLE_OPTIMIZATION_AI: ${GOOGLE_ADS_ENABLE_OPTIMIZATION_AI:-true}
+      GOOGLE_ADS_OPTIMIZATION_MODEL: ${GOOGLE_ADS_OPTIMIZATION_MODEL:-}
+    volumes:
+      - leadengine-dataprotection:/root/.aspnet/DataProtection-Keys
+    networks:
+      - leadengine_internal
+      - nginx-proxy-manager_default
+
+  leadengine-web:
+    build:
+      context: .
+      dockerfile: src/LeadEngine.Web/Dockerfile
+      args:
+        VITE_BASE_PATH: /
+        VITE_API_BASE_URL: https://planos.consultoriadev.com
+        VITE_CORRETOR_WHATSAPP: ${VITE_CORRETOR_WHATSAPP}
+    container_name: leadengine-web
+    depends_on:
+      - leadengine-api
+    networks:
+      - nginx-proxy-manager_default
+
+volumes:
+  leadengine-mysql-data:
+  leadengine-dataprotection:
+
+networks:
+  leadengine_internal:
+    driver: bridge
+  nginx-proxy-manager_default:
+    external: true
