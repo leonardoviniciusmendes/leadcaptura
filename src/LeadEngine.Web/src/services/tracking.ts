@@ -42,9 +42,26 @@ export function pushDataLayer(event: Record<string, unknown>): void {
   window.dataLayer.push(event);
 }
 
-export function trackGoogleAdsConversion(): void {
-  window.gtag?.('event', 'conversion', {
-    send_to: 'AW-18343324236/JiGoCKCw99UcEMzU46pE'
+export function trackGoogleAdsConversion(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!window.gtag) {
+      resolve();
+      return;
+    }
+
+    let resolved = false;
+    const finish = () => {
+      if (resolved) return;
+      resolved = true;
+      resolve();
+    };
+
+    window.setTimeout(finish, 1500);
+    window.gtag('event', 'conversion', {
+      send_to: 'AW-18343324236/JiGoCKCw99UcEMzU46pE',
+      event_callback: finish,
+      event_timeout: 1500
+    });
   });
 }
 
