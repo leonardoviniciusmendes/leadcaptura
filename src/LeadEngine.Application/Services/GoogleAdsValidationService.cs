@@ -30,7 +30,8 @@ public sealed class GoogleAdsValidationService : IGoogleAdsValidationService
         {
             erros.Add("Campanha precisa ter slug publico.");
         }
-        if (!IsAbsoluteUrl(campanha.UrlPublica))
+        var urlResult = CampaignPublicUrlBuilder.Build(campanha.Slug, config.PublicBaseUrl, campanha.UrlPublica);
+        if (!urlResult.Valida || !IsAbsoluteUrl(urlResult.Url))
         {
             erros.Add("URL publica da landing invalida.");
         }

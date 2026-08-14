@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using LeadEngine.Application.Common;
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
 using LeadEngine.Domain.Entities;
@@ -46,8 +47,12 @@ public sealed class GoogleAdsSynchronizationService(
         catch (Exception ex)
         {
             sync.Status = StatusSincronizacaoGoogleAds.Falhou;
-            sync.ErroCodigo = "google_ads_sync_error";
-            sync.ErroMensagemControlada = ex.Message;
+            sync.ErroCodigo = ex is GoogleAdsDiagnosticException diagnosticException ? diagnosticException.Diagnostic.Codigo : "google_ads_sync_error";
+            sync.ErroMensagemControlada = ex is GoogleAdsDiagnosticException diagnosticException2 ? diagnosticException2.Diagnostic.Mensagem : ex.Message;
+            if (ex is GoogleAdsDiagnosticException)
+            {
+                throw;
+            }
         }
         finally
         {

@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using LeadEngine.Application.Common;
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
@@ -10,7 +11,8 @@ namespace LeadEngine.Infrastructure.GoogleAds;
 
 public sealed class GoogleAdsResourceQueryClient(
     IHttpClientFactory httpClientFactory,
-    IConfigurationResolver resolver) : IGoogleAdsResourceQueryClient
+    IConfigurationResolver resolver,
+    GoogleAdsExceptionFormatter exceptionFormatter) : IGoogleAdsResourceQueryClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -51,7 +53,8 @@ public sealed class GoogleAdsResourceQueryClient(
         var body = await response.Content.ReadAsStringAsync(timeoutCts.Token);
         if (!response.IsSuccessStatusCode)
         {
-            return new GoogleAdsPublishedResourceCheckDto(resource.TipoRecurso, resource.ResourceName, resource.ExternalId, resource.Nome, resource.Status, false, false, "Nao foi possivel consultar o recurso no Google Ads.");
+            var requestId = response.Headers.TryGetValues("request-id", out var values) ? values.FirstOrDefault() : null;
+            throw new GoogleAdsDiagnosticException(exceptionFormatter.FromRestError(body, requestId, ((int)response.StatusCode).ToString(), "Nao foi possivel consultar o recurso no Google Ads."));
         }
 
         var found = HasResult(body);

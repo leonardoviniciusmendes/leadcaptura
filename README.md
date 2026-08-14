@@ -328,8 +328,10 @@ Somente campanhas com status `Revisada` podem ser publicadas. Ao publicar, a lan
 Exemplo de URL pública:
 
 ```text
-/lp/plano-familiar-amil-barra-da-tijuca
+http://localhost:5173/leadcaptura/lp/plano-familiar-amil-barra-da-tijuca
 ```
+
+Quando o frontend estiver hospedado em subpath, como `/leadcaptura/`, `Application.PublicBaseUrl` deve incluir esse subpath. O preview Google Ads usa o mesmo construtor de URL da publicação da landing: `Application.PublicBaseUrl` normalizado + `/lp/` + `slug`. Em desenvolvimento, se `Application.PublicBaseUrl` estiver vazio, o sistema tenta inferir a base a partir de `GoogleAds.RedirectUri`.
 
 Exemplo de publicação:
 
@@ -343,7 +345,7 @@ POST /api/campanhas/00000000-0000-0000-0000-000000000000/publicar
   "publicada": true,
   "ativo": true,
   "slugPublico": "plano-familiar-amil-barra-da-tijuca",
-  "urlPublica": "/lp/plano-familiar-amil-barra-da-tijuca"
+  "urlPublica": "http://localhost:5173/leadcaptura/lp/plano-familiar-amil-barra-da-tijuca"
 }
 ```
 
@@ -769,6 +771,7 @@ OPENROUTER_API_KEY=
 OPENROUTER_MODEL=
 WHATSAPP_NUMERO=
 WHATSAPP_MENSAGEM_PADRAO=
+APPLICATION_PUBLIC_BASE_URL=http://localhost:5173/leadcaptura
 GOOGLE_ADS_CLIENT_ID=
 GOOGLE_ADS_CLIENT_SECRET=
 GOOGLE_ADS_DEVELOPER_TOKEN=

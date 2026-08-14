@@ -23,7 +23,7 @@ public sealed class GoogleAdsOAuthClient(
             ["redirect_uri"] = redirectUri
         };
 
-        return await RequestTokenAsync(config.TokenEndpoint, values, cancellationToken);
+        return await RequestTokenAsync(config.TokenEndpoint, values, "Codigo OAuth invalido, expirado ou ja utilizado.", cancellationToken);
     }
 
     public async Task<GoogleAdsTokenResult> RefreshAsync(string refreshToken, CancellationToken cancellationToken)
@@ -37,7 +37,7 @@ public sealed class GoogleAdsOAuthClient(
             ["grant_type"] = "refresh_token"
         };
 
-        return await RequestTokenAsync(config.TokenEndpoint, values, cancellationToken);
+        return await RequestTokenAsync(config.TokenEndpoint, values, "Refresh token invalido ou revogado. Reconecte a conta Google.", cancellationToken);
     }
 
     public async Task<GoogleAdsUserInfo> GetUserInfoAsync(string accessToken, CancellationToken cancellationToken)
@@ -94,14 +94,14 @@ public sealed class GoogleAdsOAuthClient(
         }
     }
 
-    private async Task<GoogleAdsTokenResult> RequestTokenAsync(string tokenEndpoint, Dictionary<string, string?> values, CancellationToken cancellationToken)
+    private async Task<GoogleAdsTokenResult> RequestTokenAsync(string tokenEndpoint, Dictionary<string, string?> values, string invalidGrantMessage, CancellationToken cancellationToken)
     {
         using var content = new FormUrlEncodedContent(values.Where(x => !string.IsNullOrWhiteSpace(x.Value)).Select(x => new KeyValuePair<string, string>(x.Key, x.Value!)));
         using var response = await httpClientFactory.CreateClient("googleads").PostAsync(tokenEndpoint, content, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             var text = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new InvalidOperationException(FriendlyOAuthError(text));
+            throw new InvalidOperationException(FriendlyOAuthError(text, invalidGrantMessage));
         }
 
         using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -161,7 +161,7 @@ public sealed class GoogleAdsOAuthClient(
         return element.TryGetProperty(property, out var value) && value.TryGetInt32(out var result) ? result : null;
     }
 
-    private static string FriendlyOAuthError(string body)
+    private static string FriendlyOAuthError(string body, string invalidGrantMessage)
     {
         try
         {
@@ -169,7 +169,7 @@ public sealed class GoogleAdsOAuthClient(
             var error = ReadString(json.RootElement, "error");
             return error switch
             {
-                "invalid_grant" => "Codigo OAuth invalido, expirado ou ja utilizado.",
+                "invalid_grant" => invalidGrantMessage,
                 "redirect_uri_mismatch" => "Redirect URI do Google Ads nao confere com a configuracao.",
                 "invalid_client" => "ClientId ou ClientSecret do Google Ads invalido.",
                 "access_denied" => "Acesso ao Google Ads negado pelo usuario.",

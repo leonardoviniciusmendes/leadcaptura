@@ -418,9 +418,34 @@ export interface GoogleAdsSuggestion {
 }
 
 export type StatusGoogleAdsPublicacao = 'Preparada' | 'ValidandoRemotamente' | 'Validada' | 'Publicando' | 'ParcialmentePublicada' | 'Publicada' | 'Falhou' | 'RequerIntervencao' | 'Reconciliada';
-export interface GoogleAdsPublicationError { codigo: string; mensagem: string; operacao?: string; indiceOperacao?: number; campo?: string; valorRejeitado?: string; requestId?: string; recuperavel: boolean; acaoSugerida?: string }
+export interface GoogleAdsPublicationError {
+  codigo: string;
+  mensagem: string;
+  operacao?: string;
+  indiceOperacao?: number;
+  campo?: string;
+  valorRejeitado?: string;
+  requestId?: string;
+  recuperavel: boolean;
+  acaoSugerida?: string;
+  location?: string;
+  fieldPathElements?: string[];
+  trigger?: string;
+  statusCode?: string;
+  detail?: string;
+}
+export interface GoogleAdsDiagnosticResponse {
+  sucesso: boolean;
+  codigo: string;
+  mensagem: string;
+  requestId?: string;
+  erros: GoogleAdsPublicationError[];
+  statusCode?: string;
+  detail?: string;
+  stackTrace?: string;
+}
 export interface GoogleAdsPublishedResource { tipoRecurso: string; resourceName: string; externalId?: string; nome?: string; status: string }
-export interface GoogleAdsRemoteValidation { valido: boolean; requestId?: string; erros: GoogleAdsPublicationError[]; avisos: string[]; dataValidacao: string }
+export interface GoogleAdsRemoteValidation { valido: boolean; sucesso?: boolean; codigo?: string; mensagem?: string; requestId?: string; erros: GoogleAdsPublicationError[]; avisos: string[]; dataValidacao: string; stackTrace?: string }
 export interface GoogleAdsDryRun { operacoes: Array<{ indice: number; tipo: string; status: string; resourceNameTemporario?: string }>; quantidadeOperacoes: number; valido: boolean; erros: GoogleAdsPublicationError[]; avisos: string[] }
 export interface GoogleAdsPreparePublication {
   publicacaoId: string; confirmationToken: string; nome: string; conta: string; customerIdMascarado: string; orcamentoDiario: number; quantidadeGrupos: number; quantidadeKeywords: number; quantidadeNegativas: number; quantidadeAnuncios: number; url: string; statusPlanejado: string; hash: string; versao: number; validacaoLocal: boolean; validacaoRemota: boolean; teste: boolean;

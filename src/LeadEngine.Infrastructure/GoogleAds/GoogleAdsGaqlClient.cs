@@ -1,13 +1,17 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using LeadEngine.Application.Common;
 using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
 using LeadEngine.Domain.Enums;
 
 namespace LeadEngine.Infrastructure.GoogleAds;
 
-public sealed class GoogleAdsGaqlClient(IHttpClientFactory httpClientFactory, IConfigurationResolver resolver)
+public sealed class GoogleAdsGaqlClient(
+    IHttpClientFactory httpClientFactory,
+    IConfigurationResolver resolver,
+    GoogleAdsExceptionFormatter exceptionFormatter)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -24,8 +28,9 @@ public sealed class GoogleAdsGaqlClient(IHttpClientFactory httpClientFactory, IC
         var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            var diagnostic = exceptionFormatter.FromRestError(doc.RootElement.GetRawText(), requestId, ((int)response.StatusCode).ToString(), "Consulta Google Ads falhou.");
             doc.Dispose();
-            throw new InvalidOperationException("Consulta Google Ads falhou.");
+            throw new GoogleAdsDiagnosticException(diagnostic);
         }
         return (requestId, doc);
     }

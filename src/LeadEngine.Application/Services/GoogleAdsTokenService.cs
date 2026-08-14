@@ -9,6 +9,7 @@ public sealed class GoogleAdsTokenService(
     IGoogleAdsContaRepository repository) : IGoogleAdsTokenService
 {
     private static readonly TimeSpan RefreshSkew = TimeSpan.FromMinutes(2);
+    private const string RefreshTokenInvalido = "Refresh token invalido ou revogado. Reconecte a conta Google.";
 
     public async Task<string> ObterAccessTokenValidoAsync(GoogleAdsConta conta, CancellationToken cancellationToken)
     {
@@ -25,7 +26,21 @@ public sealed class GoogleAdsTokenService(
         }
 
         var refreshToken = protector.Unprotect(conta.RefreshTokenProtegido);
-        var token = await oauthClient.RefreshAsync(refreshToken, cancellationToken);
+        GoogleAdsTokenResult token;
+        try
+        {
+            token = await oauthClient.RefreshAsync(refreshToken, cancellationToken);
+        }
+        catch (InvalidOperationException ex) when (string.Equals(ex.Message, RefreshTokenInvalido, StringComparison.Ordinal))
+        {
+            conta.AccessTokenProtegido = null;
+            conta.RefreshTokenProtegido = null;
+            conta.AccessTokenExpiraEm = null;
+            conta.DataAtualizacao = DateTime.UtcNow;
+            await repository.SalvarAsync(cancellationToken);
+            throw;
+        }
+
         conta.AccessTokenProtegido = protector.Protect(token.AccessToken);
         conta.AccessTokenExpiraEm = DateTime.UtcNow.AddSeconds(Math.Max(60, token.ExpiresIn));
         conta.DataAtualizacao = DateTime.UtcNow;

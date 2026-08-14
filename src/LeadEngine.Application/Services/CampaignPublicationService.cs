@@ -83,9 +83,11 @@ public sealed class CampaignPublicationService(ICampanhaRepository repository, I
 
     private async Task<string> PublicUrlAsync(string slug, CancellationToken cancellationToken)
     {
-        var baseUrl = resolver is null ? null : (await resolver.ResolveAsync(CategoriaConfiguracao.Application, "PublicBaseUrl", cancellationToken)).Value;
-        return string.IsNullOrWhiteSpace(baseUrl)
-            ? $"/lp/{slug}"
-            : $"{baseUrl.TrimEnd('/')}/lp/{slug}";
+        if (resolver is null)
+        {
+            return $"/lp/{slug}";
+        }
+
+        return await new CampaignPublicUrlBuilder(resolver).BuildRequiredAsync(slug, null, cancellationToken);
     }
 }

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Diagnostics;
 using System.Text.Json;
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
@@ -23,6 +24,23 @@ public sealed class GoogleAdsPreviewService(
         var campanha = await campanhaRepository.ObterPorIdAsync(campanhaId, cancellationToken);
         var conta = await contaRepository.ObterPadraoAsync(cancellationToken);
         var config = await Config(cancellationToken);
+        var urlDiagnostics = CampaignPublicUrlBuilder.Build(campanha?.Slug, config.PublicBaseUrl, campanha?.UrlPublica);
+        Trace.TraceInformation(
+            "Google Ads preview landing URL diagnostics. PublicBaseUrl={0}; Slug={1}; UrlConstruida={2}; UrlPersistida={3}",
+            urlDiagnostics.PublicBaseUrl,
+            urlDiagnostics.Slug,
+            urlDiagnostics.Url,
+            urlDiagnostics.PersistedUrl);
+        if (!urlDiagnostics.Valida)
+        {
+            Trace.TraceWarning(
+                "Google Ads preview landing URL validation failed. PublicBaseUrl={0}; Slug={1}; UrlConstruida={2}; Motivo={3}",
+                urlDiagnostics.PublicBaseUrl,
+                urlDiagnostics.Slug,
+                urlDiagnostics.Url,
+                urlDiagnostics.MotivoFalha);
+        }
+
         var entrada = validationService.ValidarEntrada(campanha, conta, config);
         if (campanha is null || conta is null || entrada.Erros.Count > 0)
         {
@@ -31,6 +49,15 @@ public sealed class GoogleAdsPreviewService(
 
         var payload = await mappingService.MapearAsync(campanha, cancellationToken);
         var validacao = validationService.ValidarPayload(payload, config);
+        if (validacao.Erros.Any(x => x.Contains("URL", StringComparison.OrdinalIgnoreCase)))
+        {
+            Trace.TraceWarning(
+                "Google Ads preview payload URL validation failed. PublicBaseUrl={0}; Slug={1}; UrlConstruida={2}; Motivo={3}",
+                config.PublicBaseUrl,
+                campanha.Slug,
+                payload.Campaign.FinalUrl,
+                string.Join(" ", validacao.Erros.Where(x => x.Contains("URL", StringComparison.OrdinalIgnoreCase))));
+        }
         var existing = await planoRepository.ObterPorCampanhaIdAsync(campanhaId, cancellationToken);
         var now = DateTime.UtcNow;
         var hash = mappingService.CalcularHash(campanha);
@@ -263,7 +290,7 @@ public sealed class GoogleAdsPreviewService(
         var clientId = await Value(CategoriaConfiguracao.GoogleAds, "ClientId", cancellationToken);
         var clientSecret = await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "ClientSecret", cancellationToken);
         var developerToken = await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "DeveloperToken", cancellationToken);
-        var publicUrl = await Value(CategoriaConfiguracao.Application, "PublicBaseUrl", cancellationToken);
+        var publicUrl = (await new CampaignPublicUrlBuilder(resolver).BuildAsync("diagnostico", null, cancellationToken)).PublicBaseUrl;
         var defaultBudget = decimal.TryParse(await Value(CategoriaConfiguracao.GoogleAds, "DefaultDailyBudget", cancellationToken), NumberStyles.Number, CultureInfo.InvariantCulture, out var budget) ? budget : 10m;
         var defaultCpc = decimal.TryParse(await Value(CategoriaConfiguracao.GoogleAds, "DefaultCpcBid", cancellationToken), NumberStyles.Number, CultureInfo.InvariantCulture, out var cpc) ? cpc : (decimal?)null;
         return new GoogleAdsConfigurationSnapshot(

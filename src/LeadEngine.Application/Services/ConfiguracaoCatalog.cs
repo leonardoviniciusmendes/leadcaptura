@@ -27,7 +27,7 @@ public static class ConfiguracaoCatalog
         new(CategoriaConfiguracao.ExternalLeadApi, "ApiKey", TipoConfiguracao.Segredo, true, null, "EXTERNAL_LEAD_API_API_KEY", "ExternalLeadApi:ApiKey", "Chave externa."),
         new(CategoriaConfiguracao.ExternalLeadApi, "TimeoutSeconds", TipoConfiguracao.Numero, false, "20", "EXTERNAL_LEAD_API_TIMEOUT_SECONDS", "ExternalLeadApi:TimeoutSeconds", "Timeout externo."),
         new(CategoriaConfiguracao.ExternalLeadApi, "MaxRetries", TipoConfiguracao.Numero, false, "2", "EXTERNAL_LEAD_API_MAX_RETRIES", "ExternalLeadApi:MaxRetries", "Retries externo."),
-        new(CategoriaConfiguracao.Application, "PublicBaseUrl", TipoConfiguracao.Url, false, "", "APPLICATION_PUBLIC_BASE_URL", "Application:PublicBaseUrl", "URL publica da aplicacao."),
+        new(CategoriaConfiguracao.Application, "PublicBaseUrl", TipoConfiguracao.Url, false, "http://localhost:5173/leadcaptura", "APPLICATION_PUBLIC_BASE_URL", "Application:PublicBaseUrl", "URL publica da aplicacao."),
         new(CategoriaConfiguracao.Landing, "DefaultFooterText", TipoConfiguracao.Texto, false, "Valores, redes, carencias e coberturas dependem do plano.", "LANDING_DEFAULT_FOOTER_TEXT", "Landing:DefaultFooterText", "Rodape padrao."),
         new(CategoriaConfiguracao.Landing, "PrivacyPolicyUrl", TipoConfiguracao.Url, false, "", "LANDING_PRIVACY_POLICY_URL", "Landing:PrivacyPolicyUrl", "URL de privacidade."),
         new(CategoriaConfiguracao.GoogleAds, "ClientId", TipoConfiguracao.Texto, false, "", "GOOGLE_ADS_CLIENT_ID", "GoogleAds:ClientId", "Client ID OAuth do Google."),

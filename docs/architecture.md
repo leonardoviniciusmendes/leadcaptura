@@ -93,6 +93,7 @@ Fluxo de landing pública:
 Campanha Revisada
 -> POST /api/campanhas/{id}/publicar
 -> CampaignPublicationService
+-> CampaignPublicUrlBuilder
 -> /lp/{slug}
 -> GET /api/publico/campanhas/{slug}
 -> POST /api/publico/campanhas/{slug}/leads
@@ -169,6 +170,7 @@ Entidades como `GrupoAnuncio`, `PalavraChave`, `Anuncio` e `LandingPage` ainda n
 - Ao editar uma campanha já aprovada, o status volta para `Gerada`; não foi criado um status `EmRevisao` para manter a modelagem simples.
 - O histórico armazena conteúdo anterior e novo em JSON, mas a API pública de histórico retorna apenas resumo, origem, seção, provider e modelo.
 - Ao editar ou regenerar uma campanha publicada, ela é despublicada automaticamente e volta para `Gerada`.
+- A URL pública da landing é montada por `CampaignPublicUrlBuilder`, preservando subpaths de hospedagem. Exemplo local: `Application.PublicBaseUrl=http://localhost:5173/leadcaptura` gera `http://localhost:5173/leadcaptura/lp/{slug}`.
 - A landing pública usa DTO específico e não expõe provider, modelo, duração, erro técnico, histórico ou campos administrativos.
 - A tabela `Leads` já existia; a migration da landing adiciona vínculo com campanha, campos de rastreamento, tipo de contratação e controles de envio externo.
 - A captura pública não envia para API externa nesta etapa; `StatusEnvioExterno` fica preparado como `Pendente`.
@@ -303,6 +305,7 @@ Decisões:
 - palavras principais usam `PHRASE`; palavras de intenção como cotação/preço/contratar usam `EXACT`;
 - `BROAD` não é gerado automaticamente, salvo configuração explícita;
 - paths são derivados do slug com `Slugify` e limite de 15 caracteres;
+- URL final é a mesma URL pública da landing, montada como `Application.PublicBaseUrl` + `/lp/` + `slug`; se `Application.PublicBaseUrl` estiver vazio em desenvolvimento, o sistema tenta inferir a base a partir de `GoogleAds.RedirectUri`;
 - textos acima do limite não são truncados silenciosamente;
 - ajuste por IA retorna original/sugestão e exige aplicação manual.
 

@@ -10,7 +10,7 @@ using LeadEngine.Domain.Enums;
 
 namespace LeadEngine.Application.Services;
 
-public sealed class GoogleAdsCampaignMappingService(IConfigurationResolver resolver) : IGoogleAdsCampaignMappingService
+public sealed class GoogleAdsCampaignMappingService(IConfigurationResolver resolver, CampaignPublicUrlBuilder? publicUrlBuilder = null) : IGoogleAdsCampaignMappingService
 {
     public async Task<GoogleAdsPreviewPayload> MapearAsync(Campanha campanha, CancellationToken cancellationToken)
     {
@@ -25,7 +25,8 @@ public sealed class GoogleAdsCampaignMappingService(IConfigurationResolver resol
         var (path1, path2) = Paths(campanha.Slug);
         var headlines = Deserialize<string>(campanha.TitulosAnunciosJson).Select(x => x.Trim()).Where(x => x.Length > 0).ToArray();
         var descriptions = Deserialize<string>(campanha.DescricoesAnunciosJson).Select(x => x.Trim()).Where(x => x.Length > 0).ToArray();
-        var url = campanha.UrlPublica ?? string.Empty;
+        var urlBuilder = publicUrlBuilder ?? new CampaignPublicUrlBuilder(resolver);
+        var url = (await urlBuilder.BuildAsync(campanha.Slug, campanha.UrlPublica, cancellationToken)).Url ?? campanha.UrlPublica ?? string.Empty;
         var cpcMicros = config.DefaultCpcBid is > 0 ? GoogleAdsMoney.ToMicros(config.DefaultCpcBid.Value) : (long?)null;
 
         return new GoogleAdsPreviewPayload(
@@ -78,7 +79,7 @@ public sealed class GoogleAdsCampaignMappingService(IConfigurationResolver resol
 
     private async Task<GoogleAdsConfigurationSnapshot> Config(CancellationToken cancellationToken)
     {
-        var publicBaseUrl = (await resolver.ResolveAsync(CategoriaConfiguracao.Application, "PublicBaseUrl", cancellationToken)).Value;
+        var publicBaseUrl = (await new CampaignPublicUrlBuilder(resolver).BuildAsync("diagnostico", null, cancellationToken)).PublicBaseUrl;
         return new GoogleAdsConfigurationSnapshot(
             true,
             decimal.TryParse(await Value("DefaultDailyBudget", cancellationToken), NumberStyles.Number, CultureInfo.InvariantCulture, out var budget) ? budget : 10m,

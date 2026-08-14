@@ -7,7 +7,11 @@ public sealed record GoogleAdsRemoteValidationResponse(
     string? RequestId,
     IReadOnlyList<GoogleAdsPublicationErrorDto> Erros,
     IReadOnlyList<string> Avisos,
-    DateTime DataValidacao);
+    DateTime DataValidacao,
+    bool Sucesso = true,
+    string? Codigo = null,
+    string? Mensagem = null,
+    string? StackTrace = null);
 
 public sealed record GoogleAdsPreparePublicationResponse(
     Guid PublicacaoId,
@@ -58,7 +62,22 @@ public sealed record GoogleAdsPublicationErrorDto(
     string? ValorRejeitado,
     string? RequestId,
     bool Recuperavel,
-    string? AcaoSugerida);
+    string? AcaoSugerida,
+    string? Location = null,
+    IReadOnlyList<string>? FieldPathElements = null,
+    string? Trigger = null,
+    string? StatusCode = null,
+    string? Detail = null);
+
+public sealed record GoogleAdsDiagnosticResponse(
+    bool Sucesso,
+    string Codigo,
+    string Mensagem,
+    string? RequestId,
+    IReadOnlyList<GoogleAdsPublicationErrorDto> Erros,
+    string? StatusCode = null,
+    string? Detail = null,
+    string? StackTrace = null);
 
 public sealed record GoogleAdsPublishedResourceDto(
     string TipoRecurso,

@@ -7,6 +7,7 @@ namespace LeadEngine.Infrastructure.GoogleAds;
 public sealed class GoogleAdsMutationClient(
     IGoogleAdsErrorTranslator errorTranslator,
     GoogleAdsTypedOperationFactory typedOperationFactory,
+    GoogleAdsExceptionFormatter exceptionFormatter,
     GoogleAdsRestMutateTransport transport) : IGoogleAdsMutationClient
 {
     public async Task<GoogleAdsMutationResult> MutateAsync(string customerId, string accessToken, string developerToken, GoogleAdsOperationPlan plan, bool validateOnly, CancellationToken cancellationToken)
@@ -17,7 +18,8 @@ public sealed class GoogleAdsMutationClient(
             var result = await transport.SendAsync(customerId, accessToken, developerToken, plan, validateOnly, cancellationToken);
             if (!result.Success)
             {
-                return new GoogleAdsMutationResult(false, result.RequestId, [], [errorTranslator.Translate(result.ErrorCode ?? "google_ads_error", "Google Ads rejeitou a operacao.", null, null, null, null, result.RequestId)], false);
+                var diagnostic = exceptionFormatter.FromRestError(result.Body, result.RequestId, result.ErrorCode, "Google Ads rejeitou a operacao.");
+                return new GoogleAdsMutationResult(false, diagnostic.RequestId, [], diagnostic.Erros, false);
             }
 
             return validateOnly
@@ -30,7 +32,8 @@ public sealed class GoogleAdsMutationClient(
         }
         catch (Exception ex)
         {
-            return new GoogleAdsMutationResult(false, null, [], [errorTranslator.Translate(ex)], false);
+            var diagnostic = exceptionFormatter.FromException(ex);
+            return new GoogleAdsMutationResult(false, diagnostic.RequestId, [], diagnostic.Erros, false);
         }
     }
 

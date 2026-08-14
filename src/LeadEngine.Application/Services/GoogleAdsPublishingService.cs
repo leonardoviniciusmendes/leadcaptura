@@ -46,7 +46,15 @@ public sealed class GoogleAdsPublishingService(
         publication.DataAtualizacao = DateTime.UtcNow;
         await publicationRepository.SalvarAsync(cancellationToken);
 
-        return new GoogleAdsRemoteValidationResponse(result.Success, result.RequestId, result.Errors, plan.Avisos, publication.DataValidacaoRemota.Value);
+        return new GoogleAdsRemoteValidationResponse(
+            result.Success,
+            result.RequestId,
+            result.Errors,
+            plan.Avisos,
+            publication.DataValidacaoRemota.Value,
+            result.Success,
+            result.Errors.FirstOrDefault()?.Codigo,
+            result.Success ? "Validacao remota aprovada." : result.Errors.FirstOrDefault()?.Mensagem ?? "Validacao remota falhou.");
     }
 
     public async Task<GoogleAdsDryRunResponse> DryRunAsync(Guid previewId, CancellationToken cancellationToken)
@@ -171,13 +179,16 @@ public sealed class GoogleAdsPublishingService(
         }
         catch (Exception ex)
         {
+            var diagnostic = ex is LeadEngine.Application.Common.GoogleAdsDiagnosticException googleAdsDiagnostic
+                ? googleAdsDiagnostic.Diagnostic
+                : new GoogleAdsDiagnosticResponse(false, "google_ads_error", ex.Message, null, [new GoogleAdsPublicationErrorDto("google_ads_error", ex.Message, null, null, null, null, null, true, "Valide a conta e tente novamente.")]);
             await SetStatusAsync(publication, publication.Recursos.Any() ? StatusPublicacaoGoogleAds.RequerIntervencao : StatusPublicacaoGoogleAds.Falhou, "ErroPublicacao", "Falha ao publicar no Google Ads.", null, cancellationToken);
-            publication.ErroCodigo = "google_ads_error";
-            publication.ErroMensagemControlada = "Falha ao publicar no Google Ads.";
-            publication.ErrosJson = Serialize(new[] { new GoogleAdsPublicationErrorDto("google_ads_error", "Falha ao publicar no Google Ads.", null, null, null, null, null, true, "Valide a conta e tente novamente.") });
+            publication.ErroCodigo = diagnostic.Codigo;
+            publication.ErroMensagemControlada = diagnostic.Mensagem;
+            publication.ErrosJson = Serialize(diagnostic.Erros);
             publication.DataAtualizacao = DateTime.UtcNow;
             await publicationRepository.SalvarAsync(cancellationToken);
-            throw new InvalidOperationException(publication.ErroMensagemControlada, ex);
+            throw;
         }
     }
 

@@ -165,7 +165,7 @@ public sealed class ConfiguracaoService(
             new ConfiguracaoStatusItem(true, "Pronto"),
             new ConfiguracaoStatusItem(externalEnabled && !string.IsNullOrWhiteSpace(externalBase), externalEnabled ? (string.IsNullOrWhiteSpace(externalBase) ? "Pendente" : "Pronto") : "Desativado"),
             new ConfiguracaoStatusItem(!string.IsNullOrWhiteSpace(publicUrl), string.IsNullOrWhiteSpace(publicUrl) ? "Pendente" : "Pronto"),
-            new ConfiguracaoStatusItem(googleConfig.ApiConfigurada && googleConta is not null, googleConta is null ? "Nao conectado" : (googleConta.AccessTokenExpiraEm <= DateTime.UtcNow ? "Token expirado" : "Conectado")),
+            new ConfiguracaoStatusItem(googleConfig.ApiConfigurada && googleConta is not null && !GoogleAdsRequerReconexao(googleConta), GoogleAdsStatus(googleConta)),
             pendencias);
     }
 
@@ -230,6 +230,28 @@ public sealed class ConfiguracaoService(
         }
 
         return new TesteConfiguracaoResponse(true, "Configuracao Google Ads valida.");
+    }
+
+    private static string GoogleAdsStatus(GoogleAdsConta? conta)
+    {
+        if (conta is null)
+        {
+            return "Nao conectado";
+        }
+
+        if (GoogleAdsRequerReconexao(conta))
+        {
+            return "Reconexao necessaria";
+        }
+
+        return conta.AccessTokenExpiraEm <= DateTime.UtcNow ? "Token expirado" : "Conectado";
+    }
+
+    private static bool GoogleAdsRequerReconexao(GoogleAdsConta conta)
+    {
+        return string.IsNullOrWhiteSpace(conta.AccessTokenProtegido)
+            || string.IsNullOrWhiteSpace(conta.RefreshTokenProtegido)
+            || conta.AccessTokenExpiraEm is null;
     }
 
     private async Task<GoogleAdsConfiguration> GoogleAdsConfig(CancellationToken cancellationToken)

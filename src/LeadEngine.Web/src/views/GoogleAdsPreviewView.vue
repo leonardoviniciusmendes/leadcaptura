@@ -208,6 +208,36 @@
         <pre class="payload-box">{{ JSON.stringify(preview.payload, null, 2) }}</pre>
       </section>
     </template>
+
+    <div v-if="diagnosticoGoogleAds" class="modal-backdrop">
+      <section class="panel modal google-ads-error-modal" role="dialog" aria-modal="true">
+        <header class="section-heading">
+          <div>
+            <p class="eyebrow">Diagnostico Google Ads</p>
+            <h2>{{ diagnosticoGoogleAds.mensagem || 'Operacao recusada pelo Google Ads' }}</h2>
+          </div>
+          <button class="mini-button" @click="diagnosticoGoogleAds = null">Fechar</button>
+        </header>
+        <dl class="compact-list">
+          <dt>Codigo</dt><dd>{{ diagnosticoGoogleAds.codigo || '-' }}</dd>
+          <dt>RequestId</dt><dd>{{ diagnosticoGoogleAds.requestId || '-' }}</dd>
+          <dt>Status RPC/HTTP</dt><dd>{{ diagnosticoGoogleAds.statusCode || '-' }}</dd>
+          <dt>Detalhe</dt><dd>{{ diagnosticoGoogleAds.detail || '-' }}</dd>
+        </dl>
+        <section class="error-list">
+          <article v-for="(erro, index) in diagnosticoGoogleAds.erros" :key="`${erro.codigo}-${index}`" class="history-item">
+            <strong>{{ erro.codigo }}</strong>
+            <span>{{ erro.mensagem }}</span>
+            <small v-if="erro.campo">Campo: {{ erro.campo }}</small>
+            <small v-if="erro.location">Location: {{ erro.location }}</small>
+            <small v-if="erro.fieldPathElements?.length">Path: {{ erro.fieldPathElements.join(' > ') }}</small>
+            <small v-if="erro.trigger">Trigger: {{ erro.trigger }}</small>
+            <small v-if="erro.acaoSugerida">Acao sugerida: {{ erro.acaoSugerida }}</small>
+          </article>
+        </section>
+        <pre v-if="diagnosticoGoogleAds.stackTrace" class="payload-box">{{ diagnosticoGoogleAds.stackTrace }}</pre>
+      </section>
+    </div>
   </main>
 </template>
 
@@ -234,6 +264,7 @@ import {
   type GoogleAdsDryRun,
   type GoogleAdsPreparePublication,
   type GoogleAdsPublication,
+  type GoogleAdsDiagnosticResponse,
   type GoogleAdsRemoteValidation,
   type GoogleAdsSuggestion,
   type StatusGoogleAdsPreview
@@ -247,6 +278,7 @@ const validacaoRemota = ref<GoogleAdsRemoteValidation | null>(null);
 const dryRun = ref<GoogleAdsDryRun | null>(null);
 const preparacao = ref<GoogleAdsPreparePublication | null>(null);
 const publicacao = ref<GoogleAdsPublication | null>(null);
+const diagnosticoGoogleAds = ref<GoogleAdsDiagnosticResponse | null>(null);
 const confirmPaused = ref(false);
 const loading = ref(false);
 const busy = ref(false);
@@ -358,9 +390,15 @@ async function validarRemoto() {
   busy.value = true;
   try {
     validacaoRemota.value = await validarRemotamenteGoogleAds(preview.value.id);
-    showToast({ type: validacaoRemota.value.valido ? 'success' : 'error', title: validacaoRemota.value.valido ? 'Validado no Google Ads' : 'Google Ads recusou' });
+    if (validacaoRemota.value.valido) {
+      showToast({ type: 'success', title: 'Validado no Google Ads' });
+    } else {
+      diagnosticoGoogleAds.value = diagnosticFromRemoteValidation(validacaoRemota.value);
+      showToast({ type: 'error', title: 'Validacao recusada', message: validacaoRemota.value.mensagem || 'Veja os detalhes no diagnostico.' });
+    }
   } catch (err: unknown) {
     error.value = message(err, 'Nao foi possivel validar no Google Ads.');
+    diagnosticoGoogleAds.value = diagnosticFromError(err, error.value);
   } finally {
     busy.value = false;
   }
@@ -374,6 +412,7 @@ async function executarDryRun() {
     showToast({ type: dryRun.value.valido ? 'success' : 'error', title: dryRun.value.valido ? 'Dry run concluido' : 'Dry run invalido' });
   } catch (err: unknown) {
     error.value = message(err, 'Nao foi possivel executar o dry run.');
+    diagnosticoGoogleAds.value = diagnosticFromError(err, error.value);
   } finally {
     busy.value = false;
   }
@@ -388,6 +427,7 @@ async function prepararPublicacao() {
     showToast({ type: 'success', title: 'Publicacao preparada' });
   } catch (err: unknown) {
     error.value = message(err, 'Nao foi possivel preparar a publicacao.');
+    diagnosticoGoogleAds.value = diagnosticFromError(err, error.value);
   } finally {
     busy.value = false;
   }
@@ -401,6 +441,7 @@ async function publicar() {
     showToast({ type: 'success', title: 'Campanha criada como pausada' });
   } catch (err: unknown) {
     error.value = message(err, 'Nao foi possivel publicar no Google Ads.');
+    diagnosticoGoogleAds.value = diagnosticFromError(err, error.value);
   } finally {
     busy.value = false;
   }
@@ -434,5 +475,35 @@ function money(value: number) {
 function message(err: unknown, fallback: string) {
   const response = err as { response?: { data?: { mensagem?: string } } };
   return response.response?.data?.mensagem || fallback;
+}
+
+function diagnosticFromRemoteValidation(result: GoogleAdsRemoteValidation): GoogleAdsDiagnosticResponse {
+  return {
+    sucesso: false,
+    codigo: result.codigo || result.erros[0]?.codigo || 'google_ads_validation_failed',
+    mensagem: result.mensagem || result.erros[0]?.mensagem || 'Validacao remota recusada pelo Google Ads.',
+    requestId: result.requestId || result.erros[0]?.requestId,
+    erros: result.erros,
+    stackTrace: result.stackTrace
+  };
+}
+
+function diagnosticFromError(err: unknown, fallback: string): GoogleAdsDiagnosticResponse {
+  const response = err as { response?: { data?: Partial<GoogleAdsDiagnosticResponse> & { mensagem?: string; code?: string } } };
+  const data = response.response?.data;
+  return {
+    sucesso: false,
+    codigo: data?.codigo || data?.code || 'google_ads_error',
+    mensagem: data?.mensagem || fallback,
+    requestId: data?.requestId,
+    erros: data?.erros?.length ? data.erros : [{
+      codigo: data?.codigo || data?.code || 'google_ads_error',
+      mensagem: data?.mensagem || fallback,
+      recuperavel: true
+    }],
+    statusCode: data?.statusCode,
+    detail: data?.detail,
+    stackTrace: data?.stackTrace
+  };
 }
 </script>

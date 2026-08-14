@@ -11,7 +11,7 @@
         <button class="button secondary" :disabled="busy" @click="loadHistorico">Historico</button>
         <button class="button secondary" :disabled="busy || !campanha?.publicada" @click="copyPublicUrl">Copiar URL publica</button>
         <RouterLink v-if="campanha?.status === 'Revisada' && campanha?.publicada" class="button secondary" :to="`/campanhas/${campanha.id}/googleads-preview`">Preview Google Ads</RouterLink>
-        <button v-if="!campanha?.publicada" class="button secondary" :disabled="busy || !campanha" @click="publicar">{{ publishing ? 'Publicando...' : 'Publicar landing' }}</button>
+        <button v-if="!campanha?.publicada" class="button secondary" :disabled="busy || !canPublicarLanding" @click="publicar">{{ publishing ? 'Publicando...' : 'Publicar landing' }}</button>
         <button v-else class="button secondary" :disabled="busy || !campanha" @click="despublicar">{{ publishing ? 'Despublicando...' : 'Despublicar' }}</button>
         <button class="button" :disabled="busy || !campanha" @click="aprovar">{{ approving ? 'Aprovando...' : 'Aprovar campanha' }}</button>
       </div>
@@ -45,6 +45,10 @@
           <p>{{ form.subtituloLandingPage || 'Subtitulo da landing' }}</p>
           <span class="button preview-button">{{ form.textoBotao || 'CTA' }}</span>
         </section>
+      </ReviewBlock>
+
+      <ReviewBlock title="WhatsApp" secao="MensagemWhatsApp" :dirty="dirty" :busy="busy" @save="save" @cancel="reset" @regenerate="startRegeneration('MensagemWhatsApp')">
+        <label>Mensagem<textarea v-model="form.mensagemWhatsApp" maxlength="500" rows="5" /></label>
       </ReviewBlock>
 
       <ReviewBlock title="Beneficios" secao="Beneficios" :dirty="dirty" :busy="busy" @save="save" @cancel="reset" @regenerate="startRegeneration('Beneficios')">
@@ -97,10 +101,6 @@
         </div>
         <button class="button secondary narrow" :disabled="busy || form.descricoesAnuncios.length >= 4" @click="form.descricoesAnuncios.push('')">Adicionar</button>
       </ReviewBlock>
-
-      <ReviewBlock title="Mensagem de WhatsApp" secao="MensagemWhatsApp" :dirty="dirty" :busy="busy" @save="save" @cancel="reset" @regenerate="startRegeneration('MensagemWhatsApp')">
-        <label>Mensagem<textarea v-model="form.mensagemWhatsApp" maxlength="500" rows="5" /></label>
-      </ReviewBlock>
     </section>
 
     <div v-if="regeneratingSection" class="modal-backdrop">
@@ -131,7 +131,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { confirmAction, showToast } from '../components/uiEvents';
 import {
@@ -180,7 +180,38 @@ const form = reactive<RevisarCampanhaRequest>({
 const busy = computed(() => loading.value || saving.value || regenerating.value || approving.value || publishing.value);
 const dirty = computed(() => JSON.stringify(form) !== baseline.value);
 const localizacao = computed(() => campanha.value ? [campanha.value.regiao, campanha.value.cidade, campanha.value.estado].filter(Boolean).join(' / ') : '');
-const publicUrl = computed(() => campanha.value ? `${window.location.origin}/lp/${campanha.value.slug}` : '');
+const canPublicarLanding = computed(() => campanha.value?.status === 'Revisada');
+const publicUrl = computed(() => {
+  if (!campanha.value) return '';
+  const base = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/+$/, '');
+  return `${base}/lp/${campanha.value.slug}`;
+});
+
+const ReviewBlock = defineComponent({
+  props: {
+    title: { type: String, required: true },
+    secao: { type: String, required: true },
+    dirty: { type: Boolean, required: true },
+    busy: { type: Boolean, required: true }
+  },
+  emits: ['save', 'cancel', 'regenerate'],
+  setup(props, { emit, slots }) {
+    return () => h('section', { class: 'panel review-section' }, [
+      h('header', { class: 'review-section-header' }, [
+        h('div', [
+          h('h2', props.title),
+          props.dirty ? h('span', { class: 'unsaved' }, 'alteracoes nao salvas') : null
+        ]),
+        h('div', { class: 'actions' }, [
+          h('button', { class: 'button secondary', disabled: props.busy, onClick: () => emit('cancel') }, 'Cancelar'),
+          h('button', { class: 'button secondary', disabled: props.busy, onClick: () => emit('regenerate') }, 'Regenerar IA'),
+          h('button', { class: 'button', disabled: props.busy || !props.dirty, onClick: () => emit('save') }, 'Salvar')
+        ])
+      ]),
+      h('div', { class: 'review-fields' }, slots.default?.())
+    ]);
+  }
+});
 
 onMounted(load);
 
@@ -370,37 +401,4 @@ function message(err: unknown, fallback: string) {
   const response = err as { response?: { data?: { mensagem?: string } } };
   return response.response?.data?.mensagem || fallback;
 }
-</script>
-
-<script lang="ts">
-import { defineComponent } from 'vue';
-
-export default defineComponent({
-  components: {
-    ReviewBlock: defineComponent({
-      props: {
-        title: { type: String, required: true },
-        secao: { type: String, required: true },
-        dirty: { type: Boolean, required: true },
-        busy: { type: Boolean, required: true }
-      },
-      emits: ['save', 'cancel', 'regenerate'],
-      template: `
-        <section class="panel review-section">
-          <header class="review-section-header">
-            <div>
-              <h2>{{ title }}</h2>
-              <span v-if="dirty" class="unsaved">alteracoes nao salvas</span>
-            </div>
-            <div class="actions">
-              <button class="button secondary" :disabled="busy" @click="$emit('cancel')">Cancelar</button>
-              <button class="button secondary" :disabled="busy" @click="$emit('regenerate')">Regenerar IA</button>
-              <button class="button" :disabled="busy || !dirty" @click="$emit('save')">Salvar</button>
-            </div>
-          </header>
-          <div class="review-fields"><slot /></div>
-        </section>`
-    })
-  }
-});
 </script>

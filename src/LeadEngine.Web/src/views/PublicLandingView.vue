@@ -7,65 +7,130 @@
     </section>
     <template v-else-if="campanha">
       <section class="public-hero">
-        <p class="eyebrow">{{ campanha.nome }}</p>
-        <h1>{{ campanha.titulo }}</h1>
-        <p class="subtitle">{{ campanha.subtitulo }}</p>
-      </section>
+        <div class="public-hero-copy">
+          <p class="eyebrow">{{ contextoCampanha }}</p>
+          <h1>{{ campanha.titulo }}</h1>
+          <p class="subtitle">{{ campanha.subtitulo }}</p>
 
-      <section class="public-layout">
-        <div class="public-content">
-          <section>
-            <h2>Beneficios</h2>
-            <ul class="benefit-list">
-              <li v-for="beneficio in campanha.beneficios" :key="beneficio">{{ beneficio }}</li>
-            </ul>
-          </section>
+          <div class="hero-benefits" aria-label="Diferenciais">
+            <span v-for="beneficio in heroBeneficios" :key="beneficio">{{ beneficio }}</span>
+          </div>
 
-          <section>
-            <h2>FAQ</h2>
-            <details v-for="item in campanha.perguntasFrequentes" :key="item.pergunta">
-              <summary>{{ item.pergunta }}</summary>
-              <p>{{ item.resposta }}</p>
-            </details>
-          </section>
-
-          <p class="notice">Valores, redes, carencias e coberturas dependem do plano, perfil, regiao e regras da operadora.</p>
+          <p class="hero-note">Cotacao sem compromisso, com atendimento personalizado para seu perfil.</p>
         </div>
 
-        <form class="panel public-form" @submit.prevent="submit">
-          <h2>Receber cotacao</h2>
-          <label>Nome<input v-model.trim="form.nome" required maxlength="120" /></label>
-          <label>Telefone<input v-model.trim="form.telefone" required maxlength="20" inputmode="tel" /></label>
-          <label>E-mail<input v-model.trim="form.email" maxlength="160" type="email" /></label>
-          <label>Cidade<input v-model.trim="form.cidade" required maxlength="100" /></label>
-          <label>Estado<input v-model.trim="form.estado" required maxlength="2" /></label>
+        <form class="panel public-form lead-card-form" @submit.prevent="submit">
+          <div class="form-heading">
+            <span>Receba sua cotacao</span>
+            <h2>{{ ctaText }}</h2>
+            <p>{{ campanha.cidade }}/{{ campanha.estado }} - {{ labelPublico(campanha.tipoPublico) }}</p>
+          </div>
+
+          <label>Nome<input v-model.trim="form.nome" required maxlength="120" autocomplete="name" /></label>
+          <label>WhatsApp<input v-model="form.telefone" required maxlength="15" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" @input="maskPhone" /></label>
           <label>Quantidade de vidas<input v-model.number="form.quantidadeVidas" required type="number" min="1" max="999" /></label>
-          <label>
-            Tipo de contratacao
-            <select v-model="form.tipoContratacao" required>
-              <option value="Individual">Individual</option>
-              <option value="Familiar">Familiar</option>
-              <option value="Empresarial">Empresarial</option>
-              <option value="Mei">MEI</option>
-              <option value="AindaNaoSei">Ainda nao sei</option>
-            </select>
+
+          <div class="known-context">
+            <span>{{ form.cidade }}/{{ form.estado }}</span>
+            <span>{{ labelContratacao(form.tipoContratacao) }}</span>
+          </div>
+
+          <label class="consent">
+            <input v-model="form.consentimento" type="checkbox" required />
+            Autorizo contato sobre esta cotacao e entendo que meus dados serao usados apenas para essa solicitacao.
           </label>
-          <label class="wide">Observacao<textarea v-model.trim="form.observacao" maxlength="1000" rows="4" /></label>
-          <label class="consent"><input v-model="form.consentimento" type="checkbox" required /> Autorizo o contato para receber informacoes e cotacoes de planos de saude.</label>
           <input v-model="form.website" class="hp-field" tabindex="-1" autocomplete="off" />
           <p v-if="submitError" class="error">{{ submitError }}</p>
           <p v-if="success" class="success">{{ success }}</p>
-          <button class="button" :disabled="submitting">{{ submitting ? 'Enviando...' : campanha.textoBotao }}</button>
+          <button class="button public-cta" :disabled="submitting">{{ submitting ? 'Enviando...' : ctaText }}</button>
           <a v-if="whatsAppUrl" class="button secondary" :href="whatsAppUrl" target="_blank" rel="noopener">Abrir WhatsApp</a>
-          <small>Usamos seus dados apenas para contato sobre esta solicitacao.</small>
+          <small>Sem compromisso. O atendimento depende do seu consentimento.</small>
         </form>
       </section>
+
+      <section class="public-band">
+        <div class="section-heading commercial-heading">
+          <span>Como funciona</span>
+          <h2>Um caminho simples para comparar opcoes</h2>
+        </div>
+        <div class="steps-grid">
+          <article>
+            <strong>01</strong>
+            <h3>Informe seus dados</h3>
+            <p>Voce envia o essencial para iniciarmos a cotacao.</p>
+          </article>
+          <article>
+            <strong>02</strong>
+            <h3>Analisamos seu perfil</h3>
+            <p>Consideramos quantidade de vidas, localidade e tipo de contratacao.</p>
+          </article>
+          <article>
+            <strong>03</strong>
+            <h3>Receba opcoes para comparar</h3>
+            <p>Um atendimento consultivo ajuda voce a avaliar alternativas.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="public-band">
+        <div class="section-heading commercial-heading">
+          <span>Beneficios</span>
+          <h2>Diferenciais desta cotacao</h2>
+        </div>
+        <div class="benefit-cards">
+          <article v-for="beneficio in campanha.beneficios" :key="beneficio">
+            <span aria-hidden="true">OK</span>
+            <p>{{ beneficio }}</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="public-band public-trust">
+        <div>
+          <p class="eyebrow">Atendimento e seguranca</p>
+          <h2>Dados usados somente para contato sobre esta solicitacao</h2>
+        </div>
+        <div class="trust-grid">
+          <article>
+            <strong>Atendimento personalizado</strong>
+            <p>A cotacao considera as informacoes enviadas no formulario.</p>
+          </article>
+          <article>
+            <strong>Cotacao sem compromisso</strong>
+            <p>Voce recebe orientacao para comparar opcoes antes de decidir.</p>
+          </article>
+          <article>
+            <strong>Tratamento seguro dos dados</strong>
+            <p>O contato ocorre apenas mediante consentimento explicito.</p>
+          </article>
+        </div>
+        <p class="notice">Valores, redes, carencias e coberturas dependem do plano, perfil, regiao e regras da operadora.</p>
+      </section>
+
+      <section class="public-band">
+        <div class="section-heading commercial-heading">
+          <span>Duvidas frequentes</span>
+          <h2>Informacoes importantes antes de contratar</h2>
+        </div>
+        <div class="faq-list">
+          <details v-for="item in campanha.perguntasFrequentes" :key="item.pergunta">
+            <summary>{{ item.pergunta }}</summary>
+            <p>{{ item.resposta }}</p>
+          </details>
+        </div>
+      </section>
+
+      <footer class="public-footer">
+        <strong>{{ campanha.nome }}</strong>
+        <span>{{ campanha.operadora }} - {{ campanha.cidade }}/{{ campanha.estado }}</span>
+        <small>Informacoes institucionais, Politica de Privacidade e Termos de Uso podem ser exibidos aqui quando estiverem disponiveis no sistema.</small>
+      </footer>
     </template>
   </main>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { capturarLeadPublico, obterCampanhaPublica, type CampanhaPublica, type CapturarLeadPublicoRequest } from '../services/api';
 
@@ -82,15 +147,29 @@ const openedAt = Date.now();
 const form = reactive<CapturarLeadPublicoRequest>({
   nome: '',
   telefone: '',
-  email: '',
   cidade: '',
   estado: '',
   quantidadeVidas: 1,
   tipoContratacao: 'Familiar',
-  observacao: '',
   consentimento: false,
   website: '',
   formOpenedAt: openedAt
+});
+
+const contextoCampanha = computed(() => {
+  if (!campanha.value) return '';
+  const partes = [labelPublico(campanha.value.tipoPublico), campanha.value.operadora, `${campanha.value.cidade}/${campanha.value.estado}`];
+  return partes.filter(Boolean).join(' - ');
+});
+
+const heroBeneficios = computed(() => {
+  const lista = campanha.value?.beneficios.slice(0, 3) ?? [];
+  return lista.length > 0 ? lista : ['Cotacao personalizada', 'Compare opcoes', 'Atendimento consultivo'];
+});
+
+const ctaText = computed(() => {
+  const texto = campanha.value?.textoBotao?.trim();
+  return texto || 'Receber minha cotacao';
 });
 
 onMounted(async () => {
@@ -99,6 +178,7 @@ onMounted(async () => {
     campanha.value = await obterCampanhaPublica(String(route.params.slug));
     form.cidade = campanha.value.cidade;
     form.estado = campanha.value.estado;
+    form.tipoContratacao = tipoContratacaoPadrao(campanha.value.tipoPublico);
     applyTracking();
   } catch {
     error.value = 'A campanha nao esta ativa ou nao existe.';
@@ -113,7 +193,8 @@ async function submit() {
   submitError.value = '';
   success.value = '';
   try {
-    const response = await capturarLeadPublico(String(route.params.slug), { ...form, estado: form.estado.toUpperCase(), formOpenedAt: openedAt });
+    const telefone = form.telefone.replace(/\D/g, '');
+    const response = await capturarLeadPublico(String(route.params.slug), { ...form, telefone, estado: form.estado.toUpperCase(), formOpenedAt: openedAt });
     success.value = response.mensagem;
     whatsAppUrl.value = response.whatsAppUrl;
     window.open(response.whatsAppUrl, '_blank', 'noopener');
@@ -134,5 +215,48 @@ function applyTracking() {
   form.utmContent = params.get('utm_content') || undefined;
   form.gclid = params.get('gclid') || undefined;
   form.fbclid = params.get('fbclid') || undefined;
+}
+
+function maskPhone() {
+  const digits = form.telefone.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) {
+    form.telefone = digits;
+    return;
+  }
+
+  const ddd = digits.slice(0, 2);
+  const prefixLength = digits.length > 10 ? 5 : 4;
+  const prefix = digits.slice(2, 2 + prefixLength);
+  const suffix = digits.slice(2 + prefixLength);
+  form.telefone = `(${ddd}) ${prefix}${suffix ? `-${suffix}` : ''}`;
+}
+
+function tipoContratacaoPadrao(tipo: CampanhaPublica['tipoPublico']): CapturarLeadPublicoRequest['tipoContratacao'] {
+  if (tipo === 'Individual') return 'Individual';
+  if (tipo === 'Mei') return 'Mei';
+  if (tipo === 'Empresa') return 'Empresarial';
+  return 'Familiar';
+}
+
+function labelPublico(tipo: CampanhaPublica['tipoPublico']) {
+  const labels: Record<CampanhaPublica['tipoPublico'], string> = {
+    Individual: 'Plano individual',
+    Casal: 'Plano para casal',
+    Familia: 'Plano familiar',
+    Mei: 'Plano para MEI',
+    Empresa: 'Plano empresarial'
+  };
+  return labels[tipo];
+}
+
+function labelContratacao(tipo: CapturarLeadPublicoRequest['tipoContratacao']) {
+  const labels: Record<CapturarLeadPublicoRequest['tipoContratacao'], string> = {
+    Individual: 'Contratacao individual',
+    Familiar: 'Contratacao familiar',
+    Empresarial: 'Contratacao empresarial',
+    Mei: 'Contratacao MEI',
+    AindaNaoSei: 'Tipo a definir'
+  };
+  return labels[tipo];
 }
 </script>

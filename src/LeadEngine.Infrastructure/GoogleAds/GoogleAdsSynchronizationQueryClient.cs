@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using LeadEngine.Application.Common;
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
@@ -11,7 +12,8 @@ namespace LeadEngine.Infrastructure.GoogleAds;
 public sealed class GoogleAdsSynchronizationQueryClient(
     GoogleAdsGaqlClient gaqlClient,
     IHttpClientFactory httpClientFactory,
-    IConfigurationResolver resolver) : IGoogleAdsSynchronizationQueryClient
+    IConfigurationResolver resolver,
+    GoogleAdsExceptionFormatter exceptionFormatter) : IGoogleAdsSynchronizationQueryClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -63,7 +65,9 @@ public sealed class GoogleAdsSynchronizationQueryClient(
         using var response = await httpClientFactory.CreateClient("googleads").SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            throw new InvalidOperationException("Nao foi possivel alterar status remoto da campanha Google Ads.");
+            var requestId = response.Headers.TryGetValues("request-id", out var values) ? values.FirstOrDefault() : null;
+            var text = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new GoogleAdsDiagnosticException(exceptionFormatter.FromRestError(text, requestId, ((int)response.StatusCode).ToString(), "Nao foi possivel alterar status remoto da campanha Google Ads."));
         }
     }
 }

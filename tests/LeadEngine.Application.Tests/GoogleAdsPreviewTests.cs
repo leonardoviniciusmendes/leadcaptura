@@ -105,6 +105,58 @@ public sealed class GoogleAdsPreviewTests
         Assert.Equal("empresarial", rsa.Path2);
     }
 
+    [Theory]
+    [InlineData("http://localhost:5173", "http://localhost:5173/lp/plano-familiar-copacabana")]
+    [InlineData("http://localhost:5173/", "http://localhost:5173/lp/plano-familiar-copacabana")]
+    [InlineData("http://localhost:5173/leadcaptura", "http://localhost:5173/leadcaptura/lp/plano-familiar-copacabana")]
+    [InlineData("http://localhost:5173/leadcaptura/", "http://localhost:5173/leadcaptura/lp/plano-familiar-copacabana")]
+    [InlineData("https://leadengine.example.com", "https://leadengine.example.com/lp/plano-familiar-copacabana")]
+    public void UrlPublica_NormalizaBaseSlugESubpath(string publicBaseUrl, string expected)
+    {
+        var result = CampaignPublicUrlBuilder.Build("plano-familiar-copacabana", publicBaseUrl);
+
+        Assert.True(result.Valida);
+        Assert.Equal(expected, result.Url);
+    }
+
+    [Fact]
+    public void UrlPublica_InfereSubpathAPartirDoRedirectUri()
+    {
+        var result = CampaignPublicUrlBuilder.InferBaseUrlFromRedirectUri("http://localhost:5173/leadcaptura/configuracoes?googleAdsCallback=1");
+
+        Assert.Equal("http://localhost:5173/leadcaptura", result);
+    }
+
+    [Fact]
+    public async Task Preview_UsaApplicationPublicBaseUrlComSubpath()
+    {
+        var ctx = Context();
+        ctx.Campanha.Slug = "plano-familiar-copacabana";
+        ctx.Campanha.UrlPublica = "/lp/plano-familiar-copacabana";
+        var resolver = new Resolver("http://localhost:5173/leadcaptura");
+        var service = Service(ctx, resolver);
+
+        var preview = await service.GerarOuAtualizarAsync(ctx.Campanha.Id, CancellationToken.None);
+
+        Assert.Equal("http://localhost:5173/leadcaptura/lp/plano-familiar-copacabana", preview.UrlFinal);
+        Assert.Equal(StatusPlanoPublicacaoGoogleAds.Valido, preview.Status);
+    }
+
+    [Fact]
+    public async Task Preview_InferePublicBaseUrlDoRedirectUriQuandoApplicationPublicBaseUrlVazio()
+    {
+        var ctx = Context();
+        ctx.Campanha.Slug = "plano-familiar-copacabana";
+        ctx.Campanha.UrlPublica = "/lp/plano-familiar-copacabana";
+        var resolver = new Resolver(publicBaseUrl: "", redirectUri: "http://localhost:5173/leadcaptura/configuracoes?googleAdsCallback=1");
+        var service = Service(ctx, resolver);
+
+        var preview = await service.GerarOuAtualizarAsync(ctx.Campanha.Id, CancellationToken.None);
+
+        Assert.Equal("http://localhost:5173/leadcaptura/lp/plano-familiar-copacabana", preview.UrlFinal);
+        Assert.Equal(StatusPlanoPublicacaoGoogleAds.Valido, preview.Status);
+    }
+
     [Fact]
     public async Task RegenerarIncrementaVersao()
     {
@@ -191,9 +243,9 @@ public sealed class GoogleAdsPreviewTests
         return new TestContext(campanha, campanhas, contas, new Planos());
     }
 
-    private static GoogleAdsPreviewService Service(TestContext ctx)
+    private static GoogleAdsPreviewService Service(TestContext ctx, Resolver? resolver = null)
     {
-        var resolver = new Resolver();
+        resolver ??= new Resolver();
         return new GoogleAdsPreviewService(
             ctx.Campanhas,
             ctx.Contas,
@@ -208,7 +260,7 @@ public sealed class GoogleAdsPreviewTests
 
     private sealed record TestContext(Campanha Campanha, Campanhas Campanhas, Contas Contas, Planos Planos);
 
-    private sealed class Resolver : IConfigurationResolver
+    private sealed class Resolver(string publicBaseUrl = "https://leadengine.test", string redirectUri = "http://localhost:5173/leadcaptura/configuracoes?googleAdsCallback=1") : IConfigurationResolver
     {
         public Task<ResolvedConfigurationValue> ResolveAsync(CategoriaConfiguracao categoria, string chave, CancellationToken cancellationToken)
         {
@@ -224,7 +276,8 @@ public sealed class GoogleAdsPreviewTests
                 "DefaultKeywordMatchType" => "Phrase",
                 "DefaultCampaignStatus" => "PAUSED",
                 "EnableBroadMatch" => "false",
-                "PublicBaseUrl" => "https://leadengine.test",
+                "PublicBaseUrl" => publicBaseUrl,
+                "RedirectUri" => redirectUri,
                 _ => ""
             };
             return Task.FromResult(new ResolvedConfigurationValue(value, !string.IsNullOrWhiteSpace(value), OrigemConfiguracao.Banco, chave.Contains("Secret") || chave.Contains("Token")));

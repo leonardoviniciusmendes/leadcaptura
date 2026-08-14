@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IGoogleAdsMetricsRepository, GoogleAdsMetricsRepository>();
         services.AddScoped<IGoogleAdsSynchronizationRepository, GoogleAdsSynchronizationRepository>();
         services.AddScoped<IGoogleAdsAnalysisRepository, GoogleAdsAnalysisRepository>();
+        services.AddScoped<CampaignPublicUrlBuilder>();
         services.AddScoped<IGoogleAdsCampaignMappingService, GoogleAdsCampaignMappingService>();
         services.AddScoped<IGoogleAdsValidationService, GoogleAdsValidationService>();
         services.AddScoped<IGoogleAdsCopyAdjustmentService, OpenRouterGoogleAdsCopyAdjustmentService>();
@@ -45,6 +46,7 @@ public static class DependencyInjection
         services.AddScoped<IGoogleAdsLanguageResolver, GoogleAdsLanguageResolver>();
         services.AddScoped<IGoogleAdsOperationBuilder, GoogleAdsOperationBuilder>();
         services.AddScoped<IGoogleAdsErrorTranslator, GoogleAdsErrorTranslator>();
+        services.AddSingleton<GoogleAdsExceptionFormatter>();
         services.AddScoped<GoogleAdsTypedOperationFactory>();
         services.AddScoped<GoogleAdsRestMutateTransport>();
         services.AddScoped<IGoogleAdsMutationClient, GoogleAdsMutationClient>();

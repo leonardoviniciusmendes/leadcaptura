@@ -32,6 +32,11 @@ public sealed class GoogleAdsConnectionService(
                 : new GoogleAdsStatusResponse(false, "Configurado, mas OAuth nao conectado", null, null, null);
         }
 
+        if (RequerReconexao(conta))
+        {
+            return new GoogleAdsStatusResponse(false, "Reconexao necessaria", conta.Id, GoogleAdsCustomerId.Mask(conta.CustomerId), conta.Nome);
+        }
+
         var expirado = conta.AccessTokenExpiraEm is not null && conta.AccessTokenExpiraEm.Value <= DateTime.UtcNow;
         return new GoogleAdsStatusResponse(true, expirado ? "Token expirado ou invalido" : "Conectado", conta.Id, GoogleAdsCustomerId.Mask(conta.CustomerId), conta.Nome);
     }
@@ -238,6 +243,13 @@ public sealed class GoogleAdsConnectionService(
     private static GoogleAdsContaResponse Map(GoogleAdsConta conta)
     {
         return new GoogleAdsContaResponse(conta.Id, conta.CustomerId, GoogleAdsCustomerId.Mask(conta.CustomerId), conta.Nome, conta.Email, conta.Ativa, conta.Padrao, "Cliente", false, conta.DataConexao, conta.AccessTokenExpiraEm);
+    }
+
+    private static bool RequerReconexao(GoogleAdsConta conta)
+    {
+        return string.IsNullOrWhiteSpace(conta.AccessTokenProtegido)
+            || string.IsNullOrWhiteSpace(conta.RefreshTokenProtegido)
+            || conta.AccessTokenExpiraEm is null;
     }
 
     private async Task ValidateStateAsync(string state, CancellationToken cancellationToken)
