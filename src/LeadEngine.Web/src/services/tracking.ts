@@ -42,6 +42,12 @@ export function pushDataLayer(event: Record<string, unknown>): void {
   window.dataLayer.push(event);
 }
 
+export function trackGoogleAdsConversion(): void {
+  window.gtag?.('event', 'conversion', {
+    send_to: 'AW-18343324236/JiGoCKCw99UcEMzU46pE'
+  });
+}
+
 export function buildOrigem() {
   const params = readCampaignParams();
   return {

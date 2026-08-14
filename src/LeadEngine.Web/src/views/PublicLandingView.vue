@@ -133,6 +133,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { capturarLeadPublico, obterCampanhaPublica, type CampanhaPublica, type CapturarLeadPublicoRequest } from '../services/api';
+import { trackGoogleAdsConversion } from '../services/tracking';
 
 const route = useRoute();
 const campanha = ref<CampanhaPublica | null>(null);
@@ -195,6 +196,7 @@ async function submit() {
   try {
     const telefone = form.telefone.replace(/\D/g, '');
     const response = await capturarLeadPublico(String(route.params.slug), { ...form, telefone, estado: form.estado.toUpperCase(), formOpenedAt: openedAt });
+    trackGoogleAdsConversion();
     success.value = response.mensagem;
     whatsAppUrl.value = response.whatsAppUrl;
     window.open(response.whatsAppUrl, '_blank', 'noopener');

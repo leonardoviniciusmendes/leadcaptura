@@ -6,6 +6,7 @@ declare module '*.vue' {
 
 interface Window {
   dataLayer?: Array<Record<string, unknown>>;
+  gtag?: (...args: unknown[]) => void;
 }
 
 interface ImportMetaEnv {

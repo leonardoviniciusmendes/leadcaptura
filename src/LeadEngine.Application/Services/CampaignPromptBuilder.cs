@@ -30,6 +30,9 @@ public sealed class CampaignPromptBuilder
         - Use linguagem clara, profissional e objetiva.
         - Não faça promessas enganosas.
         - Não garanta preço, economia, cobertura, aprovação, contratação ou ausência de carência.
+        - Benefícios, títulos, descrições, landing page e mensagens nunca devem fazer promessas garantidas, garantir aprovação, garantir preço, garantir economia, afirmar "melhor", "mais barato" ou equivalente como fato, nem garantir resultado.
+        - Use linguagem de orientação, comparação e disponibilidade, como "Compare opções disponíveis para o seu perfil.", "Receba orientação para avaliar alternativas." e "Consulte condições e opções disponíveis.".
+        - Não use frases como "Garanta o melhor preço.", "Economize com certeza.", "Aprovação garantida." ou "Tenha o melhor plano garantido.".
         - Não invente informações sobre operadoras, rede credenciada, hospitais ou coberturas.
         - Palavras-chave devem ter intenção comercial e evitar termos excessivamente amplos.
         - Títulos de anúncios: gerar entre 8 e 12, cada um com no máximo 30 caracteres.
