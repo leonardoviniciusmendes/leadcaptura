@@ -35,15 +35,16 @@ public sealed class CampanhaService(
         await repository.AdicionarAsync(campanha, cancellationToken);
         await repository.SalvarAsync(cancellationToken);
 
+        var finalizationToken = CancellationToken.None;
         try
         {
-            var generated = await generationService.GenerateAsync(request, CancellationToken.None);
+            var generated = await generationService.GenerateAsync(request, finalizationToken);
             campanha.Nome = generated.Nome;
             campanha.TituloLandingPage = generated.TituloLandingPage;
             campanha.SubtituloLandingPage = generated.SubtituloLandingPage;
             campanha.TextoBotao = generated.TextoBotao;
             campanha.MensagemWhatsApp = generated.MensagemWhatsApp;
-            campanha.Slug = await EnsureUniqueSlugAsync(generated.Slug, campanha.Id, cancellationToken);
+            campanha.Slug = await EnsureUniqueSlugAsync(generated.Slug, campanha.Id, finalizationToken);
             campanha.BeneficiosJson = Serialize(generated.Beneficios);
             campanha.PerguntasFrequentesJson = Serialize(generated.PerguntasFrequentes.Select(x => new FaqResponse(x.Pergunta, x.Resposta)).ToArray());
             campanha.PalavrasChaveJson = Serialize(generated.PalavrasChave);
@@ -57,7 +58,7 @@ public sealed class CampanhaService(
             campanha.Status = StatusCampanha.Gerada;
             campanha.ErroGeracao = null;
             campanha.DataAtualizacao = DateTime.UtcNow;
-            await repository.SalvarAsync(CancellationToken.None);
+            await repository.SalvarAsync(finalizationToken);
             return CampanhaMapping.ToResponse(campanha);
         }
         catch (Exception ex)
@@ -65,7 +66,7 @@ public sealed class CampanhaService(
             campanha.Status = StatusCampanha.Erro;
             campanha.ErroGeracao = SafeGenerationError(ex);
             campanha.DataAtualizacao = DateTime.UtcNow;
-            await repository.SalvarAsync(CancellationToken.None);
+            await repository.SalvarAsync(finalizationToken);
             throw new CampaignGenerationException("Nao foi possivel gerar a campanha. Verifique a configuracao do provedor de IA.", ex);
         }
     }
