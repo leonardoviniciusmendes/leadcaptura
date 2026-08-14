@@ -37,7 +37,7 @@ public sealed class CampanhaService(
 
         try
         {
-            var generated = await generationService.GenerateAsync(request, cancellationToken);
+            var generated = await generationService.GenerateAsync(request, CancellationToken.None);
             campanha.Nome = generated.Nome;
             campanha.TituloLandingPage = generated.TituloLandingPage;
             campanha.SubtituloLandingPage = generated.SubtituloLandingPage;
@@ -57,15 +57,15 @@ public sealed class CampanhaService(
             campanha.Status = StatusCampanha.Gerada;
             campanha.ErroGeracao = null;
             campanha.DataAtualizacao = DateTime.UtcNow;
-            await repository.SalvarAsync(cancellationToken);
+            await repository.SalvarAsync(CancellationToken.None);
             return CampanhaMapping.ToResponse(campanha);
         }
-        catch (Exception ex) when (ex is CampaignGenerationException or InvalidOperationException or ArgumentException)
+        catch (Exception ex)
         {
             campanha.Status = StatusCampanha.Erro;
-            campanha.ErroGeracao = CampanhaText.Limitar(ex.Message, 500);
+            campanha.ErroGeracao = SafeGenerationError(ex);
             campanha.DataAtualizacao = DateTime.UtcNow;
-            await repository.SalvarAsync(cancellationToken);
+            await repository.SalvarAsync(CancellationToken.None);
             throw new CampaignGenerationException("Nao foi possivel gerar a campanha. Verifique a configuracao do provedor de IA.", ex);
         }
     }
@@ -110,5 +110,14 @@ public sealed class CampanhaService(
     private static string Serialize<T>(T items)
     {
         return JsonSerializer.Serialize(items);
+    }
+
+    private static string SafeGenerationError(Exception ex)
+    {
+        var message = ex is CampaignGenerationException or InvalidOperationException or ArgumentException
+            ? ex.Message
+            : "Falha inesperada durante a geracao da campanha.";
+
+        return CampanhaText.Limitar(message, 500) ?? "Falha inesperada durante a geracao da campanha.";
     }
 }

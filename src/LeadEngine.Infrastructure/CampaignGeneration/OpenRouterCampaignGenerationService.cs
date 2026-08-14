@@ -111,19 +111,20 @@ public sealed class OpenRouterCampaignGenerationService(
     private async Task<string> SendWithRetryAsync(OpenRouterOptions config, object body, CancellationToken cancellationToken)
     {
         var attempts = Math.Max(0, config.MaxRetries) + 1;
+        var timeout = TimeSpan.FromSeconds(Math.Clamp(config.TimeoutSeconds, 5, 300));
         Exception? lastException = null;
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+        var operationToken = timeoutCts.Token;
 
         for (var attempt = 1; attempt <= attempts; attempt++)
         {
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(config.TimeoutSeconds, 1, 300)));
-
             try
             {
                 using var request = CreateRequest(config, body);
                 var client = httpClientFactory.CreateClient(ClientName);
-                var response = await client.SendAsync(request, timeoutCts.Token);
-                var text = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+                using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, operationToken);
+                var text = await response.Content.ReadAsStringAsync(operationToken);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -136,7 +137,7 @@ public sealed class OpenRouterCampaignGenerationService(
                     throw new CampaignGenerationException($"OpenRouter retornou HTTP {(int)response.StatusCode}.");
                 }
 
-                await DelayAsync(attempt, timeoutCts.Token);
+                await DelayAsync(attempt, operationToken);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {

@@ -110,7 +110,7 @@ public static class DependencyInjection
         {
             var config = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<OpenRouterOptions>>().Value;
             client.BaseAddress = new Uri(config.BaseUrl.TrimEnd('/') + "/");
-            client.Timeout = Timeout.InfiniteTimeSpan;
+            client.Timeout = TimeSpan.FromSeconds(300);
         });
         services.AddHttpClient("googleads", client =>
         {
