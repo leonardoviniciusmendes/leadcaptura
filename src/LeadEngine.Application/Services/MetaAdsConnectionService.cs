@@ -162,9 +162,9 @@ public sealed class MetaAdsConnectionService(
             "business_management",
             "ads_read",
             "pages_show_list",
-            "pages_read_engagement",
-            "instagram_basic"
+            "pages_read_engagement"
         };
+        scopes.Remove("instagram_basic");
         if (incluirPermissaoPublicacao)
         {
             scopes.Add("ads_management");

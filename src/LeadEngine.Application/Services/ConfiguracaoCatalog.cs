@@ -68,7 +68,7 @@ public static class ConfiguracaoCatalog
         new(CategoriaConfiguracao.MetaAds, "UserInfoEndpoint", TipoConfiguracao.Url, false, "https://graph.facebook.com/v26.0/me", "META_ADS_USER_INFO_ENDPOINT", "MetaAds:UserInfoEndpoint", "Endpoint de dados do usuario Meta."),
         new(CategoriaConfiguracao.MetaAds, "GraphApiBaseUrl", TipoConfiguracao.Url, false, "https://graph.facebook.com", "META_ADS_GRAPH_API_BASE_URL", "MetaAds:GraphApiBaseUrl", "URL base da Graph API Meta."),
         new(CategoriaConfiguracao.MetaAds, "GraphApiVersion", TipoConfiguracao.Texto, false, "v26.0", "META_ADS_GRAPH_API_VERSION", "MetaAds:GraphApiVersion", "Versao da Graph API Meta."),
-        new(CategoriaConfiguracao.MetaAds, "Scopes", TipoConfiguracao.Texto, false, "public_profile business_management ads_read pages_show_list pages_read_engagement instagram_basic", "META_ADS_SCOPES", "MetaAds:Scopes", "Escopos OAuth solicitados."),
+        new(CategoriaConfiguracao.MetaAds, "Scopes", TipoConfiguracao.Texto, false, "public_profile business_management ads_read pages_show_list pages_read_engagement", "META_ADS_SCOPES", "MetaAds:Scopes", "Escopos OAuth solicitados."),
         new(CategoriaConfiguracao.MetaAds, "DefaultCountryCode", TipoConfiguracao.Texto, false, "BR", "META_ADS_DEFAULT_COUNTRY_CODE", "MetaAds:DefaultCountryCode", "Pais padrao para targeting Meta.")
     ];
 

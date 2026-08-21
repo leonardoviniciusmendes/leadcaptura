@@ -91,7 +91,7 @@ services:
       META_ADS_USER_INFO_ENDPOINT: ${META_ADS_USER_INFO_ENDPOINT:-https://graph.facebook.com/v26.0/me}
       META_ADS_GRAPH_API_BASE_URL: ${META_ADS_GRAPH_API_BASE_URL:-https://graph.facebook.com}
       META_ADS_GRAPH_API_VERSION: ${META_ADS_GRAPH_API_VERSION:-v26.0}
-      META_ADS_SCOPES: ${META_ADS_SCOPES:-public_profile business_management ads_read pages_show_list pages_read_engagement instagram_basic}
+      META_ADS_SCOPES: ${META_ADS_SCOPES:-public_profile business_management ads_read pages_show_list pages_read_engagement}
       META_ADS_DEFAULT_COUNTRY_CODE: ${META_ADS_DEFAULT_COUNTRY_CODE:-BR}
     volumes:
       - leadengine-dataprotection:/root/.aspnet/DataProtection-Keys
