@@ -26,9 +26,22 @@ public static class DependencyInjection
         services.AddScoped<IConfiguracaoRepository, ConfiguracaoRepository>();
         services.AddScoped<IGoogleAdsContaRepository, GoogleAdsContaRepository>();
         services.AddScoped<IGoogleAdsOAuthStateRepository, GoogleAdsOAuthStateRepository>();
+        services.AddScoped<IMetaAdsContaRepository, MetaAdsContaRepository>();
+        services.AddScoped<IMetaAdsOAuthStateRepository, MetaAdsOAuthStateRepository>();
+        services.AddScoped<IMetaAdsAtivoSelecionadoRepository, MetaAdsAtivoSelecionadoRepository>();
+        services.AddScoped<IMetaAdsImagemRepository, MetaAdsImagemRepository>();
+        services.AddScoped<IMetaAdsPreparacaoPublicacaoRepository, MetaAdsPreparacaoPublicacaoRepository>();
+        services.AddScoped<IMetaAdsPublicacaoRepository, MetaAdsPublicacaoRepository>();
         services.AddScoped<ISecretProtector, DataProtectionSecretProtector>();
         services.AddScoped<IConfigurationResolver, ConfigurationResolver>();
         services.AddScoped<IConfiguracaoService, ConfiguracaoService>();
+        services.AddScoped<IMetaAdsOAuthClient, MetaAdsOAuthClient>();
+        services.AddScoped<IMetaAdsConnectionService, MetaAdsConnectionService>();
+        services.AddScoped<IMetaAdsGraphClient, MetaAdsGraphClient>();
+        services.AddScoped<IMetaAdsAssetService, MetaAdsAssetService>();
+        services.AddScoped<IMetaAdsPreviewService, MetaAdsPreviewService>();
+        services.AddScoped<IMetaAdsPublicationPreparationService, MetaAdsPublicationPreparationService>();
+        services.AddScoped<IMetaAdsPublishingService, MetaAdsPublishingService>();
         services.AddScoped<IGoogleAdsOAuthClient, GoogleAdsOAuthClient>();
         services.AddScoped<IGoogleAdsTokenService, GoogleAdsTokenService>();
         services.AddScoped<IGoogleAdsConnectionService, GoogleAdsConnectionService>();
@@ -113,6 +126,10 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(300);
         });
         services.AddHttpClient("googleads", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+        services.AddHttpClient("metaads", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);
         });

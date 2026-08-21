@@ -4,6 +4,7 @@ using LeadEngine.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LeadEngine.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(LeadEngineDbContext))]
-    partial class LeadEngineDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260820235045_AddMetaAdsAssetSelection")]
+    partial class AddMetaAdsAssetSelection
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1329,69 +1332,6 @@ namespace LeadEngine.Infrastructure.Persistence.Migrations
                     b.ToTable("MetaAdsContas", (string)null);
                 });
 
-            modelBuilder.Entity("LeadEngine.Domain.Entities.MetaAdsImagem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("AdAccountId")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<Guid>("CampanhaId")
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("ContentHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<DateTime?>("DataAtualizacao")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime>("DataUpload")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<Guid>("MetaAdsContaId")
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("MetaImageHash")
-                        .IsRequired()
-                        .HasMaxLength(180)
-                        .HasColumnType("varchar(180)");
-
-                    b.Property<string>("NomeArquivo")
-                        .IsRequired()
-                        .HasMaxLength(180)
-                        .HasColumnType("varchar(180)");
-
-                    b.Property<string>("OrigemImagem")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<long?>("TamanhoBytes")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MetaAdsContaId");
-
-                    b.HasIndex("CampanhaId", "AdAccountId");
-
-                    b.HasIndex("CampanhaId", "AdAccountId", "ContentHash")
-                        .IsUnique();
-
-                    b.ToTable("MetaAdsImagens", (string)null);
-                });
-
             modelBuilder.Entity("LeadEngine.Domain.Entities.MetaAdsOAuthState", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1425,159 +1365,6 @@ namespace LeadEngine.Infrastructure.Persistence.Migrations
                     b.HasIndex("Utilizado");
 
                     b.ToTable("MetaAdsOAuthStates", (string)null);
-                });
-
-            modelBuilder.Entity("LeadEngine.Domain.Entities.MetaAdsPreparacaoPublicacao", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("AdAccountId")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<int>("AgeMax")
-                        .HasColumnType("int");
-
-                    b.Property<int>("AgeMin")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("CampanhaId")
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("CountryCode")
-                        .HasMaxLength(10)
-                        .HasColumnType("varchar(10)");
-
-                    b.Property<string>("CountryName")
-                        .HasMaxLength(120)
-                        .HasColumnType("varchar(120)");
-
-                    b.Property<DateTime?>("DataAtualizacao")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime>("DataCriacao")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("LocationKey")
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<string>("LocationName")
-                        .HasMaxLength(180)
-                        .HasColumnType("varchar(180)");
-
-                    b.Property<string>("LocationType")
-                        .HasMaxLength(40)
-                        .HasColumnType("varchar(40)");
-
-                    b.Property<Guid>("MetaAdsContaId")
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("Region")
-                        .HasMaxLength(120)
-                        .HasColumnType("varchar(120)");
-
-                    b.Property<string>("RegionId")
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CampanhaId")
-                        .IsUnique();
-
-                    b.HasIndex("MetaAdsContaId");
-
-                    b.ToTable("MetaAdsPreparacoesPublicacao", (string)null);
-                });
-
-            modelBuilder.Entity("LeadEngine.Domain.Entities.MetaAdsPublicacao", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("AdAccountId")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<string>("AdExternalId")
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<string>("AdSetExternalId")
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<string>("CampaignExternalId")
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<Guid>("CampanhaId")
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("CreativeExternalId")
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<DateTime?>("DataAtualizacao")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime?>("DataConclusao")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime>("DataInicio")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("FbTraceId")
-                        .HasMaxLength(120)
-                        .HasColumnType("varchar(120)");
-
-                    b.Property<Guid>("MetaAdsContaId")
-                        .HasColumnType("char(36)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.Property<string>("UltimaEtapaConcluida")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<string>("UltimoErroCodigo")
-                        .HasMaxLength(120)
-                        .HasColumnType("varchar(120)");
-
-                    b.Property<string>("UltimoErroHttpStatus")
-                        .HasMaxLength(40)
-                        .HasColumnType("varchar(40)");
-
-                    b.Property<string>("UltimoErroMensagem")
-                        .HasMaxLength(500)
-                        .HasColumnType("varchar(500)");
-
-                    b.Property<string>("UltimoErroSubcodigo")
-                        .HasMaxLength(120)
-                        .HasColumnType("varchar(120)");
-
-                    b.Property<string>("UltimoErroTipo")
-                        .HasMaxLength(120)
-                        .HasColumnType("varchar(120)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MetaAdsContaId");
-
-                    b.HasIndex("Status");
-
-                    b.HasIndex("CampanhaId", "AdAccountId")
-                        .IsUnique();
-
-                    b.ToTable("MetaAdsPublicacoes", (string)null);
                 });
 
             modelBuilder.Entity("LeadEngine.Domain.Entities.OrigemLead", b =>
@@ -1895,63 +1682,6 @@ namespace LeadEngine.Infrastructure.Persistence.Migrations
                         .HasForeignKey("LeadEngine.Domain.Entities.MetaAdsAtivoSelecionado", "MetaAdsContaId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("MetaAdsConta");
-                });
-
-            modelBuilder.Entity("LeadEngine.Domain.Entities.MetaAdsImagem", b =>
-                {
-                    b.HasOne("LeadEngine.Domain.Entities.Campanha", "Campanha")
-                        .WithMany()
-                        .HasForeignKey("CampanhaId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("LeadEngine.Domain.Entities.MetaAdsConta", "MetaAdsConta")
-                        .WithMany()
-                        .HasForeignKey("MetaAdsContaId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Campanha");
-
-                    b.Navigation("MetaAdsConta");
-                });
-
-            modelBuilder.Entity("LeadEngine.Domain.Entities.MetaAdsPreparacaoPublicacao", b =>
-                {
-                    b.HasOne("LeadEngine.Domain.Entities.Campanha", "Campanha")
-                        .WithMany()
-                        .HasForeignKey("CampanhaId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("LeadEngine.Domain.Entities.MetaAdsConta", "MetaAdsConta")
-                        .WithMany()
-                        .HasForeignKey("MetaAdsContaId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Campanha");
-
-                    b.Navigation("MetaAdsConta");
-                });
-
-            modelBuilder.Entity("LeadEngine.Domain.Entities.MetaAdsPublicacao", b =>
-                {
-                    b.HasOne("LeadEngine.Domain.Entities.Campanha", "Campanha")
-                        .WithMany()
-                        .HasForeignKey("CampanhaId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("LeadEngine.Domain.Entities.MetaAdsConta", "MetaAdsConta")
-                        .WithMany()
-                        .HasForeignKey("MetaAdsContaId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Campanha");
 
                     b.Navigation("MetaAdsConta");
                 });

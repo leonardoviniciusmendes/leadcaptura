@@ -12,9 +12,10 @@
       <MetricCard label="API externa" :value="status.externalLeadApi.status" />
       <MetricCard label="URL publica" :value="status.urlPublica.status" />
       <MetricCard label="Google Ads" :value="status.googleAds.status" />
+      <MetricCard label="Meta Ads" :value="status.metaAds.status" />
     </section>
 
-    <p v-if="oauthLoading" class="status-line">Conectando Google Ads...</p>
+    <p v-if="oauthLoading" class="status-line">Concluindo conexao OAuth...</p>
     <p v-if="error" class="error">{{ error }}</p>
 
     <section class="settings-layout">
@@ -103,6 +104,98 @@
             </div>
             <EmptyState v-else title="Nenhuma conta conectada" message="Conecte uma conta Google para preparar a publicacao futura no Google Ads." />
           </section>
+
+          <section v-if="selected === 'MetaAds'" class="google-ads-panel">
+            <article class="integration-banner">
+              <div>
+                <strong>Meta Ads: {{ metaStatus?.status || status?.metaAds.status || 'Configuracao inicial pendente' }}</strong>
+                <span v-if="metaStatus?.conectado">{{ metaStatus.nome || metaStatus.metaUserId }}<template v-if="metaStatus.dataConexao"> · conectado em {{ formatDate(metaStatus.dataConexao) }}</template></span>
+                <span v-else>Configure AppId, AppSecret e RedirectUri para conectar a conta Meta.</span>
+              </div>
+              <span class="status" :class="metaStatus?.conectado ? 'status-revisada' : (metaStatus?.configurado || status?.metaAds.configurado ? 'status-gerada' : 'status-erro')">
+                {{ metaStatus?.conectado ? 'Conectado' : (metaStatus?.configurado || status?.metaAds.configurado ? 'Configurado' : 'Pendente') }}
+              </span>
+            </article>
+            <header class="section-heading compact">
+              <div>
+                <h3>Conexao Meta Ads</h3>
+                <span>{{ metaStatus?.conectado ? 'OAuth conectado' : 'Sem conta Meta conectada' }}</span>
+              </div>
+              <div class="actions inline">
+                <button v-if="!metaStatus?.conectado" class="button secondary" :disabled="metaBusy || saving || testing || !(metaStatus?.configurado || status?.metaAds.configurado)" @click="conectarMeta">
+                  {{ metaBusy ? 'Conectando...' : 'Conectar Meta Ads' }}
+                </button>
+                <button v-else class="button secondary" :disabled="metaBusy" @click="desconectarMeta">
+                  {{ metaBusy ? 'Desconectando...' : 'Desconectar' }}
+                </button>
+                <button class="button secondary" disabled>Testar conexao</button>
+              </div>
+            </header>
+            <EmptyState v-if="!metaStatus?.conectado" title="Nenhuma conta Meta conectada" message="A selecao de Business, conta de anuncios, pagina, Instagram e pixel sera adicionada em etapa futura." />
+            <section v-else class="settings-form">
+              <p v-if="metaPermissionNeeded" class="error">Permissoes Meta insuficientes. Reconecte Meta Ads para autorizar os novos acessos de leitura.</p>
+              <p v-else-if="metaAssetsMessage" class="subtitle">{{ metaAssetsMessage }}</p>
+
+              <div class="setting-row">
+                <div>
+                  <label for="metaBusiness">Business</label>
+                  <small>Business Portfolio acessivel pelo usuario conectado.</small>
+                </div>
+                <select id="metaBusiness" v-model="metaSelectionForm.businessId" :disabled="metaAssetsLoading" @change="onMetaBusinessChange">
+                  <option value="">Selecionar Business</option>
+                  <option v-for="item in metaBusinesses" :key="item.id" :value="item.id">{{ item.nome }}</option>
+                </select>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <label for="metaAdAccount">Ad Account</label>
+                  <small>Conta de anuncios vinculada ao Business selecionado.</small>
+                </div>
+                <select id="metaAdAccount" v-model="metaSelectionForm.adAccountId" :disabled="metaAssetsLoading || !metaSelectionForm.businessId" @change="onMetaAdAccountChange">
+                  <option value="">Selecionar Ad Account</option>
+                  <option v-for="item in metaAdAccounts" :key="item.id" :value="item.id">{{ item.nome }}{{ item.moeda ? ` · ${item.moeda}` : '' }}</option>
+                </select>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <label for="metaPage">Facebook Page</label>
+                  <small>Page acessivel pelo usuario conectado.</small>
+                </div>
+                <select id="metaPage" v-model="metaSelectionForm.pageId" :disabled="metaAssetsLoading" @change="onMetaPageChange">
+                  <option value="">Selecionar Page</option>
+                  <option v-for="item in metaPages" :key="item.id" :value="item.id">{{ item.nome }}</option>
+                </select>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <label>Instagram</label>
+                  <small>Instagram Professional vinculado a Page selecionada.</small>
+                </div>
+                <span class="status" :class="selectedInstagram ? 'status-revisada' : 'status-gerada'">
+                  {{ selectedInstagram ? (selectedInstagram.username || selectedInstagram.nome || selectedInstagram.id) : 'Nao vinculado' }}
+                </span>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <label for="metaPixel">Pixel/Dataset</label>
+                  <small>Obtido pela Ad Account quando disponivel para leitura.</small>
+                </div>
+                <select id="metaPixel" v-model="metaSelectionForm.pixelId" :disabled="metaAssetsLoading || !metaSelectionForm.adAccountId">
+                  <option value="">Sem Pixel/Dataset selecionado</option>
+                  <option v-for="item in metaPixels" :key="item.id" :value="item.id">{{ item.nome }}</option>
+                </select>
+              </div>
+
+              <div class="actions">
+                <button class="button secondary" :disabled="metaAssetsLoading" @click="loadMetaAssets">Atualizar ativos</button>
+                <button class="button" :disabled="metaAssetsLoading || metaPermissionNeeded" @click="salvarMetaSelection">{{ metaAssetsLoading ? 'Salvando...' : 'Salvar ativos Meta' }}</button>
+              </div>
+            </section>
+          </section>
         </template>
       </section>
     </section>
@@ -118,13 +211,23 @@ import EmptyState from '../components/EmptyState.vue';
 import { confirmAction, showToast } from '../components/uiEvents';
 import {
   concluirGoogleAdsOAuth,
+  concluirMetaAdsOAuth,
+  desconectarMetaAds,
+  listarMetaAdsAdAccounts,
+  listarMetaAdsBusinesses,
+  listarMetaAdsPages,
+  listarMetaAdsPixels,
   listarGoogleAdsContas,
   obterGoogleAdsAuthUrl,
   obterGoogleAdsAmbiente,
   obterGoogleAdsStatus,
   obterConfiguracaoCategoria,
+  obterMetaAdsAuthUrl,
+  obterMetaAdsAssetSelection,
+  obterMetaAdsStatus,
   obterStatusConfiguracoes,
   selecionarGoogleAdsConta,
+  salvarMetaAdsAssetSelection,
   salvarConfiguracaoCategoria,
   testarGoogleAds,
   testarConfiguracao,
@@ -133,10 +236,17 @@ import {
   type ConfiguracoesStatus,
   type GoogleAdsAmbiente,
   type GoogleAdsConta,
-  type GoogleAdsStatus
+  type GoogleAdsStatus,
+  type MetaAdsAdAccount,
+  type MetaAdsAssetListResponse,
+  type MetaAdsAssetSelection,
+  type MetaAdsBusiness,
+  type MetaAdsPage,
+  type MetaAdsPixel,
+  type MetaAdsStatus
 } from '../services/api';
 
-const categorias: CategoriaConfiguracao[] = ['OpenRouter', 'CampaignGeneration', 'WhatsApp', 'LeadCapture', 'ExternalLeadApi', 'Application', 'Landing', 'GoogleAds'];
+const categorias: CategoriaConfiguracao[] = ['OpenRouter', 'CampaignGeneration', 'WhatsApp', 'LeadCapture', 'ExternalLeadApi', 'Application', 'Landing', 'GoogleAds', 'MetaAds'];
 const route = useRoute();
 const router = useRouter();
 const selected = ref<CategoriaConfiguracao>('OpenRouter');
@@ -145,19 +255,32 @@ const status = ref<ConfiguracoesStatus | null>(null);
 const googleStatus = ref<GoogleAdsStatus | null>(null);
 const googleAmbiente = ref<GoogleAdsAmbiente | null>(null);
 const googleContas = ref<GoogleAdsConta[]>([]);
+const metaStatus = ref<MetaAdsStatus | null>(null);
+const metaSelection = ref<MetaAdsAssetSelection | null>(null);
+const metaBusinesses = ref<MetaAdsBusiness[]>([]);
+const metaAdAccounts = ref<MetaAdsAdAccount[]>([]);
+const metaPages = ref<MetaAdsPage[]>([]);
+const metaPixels = ref<MetaAdsPixel[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const testing = ref(false);
 const googleBusy = ref(false);
+const metaBusy = ref(false);
 const oauthLoading = ref(false);
+const metaAssetsLoading = ref(false);
+const metaAssetsMessage = ref('');
+const metaPermissionNeeded = ref(false);
 const error = ref('');
 const form = reactive<Record<string, string>>({});
 const removeFlags = reactive<Record<string, boolean>>({});
+const metaSelectionForm = reactive({ businessId: '', adAccountId: '', pageId: '', pixelId: '' });
 
 const current = computed(() => configs[selected.value]);
+const selectedInstagram = computed(() => metaPages.value.find((x) => x.id === metaSelectionForm.pageId)?.instagram ?? null);
 
 onMounted(async () => {
   await handleGoogleCallback();
+  await handleMetaCallback();
   await load();
 });
 watch(selected, async () => {
@@ -170,6 +293,9 @@ watch(selected, async () => {
 watch(selected, async (value) => {
   if (value === 'GoogleAds') {
     await loadGoogleAds();
+  }
+  if (value === 'MetaAds') {
+    await loadMetaAds();
   }
 });
 
@@ -187,10 +313,108 @@ async function load() {
     if (selected.value === 'GoogleAds') {
       await loadGoogleAds();
     }
+    if (selected.value === 'MetaAds') {
+      await loadMetaAds();
+    }
   } catch {
     error.value = `Nao foi possivel carregar as configuracoes de ${labelCategoria(selected.value)}.`;
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadMetaAds() {
+  try {
+    metaStatus.value = await obterMetaAdsStatus();
+    if (metaStatus.value.conectado) {
+      await loadMetaAssets();
+    }
+  } catch {
+    metaStatus.value = { configurado: false, conectado: false, contaSelecionada: false, status: 'Erro' };
+  }
+}
+
+async function loadMetaAssets() {
+  metaAssetsLoading.value = true;
+  metaAssetsMessage.value = '';
+  metaPermissionNeeded.value = false;
+  try {
+    metaSelection.value = await obterMetaAdsAssetSelection();
+    metaSelectionForm.businessId = metaSelection.value.businessId || '';
+    metaSelectionForm.adAccountId = metaSelection.value.adAccountId || '';
+    metaSelectionForm.pageId = metaSelection.value.pageId || '';
+    metaSelectionForm.pixelId = metaSelection.value.pixelId || '';
+
+    const [businesses, pages] = await Promise.all([listarMetaAdsBusinesses(), listarMetaAdsPages()]);
+    applyMetaList(businesses, metaBusinesses);
+    applyMetaList(pages, metaPages);
+
+    if (metaSelectionForm.businessId) {
+      applyMetaList(await listarMetaAdsAdAccounts(metaSelectionForm.businessId), metaAdAccounts);
+    } else {
+      metaAdAccounts.value = [];
+    }
+
+    if (metaSelectionForm.adAccountId) {
+      applyMetaList(await listarMetaAdsPixels(metaSelectionForm.adAccountId), metaPixels);
+    } else {
+      metaPixels.value = [];
+    }
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel carregar ativos Meta.');
+  } finally {
+    metaAssetsLoading.value = false;
+  }
+}
+
+async function onMetaBusinessChange() {
+  metaSelectionForm.adAccountId = '';
+  metaSelectionForm.pixelId = '';
+  metaAdAccounts.value = [];
+  metaPixels.value = [];
+  if (!metaSelectionForm.businessId) return;
+  metaAssetsLoading.value = true;
+  try {
+    applyMetaList(await listarMetaAdsAdAccounts(metaSelectionForm.businessId), metaAdAccounts);
+  } finally {
+    metaAssetsLoading.value = false;
+  }
+}
+
+async function onMetaAdAccountChange() {
+  metaSelectionForm.pixelId = '';
+  metaPixels.value = [];
+  if (!metaSelectionForm.adAccountId) return;
+  metaAssetsLoading.value = true;
+  try {
+    applyMetaList(await listarMetaAdsPixels(metaSelectionForm.adAccountId), metaPixels);
+  } finally {
+    metaAssetsLoading.value = false;
+  }
+}
+
+function onMetaPageChange() {
+  // Instagram e derivado da Page retornada pela API Meta.
+}
+
+async function salvarMetaSelection() {
+  metaAssetsLoading.value = true;
+  error.value = '';
+  try {
+    metaSelection.value = await salvarMetaAdsAssetSelection({
+      businessId: metaSelectionForm.businessId || undefined,
+      adAccountId: metaSelectionForm.adAccountId || undefined,
+      pageId: metaSelectionForm.pageId || undefined,
+      pixelId: metaSelectionForm.pixelId || undefined
+    });
+    metaStatus.value = await obterMetaAdsStatus();
+    status.value = await obterStatusConfiguracoes();
+    showToast({ type: 'success', title: 'Ativos Meta salvos' });
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel salvar os ativos Meta.');
+    showToast({ type: 'error', title: 'Erro ao salvar', message: error.value });
+  } finally {
+    metaAssetsLoading.value = false;
   }
 }
 
@@ -228,6 +452,21 @@ async function conectarGoogle() {
     showToast({ type: 'error', title: 'Erro ao conectar', message: error.value });
   } finally {
     googleBusy.value = false;
+  }
+}
+
+async function conectarMeta() {
+  metaBusy.value = true;
+  error.value = '';
+  try {
+    const result = await obterMetaAdsAuthUrl();
+    window.sessionStorage.setItem('metaAdsOAuthState', result.state);
+    window.location.href = result.url;
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel iniciar o OAuth Meta Ads.');
+    showToast({ type: 'error', title: 'Erro ao conectar', message: error.value });
+  } finally {
+    metaBusy.value = false;
   }
 }
 
@@ -269,6 +508,50 @@ async function handleGoogleCallback() {
   }
 }
 
+async function handleMetaCallback() {
+  const metaCallback = route.query.metaAdsCallback;
+  const code = typeof route.query.code === 'string' ? route.query.code : '';
+  const state = typeof route.query.state === 'string' ? route.query.state : '';
+  if (metaCallback !== '1') return;
+  selected.value = 'MetaAds';
+  if (!code || !state) {
+    error.value = 'Callback OAuth Meta incompleto. Tente conectar novamente.';
+    await limparOAuthUrl();
+    return;
+  }
+
+  const expectedState = window.sessionStorage.getItem('metaAdsOAuthState');
+  if (expectedState && expectedState !== state) {
+    error.value = 'State OAuth Meta invalido. Tente conectar novamente.';
+    showToast({ type: 'error', title: 'OAuth invalido', message: 'State recebido nao confere.' });
+    await limparOAuthUrl();
+    return;
+  }
+
+  metaBusy.value = true;
+  oauthLoading.value = true;
+  try {
+    const result = await concluirMetaAdsOAuth({ code, state });
+    metaStatus.value = result.status;
+    await Promise.all([loadMetaAds(), load()]);
+    showToast({ type: 'success', title: result.mensagem || 'Meta Ads conectado com sucesso' });
+    const redirect = window.sessionStorage.getItem('metaAdsOAuthRedirect');
+    if (redirect) {
+      window.sessionStorage.removeItem('metaAdsOAuthRedirect');
+      await router.replace(redirect);
+      return;
+    }
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel concluir a conexao Meta Ads.');
+    showToast({ type: 'error', title: 'Erro no OAuth', message: error.value });
+  } finally {
+    metaBusy.value = false;
+    oauthLoading.value = false;
+    window.sessionStorage.removeItem('metaAdsOAuthState');
+    await limparOAuthUrl();
+  }
+}
+
 async function limparOAuthUrl() {
   await router.replace({ path: '/configuracoes', query: {} });
 }
@@ -298,6 +581,32 @@ async function testarConexaoGoogle() {
     showToast({ type: 'error', title: 'Erro no teste', message: error.value });
   } finally {
     googleBusy.value = false;
+  }
+}
+
+async function desconectarMeta() {
+  const confirmed = await confirmAction({
+    title: 'Desconectar Meta Ads',
+    message: 'A conexao local sera removida. O acesso remoto no Meta Developers nao sera revogado nesta etapa.',
+    confirmLabel: 'Desconectar'
+  });
+  if (!confirmed) return;
+
+  metaBusy.value = true;
+  try {
+    metaStatus.value = await desconectarMetaAds();
+    metaSelection.value = null;
+    metaBusinesses.value = [];
+    metaAdAccounts.value = [];
+    metaPages.value = [];
+    metaPixels.value = [];
+    status.value = await obterStatusConfiguracoes();
+    showToast({ type: 'info', title: 'Meta Ads desconectado' });
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel desconectar Meta Ads.');
+    showToast({ type: 'error', title: 'Erro ao desconectar', message: error.value });
+  } finally {
+    metaBusy.value = false;
   }
 }
 
@@ -362,7 +671,8 @@ function labelCategoria(categoria: CategoriaConfiguracao) {
     ExternalLeadApi: 'API externa',
     Application: 'Aplicacao',
     Landing: 'Landing',
-    GoogleAds: 'Google Ads'
+    GoogleAds: 'Google Ads',
+    MetaAds: 'Meta Ads'
   };
   return labels[categoria];
 }
@@ -376,7 +686,8 @@ function description(categoria: CategoriaConfiguracao) {
     ExternalLeadApi: 'Preparacao para API externa futura.',
     Application: 'URL publica para landings e links.',
     Landing: 'Textos padrao da experiencia publica.',
-    GoogleAds: 'OAuth, developer token e conta padrao para publicacao futura.'
+    GoogleAds: 'OAuth, developer token e conta padrao para publicacao futura.',
+    MetaAds: 'App, segredo e callback para preparar OAuth futuro.'
   };
   return labels[categoria];
 }
@@ -384,5 +695,19 @@ function description(categoria: CategoriaConfiguracao) {
 function message(err: unknown, fallback: string) {
   const response = err as { response?: { data?: { mensagem?: string } } };
   return response.response?.data?.mensagem || fallback;
+}
+
+function applyMetaList<T>(result: MetaAdsAssetListResponse<T>, target: { value: T[] }) {
+  if (result.permissaoNecessaria) {
+    metaPermissionNeeded.value = true;
+  }
+  if (result.mensagem) {
+    metaAssetsMessage.value = result.mensagem;
+  }
+  target.value = result.itens;
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 </script>

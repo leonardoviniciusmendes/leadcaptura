@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5018',
+  baseURL: import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '/' : 'http://localhost:5018'),
   timeout: 15000
 });
 
@@ -160,7 +160,8 @@ export type CategoriaConfiguracao =
   | 'ExternalLeadApi'
   | 'Application'
   | 'Landing'
-  | 'GoogleAds';
+  | 'GoogleAds'
+  | 'MetaAds';
 
 export interface ConfiguracaoItem {
   chave: string;
@@ -184,6 +185,7 @@ export interface ConfiguracoesStatus {
   externalLeadApi: { configurado: boolean; status: string };
   urlPublica: { configurado: boolean; status: string };
   googleAds: { configurado: boolean; status: string };
+  metaAds: { configurado: boolean; conectado: boolean; contaSelecionada: boolean; status: string };
   pendencias: string[];
 }
 
@@ -360,6 +362,167 @@ export interface GoogleAdsAmbiente {
   pendencias: string[];
 }
 
+export interface MetaAdsStatus {
+  configurado: boolean;
+  conectado: boolean;
+  contaSelecionada: boolean;
+  status: string;
+  contaId?: string;
+  metaUserId?: string;
+  nome?: string;
+  dataConexao?: string;
+  accessTokenExpiraEm?: string;
+}
+
+export interface MetaAdsAuthUrl {
+  url: string;
+  state: string;
+}
+
+export interface MetaAdsOAuthCallback {
+  sucesso: boolean;
+  conectado: boolean;
+  mensagem: string;
+  status: MetaAdsStatus;
+}
+
+export interface MetaAdsAssetListResponse<T> {
+  sucesso: boolean;
+  itens: T[];
+  mensagem?: string;
+  permissaoNecessaria: boolean;
+}
+
+export interface MetaAdsBusiness { id: string; nome: string }
+export interface MetaAdsAdAccount { id: string; accountId?: string; nome: string; status?: string; moeda?: string }
+export interface MetaAdsInstagramAccount { id: string; nome?: string; username?: string }
+export interface MetaAdsPage { id: string; nome: string; instagram?: MetaAdsInstagramAccount }
+export interface MetaAdsPixel { id: string; nome: string }
+export interface MetaAdsAssetSelection {
+  id?: string;
+  metaAdsContaId?: string;
+  businessId?: string;
+  businessNome?: string;
+  adAccountId?: string;
+  adAccountNome?: string;
+  pageId?: string;
+  pageNome?: string;
+  instagramAccountId?: string;
+  instagramNome?: string;
+  pixelId?: string;
+  pixelNome?: string;
+  dataAtualizacao?: string;
+}
+
+export interface MetaAdsPreview {
+  campanhaId: string;
+  assets: {
+    businessId?: string;
+    businessNome?: string;
+    adAccountId?: string;
+    adAccountNome?: string;
+    pageId?: string;
+    pageNome?: string;
+    instagramAccountId?: string;
+    instagramNome?: string;
+    pixelId?: string;
+    pixelNome?: string;
+  };
+  campaign: {
+    name: string;
+    objective: string;
+    status: string;
+    specialAdCategory: string;
+    specialAdCategories: string[];
+  };
+  adSet: {
+    name: string;
+    campaignObjective: string;
+    dailyBudget: number;
+    dailyBudgetMinorUnits?: number;
+    currency?: string;
+    billingEvent: string;
+    optimizationGoal: string;
+    bidStrategy: string;
+    targeting: { countries: string[]; location?: MetaAdsLocation; regionText?: string; cityText?: string; ageMin: number; ageMax: number };
+    startTime?: string;
+    endTime?: string;
+    pixelId?: string;
+  };
+  creative: {
+    pageId?: string;
+    instagramAccountId?: string;
+    primaryText: string;
+    headline: string;
+    description: string;
+    destinationUrl: string;
+    callToAction: string;
+    imageUrl?: string;
+    mediaReference?: string;
+    metaImageHash?: string;
+    mediaUploaded: boolean;
+  };
+  ad: { name: string; status: string };
+  preflight: { readyToPublish: boolean; items: Array<{ code: string; status: 'OK' | 'WARNING' | 'ERROR' | string; message: string }> };
+}
+
+export interface MetaAdsLocation {
+  key: string;
+  name: string;
+  type: string;
+  countryCode?: string;
+  countryName?: string;
+  region?: string;
+  regionId?: string;
+  supportsRegion: boolean;
+  supportsCity: boolean;
+}
+
+export interface MetaAdsLocationSearchResponse {
+  sucesso: boolean;
+  itens: MetaAdsLocation[];
+  mensagem?: string;
+  permissaoNecessaria: boolean;
+}
+
+export interface MetaAdsUploadImageResponse {
+  sucesso: boolean;
+  imagemId?: string;
+  nomeArquivo: string;
+  contentType: string;
+  tamanhoBytes?: number;
+  contentHash: string;
+  metaImageHash?: string;
+  reutilizado: boolean;
+  dataUpload?: string;
+  mensagem: string;
+}
+
+export interface MetaAdsPublicacao {
+  id: string;
+  campanhaId: string;
+  status: string;
+  ultimaEtapaConcluida: string;
+  campaignExternalId?: string;
+  adSetExternalId?: string;
+  creativeExternalId?: string;
+  adExternalId?: string;
+  dataInicio: string;
+  dataConclusao?: string;
+  dataAtualizacao?: string;
+  ultimoErroCodigo?: string;
+  ultimoErroSubcodigo?: string;
+  ultimoErroMensagem?: string;
+  fbTraceId?: string;
+  podeTentarNovamente: boolean;
+  mensagem: string;
+}
+
+export interface MetaAdsPublicationStatus {
+  existe: boolean;
+  publicacao?: MetaAdsPublicacao;
+}
+
 export type StatusGoogleAdsPreview = 'Rascunho' | 'Valido' | 'Invalido' | 'Desatualizado' | 'Publicado' | 'Erro';
 
 export interface GoogleAdsPreview {
@@ -491,6 +654,98 @@ export async function selecionarGoogleAdsConta(id: string): Promise<GoogleAdsCon
 
 export async function testarGoogleAds(contaId?: string): Promise<GoogleAdsTeste> {
   const { data } = await api.post<GoogleAdsTeste>('/api/googleads/testar', { contaId });
+  return data;
+}
+
+export async function obterMetaAdsStatus(): Promise<MetaAdsStatus> {
+  const { data } = await api.get<MetaAdsStatus>('/api/metaads/status');
+  return data;
+}
+
+export async function obterMetaAdsAuthUrl(publicacao = false): Promise<MetaAdsAuthUrl> {
+  const { data } = await api.get<MetaAdsAuthUrl>('/api/metaads/auth-url', { params: { publicacao } });
+  return data;
+}
+
+export async function concluirMetaAdsOAuth(payload: { code: string; state?: string }): Promise<MetaAdsOAuthCallback> {
+  const { data } = await api.post<MetaAdsOAuthCallback>('/api/metaads/oauth/callback', payload);
+  return data;
+}
+
+export async function desconectarMetaAds(): Promise<MetaAdsStatus> {
+  const { data } = await api.post<MetaAdsStatus>('/api/metaads/disconnect');
+  return data;
+}
+
+export async function listarMetaAdsBusinesses(): Promise<MetaAdsAssetListResponse<MetaAdsBusiness>> {
+  const { data } = await api.get<MetaAdsAssetListResponse<MetaAdsBusiness>>('/api/metaads/businesses');
+  return data;
+}
+
+export async function listarMetaAdsAdAccounts(businessId: string): Promise<MetaAdsAssetListResponse<MetaAdsAdAccount>> {
+  const { data } = await api.get<MetaAdsAssetListResponse<MetaAdsAdAccount>>(`/api/metaads/businesses/${encodeURIComponent(businessId)}/ad-accounts`);
+  return data;
+}
+
+export async function listarMetaAdsPages(): Promise<MetaAdsAssetListResponse<MetaAdsPage>> {
+  const { data } = await api.get<MetaAdsAssetListResponse<MetaAdsPage>>('/api/metaads/pages');
+  return data;
+}
+
+export async function obterMetaAdsInstagram(pageId: string): Promise<MetaAdsAssetListResponse<MetaAdsInstagramAccount>> {
+  const { data } = await api.get<MetaAdsAssetListResponse<MetaAdsInstagramAccount>>(`/api/metaads/pages/${encodeURIComponent(pageId)}/instagram`);
+  return data;
+}
+
+export async function listarMetaAdsPixels(adAccountId: string): Promise<MetaAdsAssetListResponse<MetaAdsPixel>> {
+  const { data } = await api.get<MetaAdsAssetListResponse<MetaAdsPixel>>(`/api/metaads/ad-accounts/${encodeURIComponent(adAccountId)}/pixels`);
+  return data;
+}
+
+export async function obterMetaAdsAssetSelection(): Promise<MetaAdsAssetSelection> {
+  const { data } = await api.get<MetaAdsAssetSelection>('/api/metaads/assets-selection');
+  return data;
+}
+
+export async function salvarMetaAdsAssetSelection(payload: { businessId?: string; adAccountId?: string; pageId?: string; pixelId?: string }): Promise<MetaAdsAssetSelection> {
+  const { data } = await api.put<MetaAdsAssetSelection>('/api/metaads/assets-selection', payload);
+  return data;
+}
+
+export async function gerarMetaAdsPreview(payload: { campanhaId: string; specialAdCategory?: string; idadeMinima?: number; idadeMaxima?: number; locationKey?: string }): Promise<MetaAdsPreview> {
+  const { data } = await api.post<MetaAdsPreview>('/api/metaads/preview', payload);
+  return data;
+}
+
+export async function buscarMetaAdsLocalizacoes(query: string): Promise<MetaAdsLocationSearchResponse> {
+  const { data } = await api.get<MetaAdsLocationSearchResponse>('/api/metaads/targeting/locations', { params: { query } });
+  return data;
+}
+
+export async function salvarMetaAdsTargeting(payload: { campanhaId: string; locationKey: string; idadeMinima?: number; idadeMaxima?: number }): Promise<MetaAdsLocation> {
+  const { data } = await api.put<MetaAdsLocation>('/api/metaads/publication-targeting', payload);
+  return data;
+}
+
+export async function enviarMetaAdsImagem(campanhaId: string, file: File): Promise<MetaAdsUploadImageResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await api.post<MetaAdsUploadImageResponse>(`/api/metaads/campaigns/${campanhaId}/image`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return data;
+}
+
+export async function obterMetaAdsPublicacao(campanhaId: string): Promise<MetaAdsPublicationStatus> {
+  const { data } = await api.get<MetaAdsPublicationStatus>(`/api/metaads/campaigns/${campanhaId}/publication`);
+  return data;
+}
+
+export async function publicarMetaAds(campanhaId: string): Promise<MetaAdsPublicacao> {
+  const { data } = await api.post<MetaAdsPublicacao>(`/api/metaads/campaigns/${campanhaId}/publish`);
+  return data;
+}
+
+export async function retentarMetaAdsPublicacao(id: string): Promise<MetaAdsPublicacao> {
+  const { data } = await api.post<MetaAdsPublicacao>(`/api/metaads/publicacoes/${id}/retry`);
   return data;
 }
 
