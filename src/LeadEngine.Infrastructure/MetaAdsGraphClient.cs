@@ -1,14 +1,16 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using LeadEngine.Application.Common;
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
+using Microsoft.Extensions.Logging;
 
 namespace LeadEngine.Infrastructure;
 
-public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory) : IMetaAdsGraphClient
+public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILogger<MetaAdsGraphClient> logger) : IMetaAdsGraphClient
 {
     private const int MaxPages = 10;
 
@@ -311,7 +313,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory) : I
         };
     }
 
-    private static MetaAdsGraphApiException ParseError(string body, System.Net.HttpStatusCode? statusCode = null)
+    private MetaAdsGraphApiException ParseError(string body, System.Net.HttpStatusCode? statusCode = null)
     {
         try
         {
@@ -322,16 +324,51 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory) : I
                 var subcode = error.TryGetProperty("error_subcode", out var subcodeValue) ? subcodeValue.ToString() : null;
                 var type = S(error, "type") ?? "erro";
                 var trace = S(error, "fbtrace_id");
+                var metaMessage = SanitizeMetaMessage(S(error, "message"));
                 var permission = code is "10" or "200" || string.Equals(type, "OAuthException", StringComparison.OrdinalIgnoreCase);
-                return new MetaAdsGraphApiException($"Falha Graph API Meta ({type} {code}).", code, permission, statusCode, subcode, type, trace);
+                LogMetaError(statusCode, type, code, subcode, trace, metaMessage);
+                var message = string.IsNullOrWhiteSpace(metaMessage) ? $"Falha Graph API Meta ({type} {code})." : metaMessage;
+                return new MetaAdsGraphApiException(message, code, permission, statusCode, subcode, type, trace, metaMessage);
             }
         }
-        catch
+        catch (JsonException)
         {
+            LogMetaError(statusCode, null, "meta_api_error", null, null, "Resposta de erro Meta nao estava em JSON valido.");
             return new MetaAdsGraphApiException("Falha ao consultar Graph API Meta.", "meta_api_error", false, statusCode);
         }
 
+        LogMetaError(statusCode, null, "meta_api_error", null, null, "Resposta de erro Meta sem objeto error.");
         return new MetaAdsGraphApiException("Falha ao consultar Graph API Meta.", "meta_api_error", false, statusCode);
+    }
+
+    private void LogMetaError(System.Net.HttpStatusCode? statusCode, string? type, string? code, string? subcode, string? trace, string? message)
+    {
+        logger.LogWarning(
+            "Meta Graph API error. HttpStatus={HttpStatus} MetaType={MetaType} MetaCode={MetaCode} MetaSubcode={MetaSubcode} FbTraceId={FbTraceId} MetaMessage={MetaMessage}",
+            statusCode?.ToString(),
+            type,
+            code,
+            subcode,
+            trace,
+            message);
+    }
+
+    private static string? SanitizeMetaMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return null;
+        }
+
+        var sanitized = message
+            .Replace("\r", " ")
+            .Replace("\n", " ")
+            .Replace("\t", " ")
+            .Trim();
+        sanitized = Regex.Replace(sanitized, "(access_token|client_secret|appsecret_proof)=([^\\s&]+)", "$1=[redacted]", RegexOptions.IgnoreCase);
+        sanitized = Regex.Replace(sanitized, "Bearer\\s+[^\\s]+", "Bearer [redacted]", RegexOptions.IgnoreCase);
+
+        return sanitized.Length <= 500 ? sanitized : sanitized[..500];
     }
 
     private static MetaAdsAdAccountResponse ToAdAccount(JsonElement item)

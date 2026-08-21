@@ -9,7 +9,8 @@ public sealed class MetaAdsGraphApiException(
     HttpStatusCode? httpStatusCode = null,
     string? errorSubcode = null,
     string? type = null,
-    string? fbTraceId = null) : InvalidOperationException(message)
+    string? fbTraceId = null,
+    string? metaMessage = null) : InvalidOperationException(message)
 {
     public string Code { get; } = code;
     public bool PermissionRequired { get; } = permissionRequired;
@@ -17,4 +18,5 @@ public sealed class MetaAdsGraphApiException(
     public string? ErrorSubcode { get; } = errorSubcode;
     public string? Type { get; } = type;
     public string? FbTraceId { get; } = fbTraceId;
+    public string? MetaMessage { get; } = metaMessage;
 }
