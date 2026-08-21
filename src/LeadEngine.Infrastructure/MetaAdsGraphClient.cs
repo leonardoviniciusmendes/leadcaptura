@@ -157,14 +157,15 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
     public async Task<MetaAdsCreateResult> CreateCampaignAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsCampaignCreatePayload payload, CancellationToken cancellationToken)
     {
         logger.LogInformation(
-            "Meta Campaign create request fields. Edge={MetaEdge} FieldNames={FieldNames} Name={CampaignName} Objective={Objective} BuyingType={BuyingType} SpecialAdCategories={SpecialAdCategories} Status={Status}",
+            "Meta Campaign create request fields. Edge={MetaEdge} FieldNames={FieldNames} Name={CampaignName} Objective={Objective} BuyingType={BuyingType} SpecialAdCategories={SpecialAdCategories} Status={Status} IsAdsetBudgetSharingEnabled={IsAdsetBudgetSharingEnabled}",
             "campaigns",
-            "name,objective,buying_type,special_ad_categories,status",
+            "name,objective,buying_type,special_ad_categories,status,is_adset_budget_sharing_enabled",
             SanitizeMetaMessage(payload.Name),
             payload.Objective,
             "AUCTION",
             JsonSerializer.Serialize(payload.SpecialAdCategories),
-            "PAUSED");
+            "PAUSED",
+            false);
 
         return await PostFormForIdAsync(config, accessToken, adAccountId, "campaigns", new()
         {
@@ -172,7 +173,8 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
             ["objective"] = payload.Objective,
             ["buying_type"] = "AUCTION",
             ["special_ad_categories"] = JsonSerializer.Serialize(payload.SpecialAdCategories),
-            ["status"] = "PAUSED"
+            ["status"] = "PAUSED",
+            ["is_adset_budget_sharing_enabled"] = "false"
         }, cancellationToken);
     }
 
