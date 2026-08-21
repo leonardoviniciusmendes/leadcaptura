@@ -156,6 +156,16 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
 
     public async Task<MetaAdsCreateResult> CreateCampaignAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsCampaignCreatePayload payload, CancellationToken cancellationToken)
     {
+        logger.LogInformation(
+            "Meta Campaign create request fields. Edge={MetaEdge} FieldNames={FieldNames} Name={CampaignName} Objective={Objective} BuyingType={BuyingType} SpecialAdCategories={SpecialAdCategories} Status={Status}",
+            "campaigns",
+            "name,objective,buying_type,special_ad_categories,status",
+            SanitizeMetaMessage(payload.Name),
+            payload.Objective,
+            "AUCTION",
+            JsonSerializer.Serialize(payload.SpecialAdCategories),
+            "PAUSED");
+
         return await PostFormForIdAsync(config, accessToken, adAccountId, "campaigns", new()
         {
             ["name"] = payload.Name,
@@ -325,32 +335,80 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
                 var type = S(error, "type") ?? "erro";
                 var trace = S(error, "fbtrace_id");
                 var metaMessage = SanitizeMetaMessage(S(error, "message"));
+                var errorUserTitle = SanitizeMetaMessage(S(error, "error_user_title"));
+                var errorUserMessage = SanitizeMetaMessage(S(error, "error_user_msg"));
+                var errorData = SanitizedJson(error, "error_data");
+                var blameField = SanitizedNestedJson(error, "error_data", "blame_field");
+                var blameFieldSpecs = SanitizedNestedJson(error, "error_data", "blame_field_specs");
+                var isTransient = error.TryGetProperty("is_transient", out var transientValue) && transientValue.ValueKind is JsonValueKind.True or JsonValueKind.False
+                    ? transientValue.GetBoolean()
+                    : (bool?)null;
                 var permission = code is "10" or "200" || string.Equals(type, "OAuthException", StringComparison.OrdinalIgnoreCase);
-                LogMetaError(statusCode, type, code, subcode, trace, metaMessage);
+                LogMetaError(statusCode, type, code, subcode, trace, metaMessage, errorUserTitle, errorUserMessage, errorData, blameField, blameFieldSpecs, isTransient);
                 var message = string.IsNullOrWhiteSpace(metaMessage) ? $"Falha Graph API Meta ({type} {code})." : metaMessage;
-                return new MetaAdsGraphApiException(message, code, permission, statusCode, subcode, type, trace, metaMessage);
+                return new MetaAdsGraphApiException(message, code, permission, statusCode, subcode, type, trace, metaMessage, errorUserTitle, errorUserMessage, errorData, blameField, blameFieldSpecs, isTransient);
             }
         }
         catch (JsonException)
         {
-            LogMetaError(statusCode, null, "meta_api_error", null, null, "Resposta de erro Meta nao estava em JSON valido.");
+            LogMetaError(statusCode, null, "meta_api_error", null, null, "Resposta de erro Meta nao estava em JSON valido.", null, null, null, null, null, null);
             return new MetaAdsGraphApiException("Falha ao consultar Graph API Meta.", "meta_api_error", false, statusCode);
         }
 
-        LogMetaError(statusCode, null, "meta_api_error", null, null, "Resposta de erro Meta sem objeto error.");
+        LogMetaError(statusCode, null, "meta_api_error", null, null, "Resposta de erro Meta sem objeto error.", null, null, null, null, null, null);
         return new MetaAdsGraphApiException("Falha ao consultar Graph API Meta.", "meta_api_error", false, statusCode);
     }
 
-    private void LogMetaError(System.Net.HttpStatusCode? statusCode, string? type, string? code, string? subcode, string? trace, string? message)
+    private void LogMetaError(
+        System.Net.HttpStatusCode? statusCode,
+        string? type,
+        string? code,
+        string? subcode,
+        string? trace,
+        string? message,
+        string? errorUserTitle,
+        string? errorUserMessage,
+        string? errorData,
+        string? blameField,
+        string? blameFieldSpecs,
+        bool? isTransient)
     {
         logger.LogWarning(
-            "Meta Graph API error. HttpStatus={HttpStatus} MetaType={MetaType} MetaCode={MetaCode} MetaSubcode={MetaSubcode} FbTraceId={FbTraceId} MetaMessage={MetaMessage}",
+            "Meta Graph API error. HttpStatus={HttpStatus} MetaType={MetaType} MetaCode={MetaCode} MetaSubcode={MetaSubcode} FbTraceId={FbTraceId} MetaMessage={MetaMessage} ErrorUserTitle={ErrorUserTitle} ErrorUserMessage={ErrorUserMessage} ErrorData={ErrorData} BlameField={BlameField} BlameFieldSpecs={BlameFieldSpecs} IsTransient={IsTransient}",
             statusCode?.ToString(),
             type,
             code,
             subcode,
             trace,
-            message);
+            message,
+            errorUserTitle,
+            errorUserMessage,
+            errorData,
+            blameField,
+            blameFieldSpecs,
+            isTransient);
+    }
+
+    private static string? SanitizedJson(JsonElement element, string property)
+    {
+        if (!element.TryGetProperty(property, out var value))
+        {
+            return null;
+        }
+
+        return SanitizeMetaMessage(value.ToString());
+    }
+
+    private static string? SanitizedNestedJson(JsonElement element, string parent, string property)
+    {
+        if (!element.TryGetProperty(parent, out var parentValue)
+            || parentValue.ValueKind != JsonValueKind.Object
+            || !parentValue.TryGetProperty(property, out var value))
+        {
+            return null;
+        }
+
+        return SanitizeMetaMessage(value.ToString());
     }
 
     private static string? SanitizeMetaMessage(string? message)
