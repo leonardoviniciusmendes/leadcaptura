@@ -2,7 +2,7 @@
   <main class="public-page">
     <section v-if="loading" class="public-band">Carregando...</section>
     <section v-else-if="error" class="public-band">
-      <h1>Landing page indisponivel</h1>
+      <h1>Landing page indisponível</h1>
       <p>{{ error }}</p>
     </section>
     <template v-else-if="campanha">
@@ -16,12 +16,12 @@
             <span v-for="beneficio in heroBeneficios" :key="beneficio">{{ beneficio }}</span>
           </div>
 
-          <p class="hero-note">Cotacao sem compromisso, com atendimento personalizado para seu perfil.</p>
+          <p class="hero-note">Cotação sem compromisso, com atendimento personalizado para seu perfil.</p>
         </div>
 
         <form class="panel public-form lead-card-form" @submit.prevent="submit">
           <div class="form-heading">
-            <span>Receba sua cotacao</span>
+            <span>Receba sua cotação</span>
             <h2>{{ ctaText }}</h2>
             <p>{{ campanha.cidade }}/{{ campanha.estado }} - {{ labelPublico(campanha.tipoPublico) }}</p>
           </div>
@@ -37,7 +37,7 @@
 
           <label class="consent">
             <input v-model="form.consentimento" type="checkbox" required />
-            Autorizo contato sobre esta cotacao e entendo que meus dados serao usados apenas para essa solicitacao.
+            Autorizo contato sobre esta cotação e entendo que meus dados serão usados apenas para essa solicitação.
           </label>
           <input v-model="form.website" class="hp-field" tabindex="-1" autocomplete="off" />
           <p v-if="submitError" class="error">{{ submitError }}</p>
@@ -51,31 +51,31 @@
       <section class="public-band">
         <div class="section-heading commercial-heading">
           <span>Como funciona</span>
-          <h2>Um caminho simples para comparar opcoes</h2>
+          <h2>Um caminho simples para comparar opções</h2>
         </div>
         <div class="steps-grid">
           <article>
             <strong>01</strong>
             <h3>Informe seus dados</h3>
-            <p>Voce envia o essencial para iniciarmos a cotacao.</p>
+            <p>Você envia o essencial para iniciarmos a cotação.</p>
           </article>
           <article>
             <strong>02</strong>
             <h3>Analisamos seu perfil</h3>
-            <p>Consideramos quantidade de vidas, localidade e tipo de contratacao.</p>
+            <p>Consideramos quantidade de vidas, localidade e tipo de contratação.</p>
           </article>
           <article>
             <strong>03</strong>
-            <h3>Receba opcoes para comparar</h3>
-            <p>Um atendimento consultivo ajuda voce a avaliar alternativas.</p>
+            <h3>Receba opções para comparar</h3>
+            <p>Um atendimento consultivo ajuda você a avaliar alternativas.</p>
           </article>
         </div>
       </section>
 
       <section class="public-band">
         <div class="section-heading commercial-heading">
-          <span>Beneficios</span>
-          <h2>Diferenciais desta cotacao</h2>
+          <span>Benefícios</span>
+          <h2>Diferenciais desta cotação</h2>
         </div>
         <div class="benefit-cards">
           <article v-for="beneficio in campanha.beneficios" :key="beneficio">
@@ -87,30 +87,30 @@
 
       <section class="public-band public-trust">
         <div>
-          <p class="eyebrow">Atendimento e seguranca</p>
-          <h2>Dados usados somente para contato sobre esta solicitacao</h2>
+          <p class="eyebrow">Atendimento e segurança</p>
+          <h2>Dados usados somente para contato sobre esta solicitação</h2>
         </div>
         <div class="trust-grid">
           <article>
             <strong>Atendimento personalizado</strong>
-            <p>A cotacao considera as informacoes enviadas no formulario.</p>
+            <p>A cotação considera as informações enviadas no formulário.</p>
           </article>
           <article>
-            <strong>Cotacao sem compromisso</strong>
-            <p>Voce recebe orientacao para comparar opcoes antes de decidir.</p>
+            <strong>Cotação sem compromisso</strong>
+            <p>Você recebe orientação para comparar opções antes de decidir.</p>
           </article>
           <article>
             <strong>Tratamento seguro dos dados</strong>
-            <p>O contato ocorre apenas mediante consentimento explicito.</p>
+            <p>O contato ocorre apenas mediante consentimento explícito.</p>
           </article>
         </div>
-        <p class="notice">Valores, redes, carencias e coberturas dependem do plano, perfil, regiao e regras da operadora.</p>
+        <p class="notice">Valores, redes, carências e coberturas dependem do plano, perfil, região e regras da operadora.</p>
       </section>
 
       <section class="public-band">
         <div class="section-heading commercial-heading">
-          <span>Duvidas frequentes</span>
-          <h2>Informacoes importantes antes de contratar</h2>
+          <span>Dúvidas frequentes</span>
+          <h2>Informações importantes antes de contratar</h2>
         </div>
         <div class="faq-list">
           <details v-for="item in campanha.perguntasFrequentes" :key="item.pergunta">
@@ -121,9 +121,16 @@
       </section>
 
       <footer class="public-footer">
-        <strong>{{ campanha.nome }}</strong>
-        <span>{{ campanha.operadora }} - {{ campanha.cidade }}/{{ campanha.estado }}</span>
-        <small>Informacoes institucionais, Politica de Privacidade e Termos de Uso podem ser exibidos aqui quando estiverem disponiveis no sistema.</small>
+        <strong>Atendimento e cotação de planos de saúde</strong>
+        <span>Responsável pelo atendimento e pelas solicitações de cotação: Amanda Pereira Pinto.</span>
+        <small>Este site não é uma operadora de planos de saúde. As informações apresentadas têm finalidade de atendimento e solicitação de cotação.</small>
+        <small>Preços, coberturas, carências, rede credenciada, disponibilidade e demais condições dependem do perfil informado, da proposta apresentada e das regras da respectiva operadora.</small>
+        <small>
+          <RouterLink to="/politica-de-privacidade">Política de Privacidade</RouterLink>
+          <span> | </span>
+          <RouterLink to="/termos-de-uso">Termos de Uso</RouterLink>
+        </small>
+        <small>Plataforma tecnológica LeadEngine, desenvolvida pela Consultoria Dev / L.V. Mendes Informática.</small>
       </footer>
     </template>
   </main>
