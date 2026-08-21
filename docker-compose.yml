@@ -66,6 +66,16 @@ services:
       GOOGLE_ADS_ALLOW_TEST_ACCOUNT_ACTIVATION: ${GOOGLE_ADS_ALLOW_TEST_ACCOUNT_ACTIVATION:-false}
       GOOGLE_ADS_ENABLE_OPTIMIZATION_AI: ${GOOGLE_ADS_ENABLE_OPTIMIZATION_AI:-true}
       GOOGLE_ADS_OPTIMIZATION_MODEL: ${GOOGLE_ADS_OPTIMIZATION_MODEL:-}
+      META_ADS_APP_ID: ${META_ADS_APP_ID:-}
+      META_ADS_APP_SECRET: ${META_ADS_APP_SECRET:-}
+      META_ADS_REDIRECT_URI: ${META_ADS_REDIRECT_URI:-http://localhost:5173/leadcaptura/configuracoes?metaAdsCallback=1}
+      META_ADS_AUTH_ENDPOINT: ${META_ADS_AUTH_ENDPOINT:-https://www.facebook.com/v26.0/dialog/oauth}
+      META_ADS_TOKEN_ENDPOINT: ${META_ADS_TOKEN_ENDPOINT:-https://graph.facebook.com/v26.0/oauth/access_token}
+      META_ADS_USER_INFO_ENDPOINT: ${META_ADS_USER_INFO_ENDPOINT:-https://graph.facebook.com/v26.0/me}
+      META_ADS_GRAPH_API_BASE_URL: ${META_ADS_GRAPH_API_BASE_URL:-https://graph.facebook.com}
+      META_ADS_GRAPH_API_VERSION: ${META_ADS_GRAPH_API_VERSION:-v26.0}
+      META_ADS_SCOPES: ${META_ADS_SCOPES:-public_profile business_management ads_read pages_show_list pages_read_engagement instagram_basic}
+      META_ADS_DEFAULT_COUNTRY_CODE: ${META_ADS_DEFAULT_COUNTRY_CODE:-BR}
       Database__ApplyMigrationsOnStartup: "true"
       Cors__AllowedOrigins__0: http://localhost:5173
       Cors__AllowedOrigins__1: http://localhost:8080

@@ -59,7 +59,17 @@ public static class ConfiguracaoCatalog
         new(CategoriaConfiguracao.GoogleAds, "MetricsDefaultPeriodDays", TipoConfiguracao.Numero, false, "30", "GOOGLE_ADS_METRICS_DEFAULT_PERIOD_DAYS", "GoogleAds:MetricsDefaultPeriodDays", "Periodo padrao de metricas."),
         new(CategoriaConfiguracao.GoogleAds, "AllowTestAccountActivation", TipoConfiguracao.Booleano, false, "false", "GOOGLE_ADS_ALLOW_TEST_ACCOUNT_ACTIVATION", "GoogleAds:AllowTestAccountActivation", "Permite ativacao em conta de teste."),
         new(CategoriaConfiguracao.GoogleAds, "EnableOptimizationAi", TipoConfiguracao.Booleano, false, "true", "GOOGLE_ADS_ENABLE_OPTIMIZATION_AI", "GoogleAds:EnableOptimizationAi", "Habilita analise IA."),
-        new(CategoriaConfiguracao.GoogleAds, "OptimizationModel", TipoConfiguracao.Texto, false, "", "GOOGLE_ADS_OPTIMIZATION_MODEL", "GoogleAds:OptimizationModel", "Modelo opcional para analise IA.")
+        new(CategoriaConfiguracao.GoogleAds, "OptimizationModel", TipoConfiguracao.Texto, false, "", "GOOGLE_ADS_OPTIMIZATION_MODEL", "GoogleAds:OptimizationModel", "Modelo opcional para analise IA."),
+        new(CategoriaConfiguracao.MetaAds, "AppId", TipoConfiguracao.Texto, false, "", "META_ADS_APP_ID", "MetaAds:AppId", "App ID OAuth da Meta."),
+        new(CategoriaConfiguracao.MetaAds, "AppSecret", TipoConfiguracao.Segredo, true, null, "META_ADS_APP_SECRET", "MetaAds:AppSecret", "App secret OAuth da Meta."),
+        new(CategoriaConfiguracao.MetaAds, "RedirectUri", TipoConfiguracao.Url, false, "http://localhost:5173/leadcaptura/configuracoes?metaAdsCallback=1", "META_ADS_REDIRECT_URI", "MetaAds:RedirectUri", "URL de callback OAuth da Meta."),
+        new(CategoriaConfiguracao.MetaAds, "AuthEndpoint", TipoConfiguracao.Url, false, "https://www.facebook.com/v26.0/dialog/oauth", "META_ADS_AUTH_ENDPOINT", "MetaAds:AuthEndpoint", "Endpoint de autorizacao OAuth da Meta."),
+        new(CategoriaConfiguracao.MetaAds, "TokenEndpoint", TipoConfiguracao.Url, false, "https://graph.facebook.com/v26.0/oauth/access_token", "META_ADS_TOKEN_ENDPOINT", "MetaAds:TokenEndpoint", "Endpoint de token OAuth da Meta."),
+        new(CategoriaConfiguracao.MetaAds, "UserInfoEndpoint", TipoConfiguracao.Url, false, "https://graph.facebook.com/v26.0/me", "META_ADS_USER_INFO_ENDPOINT", "MetaAds:UserInfoEndpoint", "Endpoint de dados do usuario Meta."),
+        new(CategoriaConfiguracao.MetaAds, "GraphApiBaseUrl", TipoConfiguracao.Url, false, "https://graph.facebook.com", "META_ADS_GRAPH_API_BASE_URL", "MetaAds:GraphApiBaseUrl", "URL base da Graph API Meta."),
+        new(CategoriaConfiguracao.MetaAds, "GraphApiVersion", TipoConfiguracao.Texto, false, "v26.0", "META_ADS_GRAPH_API_VERSION", "MetaAds:GraphApiVersion", "Versao da Graph API Meta."),
+        new(CategoriaConfiguracao.MetaAds, "Scopes", TipoConfiguracao.Texto, false, "public_profile business_management ads_read pages_show_list pages_read_engagement instagram_basic", "META_ADS_SCOPES", "MetaAds:Scopes", "Escopos OAuth solicitados."),
+        new(CategoriaConfiguracao.MetaAds, "DefaultCountryCode", TipoConfiguracao.Texto, false, "BR", "META_ADS_DEFAULT_COUNTRY_CODE", "MetaAds:DefaultCountryCode", "Pais padrao para targeting Meta.")
     ];
 
     public static ConfigDefinition Get(CategoriaConfiguracao categoria, string key)

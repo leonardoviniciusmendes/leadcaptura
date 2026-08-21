@@ -12,7 +12,8 @@ public sealed class ConfiguracaoService(
     IConfigurationResolver resolver,
     ISecretProtector protector,
     IWhatsAppUrlBuilder whatsAppUrlBuilder,
-    IGoogleAdsContaRepository? googleAdsContaRepository = null) : IConfiguracaoService
+    IGoogleAdsContaRepository? googleAdsContaRepository = null,
+    IMetaAdsContaRepository? metaAdsContaRepository = null) : IConfiguracaoService
 {
     public async Task<IReadOnlyList<ConfiguracaoCategoriaResponse>> ListarAsync(CancellationToken cancellationToken)
     {
@@ -125,6 +126,7 @@ public sealed class ConfiguracaoService(
             CategoriaConfiguracao.WhatsApp => await TestarWhatsAppAsync(cancellationToken),
             CategoriaConfiguracao.ExternalLeadApi => await TestarExternalLeadApiAsync(cancellationToken),
             CategoriaConfiguracao.GoogleAds => await TestarGoogleAdsConfiguracaoAsync(cancellationToken),
+            CategoriaConfiguracao.MetaAds => await TestarMetaAdsConfiguracaoAsync(cancellationToken),
             _ => new TesteConfiguracaoResponse(true, "Validacao local concluida.")
         };
     }
@@ -140,6 +142,7 @@ public sealed class ConfiguracaoService(
         var externalBase = await Value(CategoriaConfiguracao.ExternalLeadApi, "BaseUrl", cancellationToken);
         var googleConfig = await GoogleAdsConfig(cancellationToken);
         var googleConta = googleAdsContaRepository is null ? null : await googleAdsContaRepository.ObterPadraoAsync(cancellationToken);
+        var metaStatus = await MetaAdsStatusAsync(cancellationToken);
         var pendencias = new List<string>();
 
         var openConfigured = openKey.Configured && !string.IsNullOrWhiteSpace(model);
@@ -166,6 +169,7 @@ public sealed class ConfiguracaoService(
             new ConfiguracaoStatusItem(externalEnabled && !string.IsNullOrWhiteSpace(externalBase), externalEnabled ? (string.IsNullOrWhiteSpace(externalBase) ? "Pendente" : "Pronto") : "Desativado"),
             new ConfiguracaoStatusItem(!string.IsNullOrWhiteSpace(publicUrl), string.IsNullOrWhiteSpace(publicUrl) ? "Pendente" : "Pronto"),
             new ConfiguracaoStatusItem(googleConfig.ApiConfigurada && googleConta is not null && !GoogleAdsRequerReconexao(googleConta), GoogleAdsStatus(googleConta)),
+            metaStatus,
             pendencias);
     }
 
@@ -230,6 +234,46 @@ public sealed class ConfiguracaoService(
         }
 
         return new TesteConfiguracaoResponse(true, "Configuracao Google Ads valida.");
+    }
+
+    private async Task<TesteConfiguracaoResponse> TestarMetaAdsConfiguracaoAsync(CancellationToken cancellationToken)
+    {
+        var status = await MetaAdsStatusAsync(cancellationToken);
+        return new TesteConfiguracaoResponse(status.Configurado, status.Status);
+    }
+
+    private async Task<MetaAdsStatusResponse> MetaAdsStatusAsync(CancellationToken cancellationToken)
+    {
+        var appId = await Value(CategoriaConfiguracao.MetaAds, "AppId", cancellationToken);
+        var appSecret = await resolver.ResolveAsync(CategoriaConfiguracao.MetaAds, "AppSecret", cancellationToken);
+        var redirectUri = await Value(CategoriaConfiguracao.MetaAds, "RedirectUri", cancellationToken);
+        var authEndpoint = await Value(CategoriaConfiguracao.MetaAds, "AuthEndpoint", cancellationToken);
+        var tokenEndpoint = await Value(CategoriaConfiguracao.MetaAds, "TokenEndpoint", cancellationToken);
+        var userInfoEndpoint = await Value(CategoriaConfiguracao.MetaAds, "UserInfoEndpoint", cancellationToken);
+        var graphApiBaseUrl = await Value(CategoriaConfiguracao.MetaAds, "GraphApiBaseUrl", cancellationToken);
+        var graphApiVersion = await Value(CategoriaConfiguracao.MetaAds, "GraphApiVersion", cancellationToken);
+        var configurado = !string.IsNullOrWhiteSpace(appId)
+            && appSecret.Configured
+            && !string.IsNullOrWhiteSpace(redirectUri)
+            && !string.IsNullOrWhiteSpace(authEndpoint)
+            && !string.IsNullOrWhiteSpace(tokenEndpoint)
+            && !string.IsNullOrWhiteSpace(userInfoEndpoint)
+            && !string.IsNullOrWhiteSpace(graphApiBaseUrl)
+            && !string.IsNullOrWhiteSpace(graphApiVersion);
+        var conta = metaAdsContaRepository is null ? null : await metaAdsContaRepository.ObterAtivaAsync(cancellationToken);
+
+        return new MetaAdsStatusResponse(
+            configurado,
+            conta is not null && !string.IsNullOrWhiteSpace(conta.AccessTokenProtegido),
+            false,
+            conta is not null && !string.IsNullOrWhiteSpace(conta.AccessTokenProtegido)
+                ? "Conectado"
+                : configurado ? "Configuracao inicial pronta" : "Configuracao inicial pendente",
+            conta?.Id,
+            conta?.MetaUserId,
+            conta?.Nome,
+            conta?.DataConexao,
+            conta?.AccessTokenExpiraEm);
     }
 
     private static string GoogleAdsStatus(GoogleAdsConta? conta)
@@ -368,6 +412,17 @@ public sealed class ConfiguracaoService(
                 var digits = new string((value ?? string.Empty).Where(char.IsDigit).ToArray());
                 if (!string.IsNullOrWhiteSpace(value) && digits.Length != 10) throw new ArgumentException("TestCustomerId deve ter 10 digitos.");
             }
+        }
+        if (definition.Categoria == CategoriaConfiguracao.MetaAds)
+        {
+            if (definition.Key is "RedirectUri" or "AuthEndpoint" or "TokenEndpoint" or "UserInfoEndpoint" or "GraphApiBaseUrl")
+            {
+                if (string.IsNullOrWhiteSpace(value) || !Uri.TryCreate(value, UriKind.Absolute, out _)) throw new ArgumentException($"{definition.Key} deve ser uma URL valida.");
+            }
+
+            if (definition.Key == "AppId" && value?.Length > 300) throw new ArgumentException("AppId deve ter no maximo 300 caracteres.");
+            if (definition.Key == "GraphApiVersion" && (string.IsNullOrWhiteSpace(value) || value.Length is < 2 or > 20)) throw new ArgumentException("GraphApiVersion invalida.");
+            if (definition.Key == "Scopes" && value?.Length > 500) throw new ArgumentException("Scopes deve ter no maximo 500 caracteres.");
         }
     }
 }

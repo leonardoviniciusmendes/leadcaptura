@@ -20,6 +20,12 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
     public DbSet<GoogleAdsMetricaDiaria> GoogleAdsMetricasDiarias => Set<GoogleAdsMetricaDiaria>();
     public DbSet<GoogleAdsSincronizacao> GoogleAdsSincronizacoes => Set<GoogleAdsSincronizacao>();
     public DbSet<GoogleAdsAnaliseIa> GoogleAdsAnalisesIa => Set<GoogleAdsAnaliseIa>();
+    public DbSet<MetaAdsConta> MetaAdsContas => Set<MetaAdsConta>();
+    public DbSet<MetaAdsOAuthState> MetaAdsOAuthStates => Set<MetaAdsOAuthState>();
+    public DbSet<MetaAdsAtivoSelecionado> MetaAdsAtivosSelecionados => Set<MetaAdsAtivoSelecionado>();
+    public DbSet<MetaAdsImagem> MetaAdsImagens => Set<MetaAdsImagem>();
+    public DbSet<MetaAdsPreparacaoPublicacao> MetaAdsPreparacoesPublicacao => Set<MetaAdsPreparacaoPublicacao>();
+    public DbSet<MetaAdsPublicacao> MetaAdsPublicacoes => Set<MetaAdsPublicacao>();
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<OrigemLead> OrigensLead => Set<OrigemLead>();
     public DbSet<TentativaCapturaLead> TentativasCapturaLead => Set<TentativaCapturaLead>();
@@ -288,6 +294,128 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
             entity.HasIndex(x => x.GoogleAdsPublicacaoId);
             entity.HasIndex(x => x.DataCriacao);
             entity.HasOne(x => x.Publicacao).WithMany().HasForeignKey(x => x.GoogleAdsPublicacaoId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<MetaAdsConta>(entity =>
+        {
+            entity.ToTable("MetaAdsContas");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.MetaUserId).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Nome).HasMaxLength(180);
+            entity.Property(x => x.AccessTokenProtegido).HasMaxLength(4000);
+            entity.Property(x => x.TokenType).HasMaxLength(40);
+            entity.HasIndex(x => x.MetaUserId).IsUnique();
+            entity.HasIndex(x => x.Ativa);
+        });
+
+        modelBuilder.Entity<MetaAdsOAuthState>(entity =>
+        {
+            entity.ToTable("MetaAdsOAuthStates");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.StateHash).HasMaxLength(128).IsRequired();
+            entity.HasIndex(x => x.StateHash).IsUnique();
+            entity.HasIndex(x => x.ExpiraEm);
+            entity.HasIndex(x => x.Utilizado);
+        });
+
+        modelBuilder.Entity<MetaAdsAtivoSelecionado>(entity =>
+        {
+            entity.ToTable("MetaAdsAtivosSelecionados");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.BusinessId).HasMaxLength(80);
+            entity.Property(x => x.BusinessNome).HasMaxLength(180);
+            entity.Property(x => x.AdAccountId).HasMaxLength(80);
+            entity.Property(x => x.AdAccountNome).HasMaxLength(180);
+            entity.Property(x => x.PageId).HasMaxLength(80);
+            entity.Property(x => x.PageNome).HasMaxLength(180);
+            entity.Property(x => x.InstagramAccountId).HasMaxLength(80);
+            entity.Property(x => x.InstagramNome).HasMaxLength(180);
+            entity.Property(x => x.PixelId).HasMaxLength(80);
+            entity.Property(x => x.PixelNome).HasMaxLength(180);
+            entity.HasIndex(x => x.MetaAdsContaId).IsUnique();
+            entity.HasIndex(x => x.BusinessId);
+            entity.HasIndex(x => x.AdAccountId);
+            entity.HasIndex(x => x.PageId);
+            entity.HasOne(x => x.MetaAdsConta)
+                .WithOne(x => x.AtivoSelecionado)
+                .HasForeignKey<MetaAdsAtivoSelecionado>(x => x.MetaAdsContaId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<MetaAdsImagem>(entity =>
+        {
+            entity.ToTable("MetaAdsImagens");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.AdAccountId).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.OrigemImagem).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.NomeArquivo).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.ContentType).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.ContentHash).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.MetaImageHash).HasMaxLength(180).IsRequired();
+            entity.HasIndex(x => new { x.CampanhaId, x.AdAccountId });
+            entity.HasIndex(x => new { x.CampanhaId, x.AdAccountId, x.ContentHash }).IsUnique();
+            entity.HasOne(x => x.Campanha)
+                .WithMany()
+                .HasForeignKey(x => x.CampanhaId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.MetaAdsConta)
+                .WithMany()
+                .HasForeignKey(x => x.MetaAdsContaId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<MetaAdsPreparacaoPublicacao>(entity =>
+        {
+            entity.ToTable("MetaAdsPreparacoesPublicacao");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.AdAccountId).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.LocationKey).HasMaxLength(80);
+            entity.Property(x => x.LocationName).HasMaxLength(180);
+            entity.Property(x => x.LocationType).HasMaxLength(40);
+            entity.Property(x => x.CountryCode).HasMaxLength(10);
+            entity.Property(x => x.CountryName).HasMaxLength(120);
+            entity.Property(x => x.Region).HasMaxLength(120);
+            entity.Property(x => x.RegionId).HasMaxLength(80);
+            entity.HasIndex(x => x.CampanhaId).IsUnique();
+            entity.HasIndex(x => x.MetaAdsContaId);
+            entity.HasOne(x => x.Campanha)
+                .WithMany()
+                .HasForeignKey(x => x.CampanhaId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.MetaAdsConta)
+                .WithMany()
+                .HasForeignKey(x => x.MetaAdsContaId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<MetaAdsPublicacao>(entity =>
+        {
+            entity.ToTable("MetaAdsPublicacoes");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.AdAccountId).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Status).HasConversion<int>();
+            entity.Property(x => x.UltimaEtapaConcluida).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.CampaignExternalId).HasMaxLength(80);
+            entity.Property(x => x.AdSetExternalId).HasMaxLength(80);
+            entity.Property(x => x.CreativeExternalId).HasMaxLength(80);
+            entity.Property(x => x.AdExternalId).HasMaxLength(80);
+            entity.Property(x => x.UltimoErroCodigo).HasMaxLength(120);
+            entity.Property(x => x.UltimoErroSubcodigo).HasMaxLength(120);
+            entity.Property(x => x.UltimoErroTipo).HasMaxLength(120);
+            entity.Property(x => x.UltimoErroMensagem).HasMaxLength(500);
+            entity.Property(x => x.UltimoErroHttpStatus).HasMaxLength(40);
+            entity.Property(x => x.FbTraceId).HasMaxLength(120);
+            entity.HasIndex(x => new { x.CampanhaId, x.AdAccountId }).IsUnique();
+            entity.HasIndex(x => x.MetaAdsContaId);
+            entity.HasIndex(x => x.Status);
+            entity.HasOne(x => x.Campanha)
+                .WithMany()
+                .HasForeignKey(x => x.CampanhaId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.MetaAdsConta)
+                .WithMany()
+                .HasForeignKey(x => x.MetaAdsContaId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Lead>(entity =>

@@ -9,6 +9,7 @@ import ConfiguracoesView from './views/ConfiguracoesView.vue';
 import GoogleAdsPreviewView from './views/GoogleAdsPreviewView.vue';
 import GoogleAdsPublicacaoView from './views/GoogleAdsPublicacaoView.vue';
 import GoogleAdsDashboardView from './views/GoogleAdsDashboardView.vue';
+import MetaAdsPreviewView from './views/MetaAdsPreviewView.vue';
 
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -18,6 +19,7 @@ export const router = createRouter({
     { path: '/campanhas/nova', component: NovaCampanhaView, meta: { title: 'Nova campanha', subtitle: 'Briefing de geracao' } },
     { path: '/campanhas/:id', component: CampanhaRevisaoView, props: true, meta: { title: 'Revisao', subtitle: 'Conteudo comercial e landing' } },
     { path: '/campanhas/:id/googleads-preview', component: GoogleAdsPreviewView, props: true, meta: { title: 'Preview Google Ads', subtitle: 'Pre-publicacao tecnica' } },
+    { path: '/campanhas/:id/metaads-preview', component: MetaAdsPreviewView, props: true, meta: { title: 'Preview Meta Ads', subtitle: 'Pre-publicacao tecnica' } },
     { path: '/googleads/publicacoes/:id', component: GoogleAdsPublicacaoView, props: true, meta: { title: 'Publicacao Google Ads', subtitle: 'Recursos criados' } },
     { path: '/googleads/dashboard', component: GoogleAdsDashboardView, meta: { title: 'Google Ads', subtitle: 'Metricas, sincronizacao e otimizacao' } },
     { path: '/leads', component: LeadsView, meta: { title: 'Leads', subtitle: 'Capturas da landing page' } },

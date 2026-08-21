@@ -9,5 +9,6 @@ public enum CategoriaConfiguracao
     ExternalLeadApi = 5,
     Application = 6,
     Landing = 7,
-    GoogleAds = 8
+    GoogleAds = 8,
+    MetaAds = 9
 }
