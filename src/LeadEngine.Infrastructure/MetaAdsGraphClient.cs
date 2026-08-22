@@ -27,8 +27,8 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
 
     public async Task<IReadOnlyList<MetaCampaignDto>> GetCampaignsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken)
     {
-        var rows = await GetPagedDataAsync(GraphUrl(config, $"{NormalizeAdAccountId(adAccountId)}/campaigns", new() { ["fields"] = "id,name,status,effective_status", ["limit"] = "100" }), accessToken, cancellationToken);
-        return rows.Select(x => new MetaCampaignDto(S(x, "id") ?? string.Empty, S(x, "name"), S(x, "status"), S(x, "effective_status")))
+        var rows = await GetPagedDataAsync(GraphUrl(config, $"{NormalizeAdAccountId(adAccountId)}/campaigns", new() { ["fields"] = "id,name,status,effective_status,bid_strategy", ["limit"] = "100" }), accessToken, cancellationToken);
+        return rows.Select(x => new MetaCampaignDto(S(x, "id") ?? string.Empty, S(x, "name"), S(x, "status"), S(x, "effective_status"), S(x, "bid_strategy")))
             .Where(x => !string.IsNullOrWhiteSpace(x.Id))
             .ToArray();
     }
@@ -45,6 +45,14 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
     {
         var rows = await GetPagedDataAsync(GraphUrl(config, $"{NormalizeAdAccountId(adAccountId)}/ads", new() { ["fields"] = "id,name,status,effective_status,adset_id,campaign_id", ["limit"] = "100" }), accessToken, cancellationToken);
         return rows.Select(x => new MetaAdDto(S(x, "id") ?? string.Empty, S(x, "name"), S(x, "status"), S(x, "effective_status"), S(x, "adset_id"), S(x, "campaign_id")))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Id))
+            .ToArray();
+    }
+
+    public async Task<IReadOnlyList<MetaCreativeDto>> GetAdCreativesAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken)
+    {
+        var rows = await GetPagedDataAsync(GraphUrl(config, $"{NormalizeAdAccountId(adAccountId)}/adcreatives", new() { ["fields"] = "id,name,status,object_story_id,object_story_spec", ["limit"] = "100" }), accessToken, cancellationToken);
+        return rows.Select(x => new MetaCreativeDto(S(x, "id") ?? string.Empty, S(x, "name"), S(x, "status"), S(x, "object_story_id"), S(x, "object_story_spec")))
             .Where(x => !string.IsNullOrWhiteSpace(x.Id))
             .ToArray();
     }
@@ -191,18 +199,23 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
 
     public async Task<MetaAdsCreateResult> CreateCampaignAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsCampaignCreatePayload payload, CancellationToken cancellationToken)
     {
+        var fieldNames = string.IsNullOrWhiteSpace(payload.BidStrategy)
+            ? "name,objective,buying_type,special_ad_categories,status,is_adset_budget_sharing_enabled"
+            : "name,objective,buying_type,special_ad_categories,bid_strategy,status,is_adset_budget_sharing_enabled";
+
         logger.LogInformation(
-            "Meta Campaign create request fields. Edge={MetaEdge} FieldNames={FieldNames} Name={CampaignName} Objective={Objective} BuyingType={BuyingType} SpecialAdCategories={SpecialAdCategories} Status={Status} IsAdsetBudgetSharingEnabled={IsAdsetBudgetSharingEnabled}",
+            "Meta Campaign create request fields. Edge={MetaEdge} FieldNames={FieldNames} Name={CampaignName} Objective={Objective} BuyingType={BuyingType} SpecialAdCategories={SpecialAdCategories} BidStrategy={BidStrategy} Status={Status} IsAdsetBudgetSharingEnabled={IsAdsetBudgetSharingEnabled}",
             "campaigns",
-            "name,objective,buying_type,special_ad_categories,status,is_adset_budget_sharing_enabled",
+            fieldNames,
             SanitizeMetaMessage(payload.Name),
             payload.Objective,
             MetaAdsConstants.BuyingTypeAuction,
             JsonSerializer.Serialize(payload.SpecialAdCategories),
+            payload.BidStrategy,
             MetaAdsConstants.StatusPaused,
             MetaAdsConstants.IsAdsetBudgetSharingEnabled);
 
-        return await PostFormForIdAsync(config, accessToken, adAccountId, "campaigns", new()
+        var values = new Dictionary<string, string>
         {
             ["name"] = payload.Name,
             ["objective"] = payload.Objective,
@@ -210,7 +223,13 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
             ["special_ad_categories"] = JsonSerializer.Serialize(payload.SpecialAdCategories),
             ["status"] = MetaAdsConstants.StatusPaused,
             ["is_adset_budget_sharing_enabled"] = MetaAdsConstants.IsAdsetBudgetSharingEnabled ? "true" : "false"
-        }, cancellationToken);
+        };
+        if (!string.IsNullOrWhiteSpace(payload.BidStrategy))
+        {
+            values["bid_strategy"] = payload.BidStrategy;
+        }
+
+        return await PostFormForIdAsync(config, accessToken, adAccountId, "campaigns", values, cancellationToken);
     }
 
     public async Task DeleteCampaignAsync(MetaAdsConfiguration config, string accessToken, string campaignId, CancellationToken cancellationToken)
@@ -233,17 +252,49 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
 
     public async Task<MetaAdsCreateResult> CreateAdSetAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsAdSetCreatePayload payload, CancellationToken cancellationToken)
     {
-        return await PostFormForIdAsync(config, accessToken, adAccountId, "adsets", new()
+        var values = new Dictionary<string, string>
         {
             ["name"] = payload.Name,
             ["campaign_id"] = payload.CampaignId,
             ["optimization_goal"] = payload.OptimizationGoal,
             ["billing_event"] = payload.BillingEvent,
             ["daily_budget"] = payload.DailyBudget.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["bid_strategy"] = payload.BidStrategy,
             ["targeting"] = JsonSerializer.Serialize(ToTargetingJson(payload.Targeting)),
-            ["status"] = "PAUSED"
-        }, cancellationToken);
+            ["status"] = MetaAdsConstants.StatusPaused
+        };
+
+        if (!string.IsNullOrWhiteSpace(payload.BidStrategy))
+        {
+            values["bid_strategy"] = payload.BidStrategy;
+        }
+        if (payload.StartTime is not null)
+        {
+            values["start_time"] = ToMetaDateTime(payload.StartTime.Value);
+        }
+        if (payload.EndTime is not null)
+        {
+            values["end_time"] = ToMetaDateTime(payload.EndTime.Value);
+        }
+
+        return await PostFormForIdAsync(config, accessToken, adAccountId, "adsets", values, cancellationToken);
+    }
+
+    public async Task DeleteAdSetAsync(MetaAdsConfiguration config, string accessToken, string adSetId, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, GraphUrl(config, adSetId, new()));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var response = await httpClientFactory.CreateClient("metaads").SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var text = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw ParseError(text, response.StatusCode);
+        }
+
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+        if (!json.RootElement.TryGetProperty("success", out var success) || success.ValueKind != JsonValueKind.True)
+        {
+            throw new MetaAdsGraphApiException("Exclusao de Ad Set Meta nao retornou success=true.", "meta_delete_not_confirmed", false, response.StatusCode);
+        }
     }
 
     public async Task<MetaAdsCreateResult> CreateAdCreativeAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsCreativeCreatePayload payload, CancellationToken cancellationToken)
@@ -277,6 +328,59 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
         }, cancellationToken);
     }
 
+    public async Task<MetaAdsCreateResult> CreateDiagnosticAdCreativeAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsDiagnosticCreativeCreatePayload payload, CancellationToken cancellationToken)
+    {
+        var linkData = new Dictionary<string, object?>
+        {
+            ["image_hash"] = payload.ImageHash,
+            ["link"] = payload.Link,
+            ["message"] = payload.Message,
+            ["name"] = payload.Headline
+        };
+        if (!string.IsNullOrWhiteSpace(payload.Description))
+        {
+            linkData["description"] = payload.Description;
+        }
+        if (!string.IsNullOrWhiteSpace(payload.CallToAction))
+        {
+            linkData["call_to_action"] = new Dictionary<string, object?>
+            {
+                ["type"] = payload.CallToAction,
+                ["value"] = new Dictionary<string, object?> { ["link"] = payload.Link }
+            };
+        }
+
+        var spec = new Dictionary<string, object?>
+        {
+            ["page_id"] = payload.PageId,
+            ["link_data"] = linkData
+        };
+
+        return await PostFormForIdAsync(config, accessToken, adAccountId, "adcreatives", new()
+        {
+            ["name"] = payload.Name,
+            ["object_story_spec"] = JsonSerializer.Serialize(spec)
+        }, cancellationToken);
+    }
+
+    public async Task DeleteAdCreativeAsync(MetaAdsConfiguration config, string accessToken, string creativeId, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, GraphUrl(config, creativeId, new()));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var response = await httpClientFactory.CreateClient("metaads").SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var text = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw ParseError(text, response.StatusCode);
+        }
+
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+        if (!json.RootElement.TryGetProperty("success", out var success) || success.ValueKind != JsonValueKind.True)
+        {
+            throw new MetaAdsGraphApiException("Exclusao de Creative Meta nao retornou success=true.", "meta_delete_not_confirmed", false, response.StatusCode);
+        }
+    }
+
     public async Task<MetaAdsCreateResult> CreateAdAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsAdCreatePayload payload, CancellationToken cancellationToken)
     {
         return await PostFormForIdAsync(config, accessToken, adAccountId, "ads", new()
@@ -286,6 +390,24 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
             ["creative"] = JsonSerializer.Serialize(new Dictionary<string, string> { ["creative_id"] = payload.CreativeId }),
             ["status"] = "PAUSED"
         }, cancellationToken);
+    }
+
+    public async Task DeleteAdAsync(MetaAdsConfiguration config, string accessToken, string adId, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, GraphUrl(config, adId, new()));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var response = await httpClientFactory.CreateClient("metaads").SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var text = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw ParseError(text, response.StatusCode);
+        }
+
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+        if (!json.RootElement.TryGetProperty("success", out var success) || success.ValueKind != JsonValueKind.True)
+        {
+            throw new MetaAdsGraphApiException("Exclusao de Ad Meta nao retornou success=true.", "meta_delete_not_confirmed", false, response.StatusCode);
+        }
     }
 
     private async Task<IReadOnlyList<JsonElement>> GetPagedDataAsync(string initialUrl, string accessToken, CancellationToken cancellationToken)
@@ -370,12 +492,37 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
             geo["cities"] = targeting.Cities.Select(x => new Dictionary<string, string> { ["key"] = x.Key }).ToArray();
         }
 
-        return new Dictionary<string, object?>
+        var result = new Dictionary<string, object?>
         {
-            ["geo_locations"] = geo,
-            ["age_min"] = targeting.AgeMin,
-            ["age_max"] = targeting.AgeMax
+            ["geo_locations"] = geo
         };
+        if (targeting.AgeMin is not null)
+        {
+            result["age_min"] = targeting.AgeMin;
+        }
+        if (targeting.AgeMax is not null)
+        {
+            result["age_max"] = targeting.AgeMax;
+        }
+        if (targeting.Genders?.Count > 0)
+        {
+            result["genders"] = targeting.Genders;
+        }
+        if (targeting.AdvantageAudience is not null)
+        {
+            result["targeting_automation"] = new Dictionary<string, int>
+            {
+                ["advantage_audience"] = targeting.AdvantageAudience.Value
+            };
+        }
+
+        return result;
+    }
+
+    private static string ToMetaDateTime(DateTimeOffset value)
+    {
+        var utc = value.ToUniversalTime();
+        return utc.ToString("yyyy-MM-dd'T'HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) + "+0000";
     }
 
     private MetaAdsGraphApiException ParseError(string body, System.Net.HttpStatusCode? statusCode = null)

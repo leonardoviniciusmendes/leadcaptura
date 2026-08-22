@@ -234,7 +234,8 @@ public sealed record MetaCampaignDto(
     string Id,
     string? Name,
     string? Status,
-    string? EffectiveStatus);
+    string? EffectiveStatus,
+    string? BidStrategy = null);
 
 public sealed record MetaAdSetDto(
     string Id,
@@ -253,6 +254,13 @@ public sealed record MetaAdDto(
     string? AdSetId,
     string? CampaignId);
 
+public sealed record MetaCreativeDto(
+    string Id,
+    string? Name,
+    string? Status,
+    string? ObjectStoryId,
+    string? ObjectStorySpec);
+
 public sealed record CreateMetaCampaignRequest(
     string Name,
     string? Objective = null,
@@ -263,11 +271,59 @@ public sealed record CreateMetaCampaignResponse(string Id);
 
 public sealed record DeleteMetaCampaignResponse(bool Success);
 
+public sealed record CreateMetaAdSetRequest(
+    string CampaignId,
+    string Name,
+    long DailyBudget,
+    string? BillingEvent,
+    string? OptimizationGoal,
+    DateTimeOffset? StartTime,
+    DateTimeOffset? EndTime,
+    MetaTargetingRequest? Targeting);
+
+public sealed record MetaTargetingRequest(
+    IReadOnlyList<string>? Countries,
+    IReadOnlyList<MetaLocationKeyRequest>? Regions,
+    IReadOnlyList<MetaLocationKeyRequest>? Cities,
+    int? AgeMin,
+    int? AgeMax,
+    IReadOnlyList<int>? Genders);
+
+public sealed record MetaLocationKeyRequest(string Key);
+
+public sealed record CreateMetaAdSetResponse(string Id);
+
+public sealed record DeleteMetaAdSetResponse(bool Success);
+
+public sealed record CreateMetaCreativeRequest(
+    string Name,
+    string PageId,
+    string ImageHash,
+    string Message,
+    string LinkUrl,
+    string Headline,
+    string? Description = null,
+    string? CallToActionType = null);
+
+public sealed record CreateMetaCreativeResponse(string Id);
+
+public sealed record DeleteMetaCreativeResponse(bool Success);
+
+public sealed record CreateMetaAdRequest(
+    string Name,
+    string AdSetId,
+    string CreativeId);
+
+public sealed record CreateMetaAdResponse(string Id);
+
+public sealed record DeleteMetaAdResponse(bool Success);
+
 public sealed record MetaAdsCampaignCreatePayload(
     string Name,
     string Objective,
     IReadOnlyList<string> SpecialAdCategories,
-    string Status);
+    string Status,
+    string? BidStrategy = null);
 
 public sealed record MetaAdsAdSetCreatePayload(
     string Name,
@@ -275,16 +331,20 @@ public sealed record MetaAdsAdSetCreatePayload(
     string OptimizationGoal,
     string BillingEvent,
     long DailyBudget,
-    string BidStrategy,
+    string? BidStrategy,
     MetaAdsTargetingCreatePayload Targeting,
-    string Status);
+    string Status,
+    DateTimeOffset? StartTime = null,
+    DateTimeOffset? EndTime = null);
 
 public sealed record MetaAdsTargetingCreatePayload(
     IReadOnlyList<string> Countries,
     IReadOnlyList<MetaAdsTargetingLocationPayload> Regions,
     IReadOnlyList<MetaAdsTargetingLocationPayload> Cities,
-    int AgeMin,
-    int AgeMax);
+    int? AgeMin,
+    int? AgeMax,
+    IReadOnlyList<int>? Genders = null,
+    int? AdvantageAudience = null);
 
 public sealed record MetaAdsTargetingLocationPayload(string Key);
 
@@ -298,6 +358,16 @@ public sealed record MetaAdsCreativeCreatePayload(
     string Headline,
     string Description,
     string CallToAction);
+
+public sealed record MetaAdsDiagnosticCreativeCreatePayload(
+    string Name,
+    string PageId,
+    string ImageHash,
+    string Link,
+    string Message,
+    string Headline,
+    string? Description,
+    string? CallToAction);
 
 public sealed record MetaAdsAdCreatePayload(
     string Name,
