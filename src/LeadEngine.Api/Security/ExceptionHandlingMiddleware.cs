@@ -43,6 +43,32 @@ public sealed class ExceptionHandlingMiddleware(
                 : ex.Diagnostic;
             await WriteObjectAsync(context, diagnostic);
         }
+        catch (MetaAdsGraphApiException ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Meta Ads API error for {Path}. HttpStatus={HttpStatus} MetaType={MetaType} MetaCode={MetaCode} MetaSubcode={MetaSubcode} FbTraceId={FbTraceId}",
+                context.Request.Path,
+                ex.HttpStatusCode?.ToString(),
+                ex.Type,
+                ex.Code,
+                ex.ErrorSubcode,
+                ex.FbTraceId);
+            context.Response.StatusCode = StatusCodes.Status502BadGateway;
+            await WriteObjectAsync(context, new
+            {
+                sucesso = false,
+                code = ex.Code,
+                mensagem = ex.Message,
+                httpStatus = ex.HttpStatusCode?.ToString(),
+                metaType = ex.Type,
+                metaCode = ex.Code,
+                metaSubcode = ex.ErrorSubcode,
+                fbTraceId = ex.FbTraceId,
+                errorUserTitle = ex.ErrorUserTitle,
+                errorUserMessage = ex.ErrorUserMessage
+            });
+        }
         catch (Exception ex)
         {
             if (context.Request.Path.StartsWithSegments("/api/googleads"))

@@ -14,6 +14,41 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
 {
     private const int MaxPages = 10;
 
+    public async Task<MetaAdAccountDto> GetAdAccountAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken)
+    {
+        using var json = await GetJsonAsync(GraphUrl(config, NormalizeAdAccountId(adAccountId), new() { ["fields"] = "id,name,account_status,currency,timezone_name" }), accessToken, cancellationToken);
+        return new MetaAdAccountDto(
+            S(json.RootElement, "id") ?? string.Empty,
+            S(json.RootElement, "name"),
+            S(json.RootElement, "account_status"),
+            S(json.RootElement, "currency"),
+            S(json.RootElement, "timezone_name"));
+    }
+
+    public async Task<IReadOnlyList<MetaCampaignDto>> GetCampaignsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken)
+    {
+        var rows = await GetPagedDataAsync(GraphUrl(config, $"{NormalizeAdAccountId(adAccountId)}/campaigns", new() { ["fields"] = "id,name,status,effective_status", ["limit"] = "100" }), accessToken, cancellationToken);
+        return rows.Select(x => new MetaCampaignDto(S(x, "id") ?? string.Empty, S(x, "name"), S(x, "status"), S(x, "effective_status")))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Id))
+            .ToArray();
+    }
+
+    public async Task<IReadOnlyList<MetaAdSetDto>> GetAdSetsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken)
+    {
+        var rows = await GetPagedDataAsync(GraphUrl(config, $"{NormalizeAdAccountId(adAccountId)}/adsets", new() { ["fields"] = "id,name,status,effective_status,campaign_id,daily_budget,lifetime_budget", ["limit"] = "100" }), accessToken, cancellationToken);
+        return rows.Select(x => new MetaAdSetDto(S(x, "id") ?? string.Empty, S(x, "name"), S(x, "status"), S(x, "effective_status"), S(x, "campaign_id"), S(x, "daily_budget"), S(x, "lifetime_budget")))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Id))
+            .ToArray();
+    }
+
+    public async Task<IReadOnlyList<MetaAdDto>> GetAdsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken)
+    {
+        var rows = await GetPagedDataAsync(GraphUrl(config, $"{NormalizeAdAccountId(adAccountId)}/ads", new() { ["fields"] = "id,name,status,effective_status,adset_id,campaign_id", ["limit"] = "100" }), accessToken, cancellationToken);
+        return rows.Select(x => new MetaAdDto(S(x, "id") ?? string.Empty, S(x, "name"), S(x, "status"), S(x, "effective_status"), S(x, "adset_id"), S(x, "campaign_id")))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Id))
+            .ToArray();
+    }
+
     public async Task<IReadOnlyList<MetaAdsBusinessResponse>> ListBusinessesAsync(MetaAdsConfiguration config, string accessToken, CancellationToken cancellationToken)
     {
         var url = GraphUrl(config, "me/businesses", new() { ["fields"] = "id,name", ["limit"] = "100" });
@@ -49,7 +84,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
 
     public async Task<IReadOnlyList<MetaAdsPixelResponse>> ListPixelsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken)
     {
-        var normalized = adAccountId.StartsWith("act_", StringComparison.OrdinalIgnoreCase) ? adAccountId : $"act_{adAccountId}";
+        var normalized = NormalizeAdAccountId(adAccountId);
         var url = GraphUrl(config, $"{normalized}/adspixels", new() { ["fields"] = "id,name", ["limit"] = "100" });
         var rows = await GetPagedDataAsync(url, accessToken, cancellationToken);
         return rows.Select(x => new MetaAdsPixelResponse(S(x, "id") ?? string.Empty, S(x, "name") ?? "Pixel Meta")).Where(x => !string.IsNullOrWhiteSpace(x.Id)).ToArray();
@@ -102,7 +137,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
 
     public async Task<string> UploadAdImageAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, string fileName, string contentType, byte[] content, CancellationToken cancellationToken)
     {
-        var normalized = adAccountId.StartsWith("act_", StringComparison.OrdinalIgnoreCase) ? adAccountId : $"act_{adAccountId}";
+        var normalized = NormalizeAdAccountId(adAccountId);
         using var request = new HttpRequestMessage(HttpMethod.Post, GraphUrl(config, $"{normalized}/adimages", new()));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         using var form = new MultipartFormDataContent();
@@ -162,20 +197,38 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
             "name,objective,buying_type,special_ad_categories,status,is_adset_budget_sharing_enabled",
             SanitizeMetaMessage(payload.Name),
             payload.Objective,
-            "AUCTION",
+            MetaAdsConstants.BuyingTypeAuction,
             JsonSerializer.Serialize(payload.SpecialAdCategories),
-            "PAUSED",
-            false);
+            MetaAdsConstants.StatusPaused,
+            MetaAdsConstants.IsAdsetBudgetSharingEnabled);
 
         return await PostFormForIdAsync(config, accessToken, adAccountId, "campaigns", new()
         {
             ["name"] = payload.Name,
             ["objective"] = payload.Objective,
-            ["buying_type"] = "AUCTION",
+            ["buying_type"] = MetaAdsConstants.BuyingTypeAuction,
             ["special_ad_categories"] = JsonSerializer.Serialize(payload.SpecialAdCategories),
-            ["status"] = "PAUSED",
-            ["is_adset_budget_sharing_enabled"] = "false"
+            ["status"] = MetaAdsConstants.StatusPaused,
+            ["is_adset_budget_sharing_enabled"] = MetaAdsConstants.IsAdsetBudgetSharingEnabled ? "true" : "false"
         }, cancellationToken);
+    }
+
+    public async Task DeleteCampaignAsync(MetaAdsConfiguration config, string accessToken, string campaignId, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, GraphUrl(config, campaignId, new()));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var response = await httpClientFactory.CreateClient("metaads").SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var text = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw ParseError(text, response.StatusCode);
+        }
+
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+        if (!json.RootElement.TryGetProperty("success", out var success) || success.ValueKind != JsonValueKind.True)
+        {
+            throw new MetaAdsGraphApiException("Exclusao de campanha Meta nao retornou success=true.", "meta_delete_not_confirmed", false, response.StatusCode);
+        }
     }
 
     public async Task<MetaAdsCreateResult> CreateAdSetAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsAdSetCreatePayload payload, CancellationToken cancellationToken)
@@ -280,7 +333,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
 
     private async Task<MetaAdsCreateResult> PostFormForIdAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, string edge, Dictionary<string, string> values, CancellationToken cancellationToken)
     {
-        var normalized = adAccountId.StartsWith("act_", StringComparison.OrdinalIgnoreCase) ? adAccountId : $"act_{adAccountId}";
+        var normalized = NormalizeAdAccountId(adAccountId);
         using var request = new HttpRequestMessage(HttpMethod.Post, GraphUrl(config, $"{normalized}/{edge}", new()));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         request.Content = new FormUrlEncodedContent(values);
@@ -484,5 +537,10 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
     private static string? S(JsonElement element, string property)
     {
         return element.TryGetProperty(property, out var value) ? value.ToString() : null;
+    }
+
+    private static string NormalizeAdAccountId(string adAccountId)
+    {
+        return adAccountId.StartsWith("act_", StringComparison.OrdinalIgnoreCase) ? adAccountId : $"act_{adAccountId}";
     }
 }
