@@ -42,6 +42,7 @@ public static class DependencyInjection
         services.AddScoped<IMetaAdsPreviewService, MetaAdsPreviewService>();
         services.AddScoped<IMetaAdsPublicationPreparationService, MetaAdsPublicationPreparationService>();
         services.AddScoped<IMetaAdsPublishingService, MetaAdsPublishingService>();
+        services.AddScoped<IMetaAdsDiagnosticsService, MetaAdsDiagnosticsService>();
         services.AddScoped<IGoogleAdsOAuthClient, GoogleAdsOAuthClient>();
         services.AddScoped<IGoogleAdsTokenService, GoogleAdsTokenService>();
         services.AddScoped<IGoogleAdsConnectionService, GoogleAdsConnectionService>();
@@ -131,7 +132,9 @@ public static class DependencyInjection
         });
         services.AddHttpClient("metaads", client =>
         {
-            client.Timeout = TimeSpan.FromSeconds(30);
+            var timeoutText = Environment.GetEnvironmentVariable("META_ADS_API_TIMEOUT_SECONDS")
+                ?? configuration["MetaAds:ApiTimeoutSeconds"];
+            client.Timeout = TimeSpan.FromSeconds(int.TryParse(timeoutText, out var timeout) && timeout > 0 ? timeout : 30);
         });
         services.Configure<IntegracaoLeadsOptions>(configuration.GetSection("IntegracaoLeads"));
         services.AddHttpClient<IIntegracaoLeadService, IntegracaoLeadService>((provider, client) =>

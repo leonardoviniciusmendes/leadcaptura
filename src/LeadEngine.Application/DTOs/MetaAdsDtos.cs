@@ -223,6 +223,46 @@ public sealed record MetaAdsPublicationStatusResponse(
 
 public sealed record MetaAdsCreateResult(string Id);
 
+public sealed record MetaAdAccountDto(
+    string Id,
+    string? Name,
+    string? AccountStatus,
+    string? Currency,
+    string? TimezoneName);
+
+public sealed record MetaCampaignDto(
+    string Id,
+    string? Name,
+    string? Status,
+    string? EffectiveStatus);
+
+public sealed record MetaAdSetDto(
+    string Id,
+    string? Name,
+    string? Status,
+    string? EffectiveStatus,
+    string? CampaignId,
+    string? DailyBudget,
+    string? LifetimeBudget);
+
+public sealed record MetaAdDto(
+    string Id,
+    string? Name,
+    string? Status,
+    string? EffectiveStatus,
+    string? AdSetId,
+    string? CampaignId);
+
+public sealed record CreateMetaCampaignRequest(
+    string Name,
+    string? Objective = null,
+    IReadOnlyList<string>? SpecialAdCategories = null,
+    string? Status = null);
+
+public sealed record CreateMetaCampaignResponse(string Id);
+
+public sealed record DeleteMetaCampaignResponse(bool Success);
+
 public sealed record MetaAdsCampaignCreatePayload(
     string Name,
     string Objective,

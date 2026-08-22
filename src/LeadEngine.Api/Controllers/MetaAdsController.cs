@@ -13,6 +13,8 @@ public sealed class MetaAdsController(
     IMetaAdsPublicationPreparationService preparationService,
     IMetaAdsPublishingService publishingService) : ControllerBase
 {
+    private const long MaxImageUploadBytes = 10 * 1024 * 1024;
+
     [HttpGet("status")]
     public async Task<ActionResult<MetaAdsStatusResponse>> Status(CancellationToken cancellationToken)
     {
@@ -179,7 +181,8 @@ public sealed class MetaAdsController(
     }
 
     [HttpPost("campaigns/{campanhaId:guid}/image")]
-    [RequestSizeLimit(20_000_000)]
+    [RequestSizeLimit(MaxImageUploadBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxImageUploadBytes)]
     public async Task<ActionResult<MetaAdsUploadImageResponse>> UploadImage(Guid campanhaId, IFormFile file, CancellationToken cancellationToken)
     {
         if (file is null || file.Length == 0)

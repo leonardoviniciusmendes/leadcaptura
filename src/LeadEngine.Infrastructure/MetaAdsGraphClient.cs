@@ -1,16 +1,53 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using LeadEngine.Application.Common;
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
+using Microsoft.Extensions.Logging;
 
 namespace LeadEngine.Infrastructure;
 
-public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory) : IMetaAdsGraphClient
+public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILogger<MetaAdsGraphClient> logger) : IMetaAdsGraphClient
 {
     private const int MaxPages = 10;
+
+    public async Task<MetaAdAccountDto> GetAdAccountAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken)
+    {
+        using var json = await GetJsonAsync(GraphUrl(config, NormalizeAdAccountId(adAccountId), new() { ["fields"] = "id,name,account_status,currency,timezone_name" }), accessToken, cancellationToken);
+        return new MetaAdAccountDto(
+            S(json.RootElement, "id") ?? string.Empty,
+            S(json.RootElement, "name"),
+            S(json.RootElement, "account_status"),
+            S(json.RootElement, "currency"),
+            S(json.RootElement, "timezone_name"));
+    }
+
+    public async Task<IReadOnlyList<MetaCampaignDto>> GetCampaignsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken)
+    {
+        var rows = await GetPagedDataAsync(GraphUrl(config, $"{NormalizeAdAccountId(adAccountId)}/campaigns", new() { ["fields"] = "id,name,status,effective_status", ["limit"] = "100" }), accessToken, cancellationToken);
+        return rows.Select(x => new MetaCampaignDto(S(x, "id") ?? string.Empty, S(x, "name"), S(x, "status"), S(x, "effective_status")))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Id))
+            .ToArray();
+    }
+
+    public async Task<IReadOnlyList<MetaAdSetDto>> GetAdSetsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken)
+    {
+        var rows = await GetPagedDataAsync(GraphUrl(config, $"{NormalizeAdAccountId(adAccountId)}/adsets", new() { ["fields"] = "id,name,status,effective_status,campaign_id,daily_budget,lifetime_budget", ["limit"] = "100" }), accessToken, cancellationToken);
+        return rows.Select(x => new MetaAdSetDto(S(x, "id") ?? string.Empty, S(x, "name"), S(x, "status"), S(x, "effective_status"), S(x, "campaign_id"), S(x, "daily_budget"), S(x, "lifetime_budget")))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Id))
+            .ToArray();
+    }
+
+    public async Task<IReadOnlyList<MetaAdDto>> GetAdsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken)
+    {
+        var rows = await GetPagedDataAsync(GraphUrl(config, $"{NormalizeAdAccountId(adAccountId)}/ads", new() { ["fields"] = "id,name,status,effective_status,adset_id,campaign_id", ["limit"] = "100" }), accessToken, cancellationToken);
+        return rows.Select(x => new MetaAdDto(S(x, "id") ?? string.Empty, S(x, "name"), S(x, "status"), S(x, "effective_status"), S(x, "adset_id"), S(x, "campaign_id")))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Id))
+            .ToArray();
+    }
 
     public async Task<IReadOnlyList<MetaAdsBusinessResponse>> ListBusinessesAsync(MetaAdsConfiguration config, string accessToken, CancellationToken cancellationToken)
     {
@@ -47,7 +84,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory) : I
 
     public async Task<IReadOnlyList<MetaAdsPixelResponse>> ListPixelsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken)
     {
-        var normalized = adAccountId.StartsWith("act_", StringComparison.OrdinalIgnoreCase) ? adAccountId : $"act_{adAccountId}";
+        var normalized = NormalizeAdAccountId(adAccountId);
         var url = GraphUrl(config, $"{normalized}/adspixels", new() { ["fields"] = "id,name", ["limit"] = "100" });
         var rows = await GetPagedDataAsync(url, accessToken, cancellationToken);
         return rows.Select(x => new MetaAdsPixelResponse(S(x, "id") ?? string.Empty, S(x, "name") ?? "Pixel Meta")).Where(x => !string.IsNullOrWhiteSpace(x.Id)).ToArray();
@@ -100,7 +137,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory) : I
 
     public async Task<string> UploadAdImageAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, string fileName, string contentType, byte[] content, CancellationToken cancellationToken)
     {
-        var normalized = adAccountId.StartsWith("act_", StringComparison.OrdinalIgnoreCase) ? adAccountId : $"act_{adAccountId}";
+        var normalized = NormalizeAdAccountId(adAccountId);
         using var request = new HttpRequestMessage(HttpMethod.Post, GraphUrl(config, $"{normalized}/adimages", new()));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         using var form = new MultipartFormDataContent();
@@ -154,14 +191,44 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory) : I
 
     public async Task<MetaAdsCreateResult> CreateCampaignAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsCampaignCreatePayload payload, CancellationToken cancellationToken)
     {
+        logger.LogInformation(
+            "Meta Campaign create request fields. Edge={MetaEdge} FieldNames={FieldNames} Name={CampaignName} Objective={Objective} BuyingType={BuyingType} SpecialAdCategories={SpecialAdCategories} Status={Status} IsAdsetBudgetSharingEnabled={IsAdsetBudgetSharingEnabled}",
+            "campaigns",
+            "name,objective,buying_type,special_ad_categories,status,is_adset_budget_sharing_enabled",
+            SanitizeMetaMessage(payload.Name),
+            payload.Objective,
+            MetaAdsConstants.BuyingTypeAuction,
+            JsonSerializer.Serialize(payload.SpecialAdCategories),
+            MetaAdsConstants.StatusPaused,
+            MetaAdsConstants.IsAdsetBudgetSharingEnabled);
+
         return await PostFormForIdAsync(config, accessToken, adAccountId, "campaigns", new()
         {
             ["name"] = payload.Name,
             ["objective"] = payload.Objective,
-            ["buying_type"] = "AUCTION",
+            ["buying_type"] = MetaAdsConstants.BuyingTypeAuction,
             ["special_ad_categories"] = JsonSerializer.Serialize(payload.SpecialAdCategories),
-            ["status"] = "PAUSED"
+            ["status"] = MetaAdsConstants.StatusPaused,
+            ["is_adset_budget_sharing_enabled"] = MetaAdsConstants.IsAdsetBudgetSharingEnabled ? "true" : "false"
         }, cancellationToken);
+    }
+
+    public async Task DeleteCampaignAsync(MetaAdsConfiguration config, string accessToken, string campaignId, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, GraphUrl(config, campaignId, new()));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var response = await httpClientFactory.CreateClient("metaads").SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var text = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw ParseError(text, response.StatusCode);
+        }
+
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+        if (!json.RootElement.TryGetProperty("success", out var success) || success.ValueKind != JsonValueKind.True)
+        {
+            throw new MetaAdsGraphApiException("Exclusao de campanha Meta nao retornou success=true.", "meta_delete_not_confirmed", false, response.StatusCode);
+        }
     }
 
     public async Task<MetaAdsCreateResult> CreateAdSetAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsAdSetCreatePayload payload, CancellationToken cancellationToken)
@@ -266,7 +333,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory) : I
 
     private async Task<MetaAdsCreateResult> PostFormForIdAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, string edge, Dictionary<string, string> values, CancellationToken cancellationToken)
     {
-        var normalized = adAccountId.StartsWith("act_", StringComparison.OrdinalIgnoreCase) ? adAccountId : $"act_{adAccountId}";
+        var normalized = NormalizeAdAccountId(adAccountId);
         using var request = new HttpRequestMessage(HttpMethod.Post, GraphUrl(config, $"{normalized}/{edge}", new()));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         request.Content = new FormUrlEncodedContent(values);
@@ -311,7 +378,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory) : I
         };
     }
 
-    private static MetaAdsGraphApiException ParseError(string body, System.Net.HttpStatusCode? statusCode = null)
+    private MetaAdsGraphApiException ParseError(string body, System.Net.HttpStatusCode? statusCode = null)
     {
         try
         {
@@ -322,16 +389,99 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory) : I
                 var subcode = error.TryGetProperty("error_subcode", out var subcodeValue) ? subcodeValue.ToString() : null;
                 var type = S(error, "type") ?? "erro";
                 var trace = S(error, "fbtrace_id");
+                var metaMessage = SanitizeMetaMessage(S(error, "message"));
+                var errorUserTitle = SanitizeMetaMessage(S(error, "error_user_title"));
+                var errorUserMessage = SanitizeMetaMessage(S(error, "error_user_msg"));
+                var errorData = SanitizedJson(error, "error_data");
+                var blameField = SanitizedNestedJson(error, "error_data", "blame_field");
+                var blameFieldSpecs = SanitizedNestedJson(error, "error_data", "blame_field_specs");
+                var isTransient = error.TryGetProperty("is_transient", out var transientValue) && transientValue.ValueKind is JsonValueKind.True or JsonValueKind.False
+                    ? transientValue.GetBoolean()
+                    : (bool?)null;
                 var permission = code is "10" or "200" || string.Equals(type, "OAuthException", StringComparison.OrdinalIgnoreCase);
-                return new MetaAdsGraphApiException($"Falha Graph API Meta ({type} {code}).", code, permission, statusCode, subcode, type, trace);
+                LogMetaError(statusCode, type, code, subcode, trace, metaMessage, errorUserTitle, errorUserMessage, errorData, blameField, blameFieldSpecs, isTransient);
+                var message = string.IsNullOrWhiteSpace(metaMessage) ? $"Falha Graph API Meta ({type} {code})." : metaMessage;
+                return new MetaAdsGraphApiException(message, code, permission, statusCode, subcode, type, trace, metaMessage, errorUserTitle, errorUserMessage, errorData, blameField, blameFieldSpecs, isTransient);
             }
         }
-        catch
+        catch (JsonException)
         {
+            LogMetaError(statusCode, null, "meta_api_error", null, null, "Resposta de erro Meta nao estava em JSON valido.", null, null, null, null, null, null);
             return new MetaAdsGraphApiException("Falha ao consultar Graph API Meta.", "meta_api_error", false, statusCode);
         }
 
+        LogMetaError(statusCode, null, "meta_api_error", null, null, "Resposta de erro Meta sem objeto error.", null, null, null, null, null, null);
         return new MetaAdsGraphApiException("Falha ao consultar Graph API Meta.", "meta_api_error", false, statusCode);
+    }
+
+    private void LogMetaError(
+        System.Net.HttpStatusCode? statusCode,
+        string? type,
+        string? code,
+        string? subcode,
+        string? trace,
+        string? message,
+        string? errorUserTitle,
+        string? errorUserMessage,
+        string? errorData,
+        string? blameField,
+        string? blameFieldSpecs,
+        bool? isTransient)
+    {
+        logger.LogWarning(
+            "Meta Graph API error. HttpStatus={HttpStatus} MetaType={MetaType} MetaCode={MetaCode} MetaSubcode={MetaSubcode} FbTraceId={FbTraceId} MetaMessage={MetaMessage} ErrorUserTitle={ErrorUserTitle} ErrorUserMessage={ErrorUserMessage} ErrorData={ErrorData} BlameField={BlameField} BlameFieldSpecs={BlameFieldSpecs} IsTransient={IsTransient}",
+            statusCode?.ToString(),
+            type,
+            code,
+            subcode,
+            trace,
+            message,
+            errorUserTitle,
+            errorUserMessage,
+            errorData,
+            blameField,
+            blameFieldSpecs,
+            isTransient);
+    }
+
+    private static string? SanitizedJson(JsonElement element, string property)
+    {
+        if (!element.TryGetProperty(property, out var value))
+        {
+            return null;
+        }
+
+        return SanitizeMetaMessage(value.ToString());
+    }
+
+    private static string? SanitizedNestedJson(JsonElement element, string parent, string property)
+    {
+        if (!element.TryGetProperty(parent, out var parentValue)
+            || parentValue.ValueKind != JsonValueKind.Object
+            || !parentValue.TryGetProperty(property, out var value))
+        {
+            return null;
+        }
+
+        return SanitizeMetaMessage(value.ToString());
+    }
+
+    private static string? SanitizeMetaMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return null;
+        }
+
+        var sanitized = message
+            .Replace("\r", " ")
+            .Replace("\n", " ")
+            .Replace("\t", " ")
+            .Trim();
+        sanitized = Regex.Replace(sanitized, "(access_token|client_secret|appsecret_proof)=([^\\s&]+)", "$1=[redacted]", RegexOptions.IgnoreCase);
+        sanitized = Regex.Replace(sanitized, "Bearer\\s+[^\\s]+", "Bearer [redacted]", RegexOptions.IgnoreCase);
+
+        return sanitized.Length <= 500 ? sanitized : sanitized[..500];
     }
 
     private static MetaAdsAdAccountResponse ToAdAccount(JsonElement item)
@@ -387,5 +537,10 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory) : I
     private static string? S(JsonElement element, string property)
     {
         return element.TryGetProperty(property, out var value) ? value.ToString() : null;
+    }
+
+    private static string NormalizeAdAccountId(string adAccountId)
+    {
+        return adAccountId.StartsWith("act_", StringComparison.OrdinalIgnoreCase) ? adAccountId : $"act_{adAccountId}";
     }
 }
