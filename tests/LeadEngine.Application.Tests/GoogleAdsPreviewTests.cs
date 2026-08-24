@@ -265,6 +265,41 @@ public sealed class GoogleAdsPreviewTests
         Assert.Equal(Google.Ads.GoogleAds.V22.Enums.AdGroupAdStatusEnum.Types.AdGroupAdStatus.Paused, operations.Single(x => x.AdGroupAdOperation is not null).AdGroupAdOperation.Create.Status);
     }
 
+    [Fact]
+    public async Task SalvarPreviewLegadoPreencheLocalizacaoEstruturadaRioDeJaneiro()
+    {
+        var ctx = Context();
+        ctx.Campanha.Id = Guid.Parse("01281be7-066d-4d92-98c2-55564d8cb18b");
+        ctx.Campanha.Nome = "Captacao Plano Familiar Zona Sul RJ";
+        ctx.Campanha.Regiao = "Zona Sul";
+        ctx.Campanha.Cidade = "Rio de Janeiro";
+        ctx.Campanha.Estado = "RJ";
+        var service = Service(ctx);
+        var preview = await service.GerarOuAtualizarAsync(ctx.Campanha.Id, CancellationToken.None);
+        var legacyPayload = preview.Payload with
+        {
+            Campaign = preview.Payload.Campaign with
+            {
+                LocationName = null,
+                GeoTargetResourceName = null
+            }
+        };
+        ctx.Planos.Items.Single().PayloadPreviewJson = System.Text.Json.JsonSerializer.Serialize(legacyPayload, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+
+        await service.AtualizarAsync(preview.Id, new AtualizarGoogleAdsPreviewRequest(null, null, null, null, null, null, null, null, null, null), CancellationToken.None);
+        var reloaded = await service.ObterAsync(preview.Id, CancellationToken.None);
+        var plan = await new GoogleAdsOperationBuilder(new GoogleAdsGeoTargetResolver(), new GoogleAdsLanguageResolver())
+            .BuildAsync(ctx.Planos.Items.Single(), "1234567890", CancellationToken.None);
+
+        Assert.NotNull(reloaded.Payload.Campaign.LocationName);
+        Assert.Equal("Rio de Janeiro, State of Rio de Janeiro, Brazil", reloaded.Payload.Campaign.LocationName);
+        Assert.Equal("geoTargetConstants/1001655", reloaded.Payload.Campaign.GeoTargetResourceName);
+        Assert.Equal("geoTargetConstants/1001655", plan.GeoTargetResourceName);
+        Assert.NotEqual("geoTargetConstants/2076", plan.GeoTargetResourceName);
+        Assert.Contains(plan.Operations, x => x.TipoRecurso == "CampaignCriterion" && x.PayloadJson.Contains("\"geoTargetResourceName\":\"geoTargetConstants/1001655\""));
+        Assert.DoesNotContain(plan.Operations, x => x.TipoRecurso == "CampaignCriterion" && x.PayloadJson.Contains("\"geoTargetResourceName\":\"geoTargetConstants/2076\""));
+    }
+
     private static TestContext Context()
     {
         var campanha = new Campanha

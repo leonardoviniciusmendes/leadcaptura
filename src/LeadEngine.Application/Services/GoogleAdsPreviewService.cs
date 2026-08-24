@@ -132,14 +132,21 @@ public sealed class GoogleAdsPreviewService(
     public async Task<GoogleAdsPreviewResponse> AtualizarAsync(Guid id, AtualizarGoogleAdsPreviewRequest request, CancellationToken cancellationToken)
     {
         var plano = await planoRepository.ObterPorIdAsync(id, cancellationToken) ?? throw new KeyNotFoundException("Preview Google Ads nao encontrado.");
+        var campanha = await campanhaRepository.ObterPorIdAsync(plano.CampanhaId, cancellationToken);
         var payload = DeserializePayload(plano.PayloadPreviewJson);
+        var mappedCampaign = campanha is null ? payload.Campaign : (await mappingService.MapearAsync(campanha, cancellationToken)).Campaign;
         var adGroup = payload.AdGroups.First();
         var rsa = adGroup.ResponsiveSearchAd;
         var budget = request.OrcamentoDiario ?? payload.Budget.Amount;
         var cpc = request.CpcBid ?? adGroup.CpcBid;
         var updatedPayload = payload with
         {
-            Campaign = payload.Campaign with { Name = request.NomeCampanha ?? payload.Campaign.Name },
+            Campaign = payload.Campaign with
+            {
+                Name = request.NomeCampanha ?? payload.Campaign.Name,
+                LocationName = mappedCampaign.LocationName,
+                GeoTargetResourceName = mappedCampaign.GeoTargetResourceName
+            },
             Budget = payload.Budget with { Amount = budget, AmountMicros = GoogleAdsMoney.ToMicros(budget) },
             AdGroups =
             [
