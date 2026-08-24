@@ -819,6 +819,11 @@ export async function obterPublicacaoGoogleAds(id: string): Promise<GoogleAdsPub
   return data;
 }
 
+export async function listarPublicacoesGoogleAdsPorCampanha(campanhaId: string): Promise<GoogleAdsPublication[]> {
+  const { data } = await api.get<GoogleAdsPublication[]>(`/api/googleads/publicacoes/campanha/${campanhaId}`);
+  return data;
+}
+
 export async function reconciliarPublicacaoGoogleAds(id: string): Promise<Record<string, unknown>> {
   const { data } = await api.post(`/api/googleads/publicacoes/${id}/reconciliar`);
   return data;

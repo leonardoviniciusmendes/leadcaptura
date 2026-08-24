@@ -14,6 +14,7 @@
         <button class="button secondary" :disabled="busy || !canPrepare" @click="prepararPublicacao">Preparar publicacao</button>
         <button class="button secondary" :disabled="busy || !preview" @click="sugerir">Sugerir ajustes</button>
         <button class="button secondary" :disabled="busy || !preview" @click="excluir">Excluir</button>
+        <RouterLink v-if="publicacao" class="button secondary" :to="`/googleads/publicacoes/${publicacao.id}`">Abrir publicacao</RouterLink>
         <button class="button" :disabled="busy" @click="gerar">{{ preview ? 'Regenerar' : 'Gerar preview' }}</button>
       </div>
     </section>
@@ -196,7 +197,7 @@
         <header class="section-heading"><h2>Publicacao</h2></header>
         <p>Status: <span class="status">{{ publicacao.status }}</span></p>
         <p>RequestId: {{ publicacao.requestIdPublicacao || publicacao.requestIdValidacao || '-' }}</p>
-        <RouterLink class="button secondary narrow" :to="`/googleads/publicacoes/${publicacao.id}`">Ver historico</RouterLink>
+        <RouterLink class="button secondary narrow" :to="`/googleads/publicacoes/${publicacao.id}`">Ver publicacao</RouterLink>
         <article v-for="resource in publicacao.recursos" :key="resource.resourceName" class="history-item">
           <strong>{{ resource.tipoRecurso }}</strong>
           <span>{{ resource.resourceName }}</span>
@@ -254,6 +255,7 @@ import {
   dryRunGoogleAds,
   excluirGoogleAdsPreview,
   gerarGoogleAdsPreview,
+  listarPublicacoesGoogleAdsPorCampanha,
   obterGoogleAdsPreviewPorCampanha,
   prepararPublicacaoGoogleAds,
   publicarGoogleAds,
@@ -306,11 +308,27 @@ async function load() {
   error.value = '';
   try {
     preview.value = await obterGoogleAdsPreviewPorCampanha(campanhaId);
+    await carregarPublicacaoExistente();
     hydrate();
   } catch {
     preview.value = null;
+    publicacao.value = null;
   } finally {
     loading.value = false;
+  }
+}
+
+async function carregarPublicacaoExistente() {
+  if (!preview.value) {
+    publicacao.value = null;
+    return;
+  }
+
+  try {
+    const publicacoes = await listarPublicacoesGoogleAdsPorCampanha(campanhaId);
+    publicacao.value = publicacoes.find((item) => item.previewId === preview.value?.id) ?? null;
+  } catch {
+    publicacao.value = null;
   }
 }
 
@@ -320,6 +338,7 @@ async function gerar() {
   try {
     preview.value = await gerarGoogleAdsPreview(campanhaId);
     sugestoes.value = [];
+    await carregarPublicacaoExistente();
     hydrate();
     showToast({ type: 'success', title: 'Preview gerado' });
   } catch (err: unknown) {
@@ -471,6 +490,7 @@ async function excluir() {
   if (!confirmed) return;
   await excluirGoogleAdsPreview(preview.value.id);
   preview.value = null;
+  publicacao.value = null;
   sugestoes.value = [];
 }
 
