@@ -117,11 +117,15 @@ public sealed class GoogleAdsPublishingTests
         await service.ValidarRemotamenteAsync(ctx.Preview.Id, CancellationToken.None);
         var prepared = await service.PrepararAsync(ctx.Preview.Id, CancellationToken.None);
         var published = await service.PublicarAsync(ctx.Preview.Id, new GoogleAdsPublishRequest(prepared.ConfirmationToken, true), CancellationToken.None);
+        var mutateCallsBeforeReconciliation = ctx.Mutation.MutateCalls;
 
         var reconciled = await service.ReconciliarAsync(published.Id, CancellationToken.None);
 
         Assert.Equal(StatusPublicacaoGoogleAds.Reconciliada, reconciled.Status);
         Assert.Equal(published.Recursos.Count, reconciled.Recursos.Count);
+        Assert.Equal(mutateCallsBeforeReconciliation, ctx.Mutation.MutateCalls);
+        Assert.Equal(published.Recursos.Count, ctx.Query.LastResources.Count);
+        Assert.All(reconciled.Recursos, x => Assert.Equal("PAUSED", x.Status));
     }
 
     [Fact]
@@ -218,8 +222,11 @@ public sealed class GoogleAdsPublishingTests
 
     private sealed class Query : IGoogleAdsResourceQueryClient
     {
+        public IReadOnlyList<GoogleAdsPublishedResourceDto> LastResources { get; private set; } = [];
+
         public Task<IReadOnlyList<GoogleAdsPublishedResourceCheckDto>> CheckResourcesAsync(string customerId, string accessToken, string developerToken, IReadOnlyList<GoogleAdsPublishedResourceDto> resources, CancellationToken cancellationToken)
         {
+            LastResources = resources;
             return Task.FromResult<IReadOnlyList<GoogleAdsPublishedResourceCheckDto>>(resources.Select(x => new GoogleAdsPublishedResourceCheckDto(x.TipoRecurso, x.ResourceName, x.ExternalId, x.Nome, x.Status, true, false, "ok")).ToArray());
         }
     }
