@@ -824,6 +824,11 @@ export async function reconciliarPublicacaoGoogleAds(id: string): Promise<Record
   return data;
 }
 
+export async function ativarPublicacaoGoogleAds(id: string): Promise<GoogleAdsPublication> {
+  const { data } = await api.post<GoogleAdsPublication>(`/api/googleads/publicacoes/${id}/ativar`, { confirmarAtivacaoEmContaTeste: true });
+  return data;
+}
+
 export async function historicoPublicacaoGoogleAds(id: string): Promise<GoogleAdsPublicationHistory[]> {
   const { data } = await api.get<GoogleAdsPublicationHistory[]>(`/api/googleads/publicacoes/${id}/historico`);
   return data;

@@ -96,13 +96,92 @@ public sealed class GoogleAdsSynchronizationService(
     {
         if (!request.ConfirmarAtivacaoEmContaTeste) throw new ArgumentException("Confirme ativacao em conta de teste.");
         var publication = await publicationRepository.ObterPorIdAsync(publicacaoId, cancellationToken) ?? throw new KeyNotFoundException("Publicacao Google Ads nao encontrada.");
+        if (publication.Status != StatusPublicacaoGoogleAds.Reconciliada)
+        {
+            throw new InvalidOperationException("Somente publicacao reconciliada pode ser ativada pelo painel.");
+        }
+
         var allow = bool.TryParse((await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "AllowTestAccountActivation", cancellationToken)).Value, out var value) && value;
         if (!allow) throw new UnauthorizedAccessException("Ativacao em conta de teste desabilitada por configuracao.");
         await EnsureTestMutationAllowedAsync(publication, cancellationToken);
-        await SetStatusRemoteAsync(publication, "ENABLED", cancellationToken);
+        var snapshot = await SnapshotAsync(publication, cancellationToken);
+        if (snapshot.MissingResources.Count > 0)
+        {
+            throw new InvalidOperationException("Recursos remotos ausentes. Execute reconciliacao antes de ativar.");
+        }
+
+        if (!string.Equals(snapshot.CampaignStatus, "PAUSED", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(snapshot.CampaignStatus, "ENABLED", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Campaign remota precisa estar PAUSED antes da ativacao.");
+        }
+
+        var targetResources = ResourcesForActivation(publication);
+        string? requestId = null;
+        if (string.Equals(snapshot.CampaignStatus, "ENABLED", StringComparison.OrdinalIgnoreCase)
+            && targetResources.All(x => string.Equals(x.Status, "ENABLED", StringComparison.OrdinalIgnoreCase)))
+        {
+            requestId = snapshot.RequestId;
+        }
+        else
+        {
+            var conta = await contaRepository.ObterPorIdAsync(publication.GoogleAdsContaId, cancellationToken) ?? throw new KeyNotFoundException("Conta Google Ads nao encontrada.");
+            var accessToken = await tokenService.ObterAccessTokenValidoAsync(conta, cancellationToken);
+            var developerToken = await RequiredSecretAsync("DeveloperToken", cancellationToken);
+            requestId = await queryClient.SetResourceStatusesAsync(publication.CustomerId, accessToken, developerToken, targetResources, "ENABLED", cancellationToken);
+            foreach (var resource in publication.Recursos.Where(x => targetResources.Any(y => y.ResourceName == x.ResourceName)))
+            {
+                resource.Status = "ENABLED";
+            }
+        }
+
+        var activationHistory = await publicationRepository.ListarHistoricoAsync(publication.Id, cancellationToken);
+        if (!activationHistory.Any(x => x.Operacao == "Ativacao"))
+        {
+            await publicationRepository.AdicionarHistoricoAsync(new GoogleAdsPublicacaoHistorico
+            {
+                Id = Guid.NewGuid(),
+                GoogleAdsPublicacaoId = publication.Id,
+                StatusAnterior = publication.Status,
+                StatusNovo = publication.Status,
+                Operacao = "Ativacao",
+                MensagemControlada = "Recursos da publicacao ativados no Google Ads.",
+                RequestId = requestId,
+                Data = DateTime.UtcNow,
+                MetadadosJson = JsonSerializer.Serialize(new { target = "ENABLED", resources = targetResources.Select(x => x.ResourceName).ToArray() }, JsonOptions)
+            }, cancellationToken);
+        }
+
+        publication.DataAtualizacao = DateTime.UtcNow;
+        publication.RecursosJson = JsonSerializer.Serialize(publication.Recursos.Select(x => new GoogleAdsPublishedResourceDto(x.TipoRecurso, x.ResourceName, x.ExternalId, x.Nome, x.Status)), JsonOptions);
+        await publicationRepository.SalvarAsync(cancellationToken);
         await SincronizarPublicacaoAsync(publication.Id, cancellationToken);
         return ToPublicationResponse(publication);
     }
+
+    private static IReadOnlyList<GoogleAdsPublishedResourceDto> ResourcesForActivation(GoogleAdsPublicacao publication)
+    {
+        var resources = publication.Recursos
+            .Where(x => x.TipoRecurso is "AdGroup" or "Keyword" or "ResponsiveSearchAd" or "Campaign")
+            .OrderBy(ActivationOrder)
+            .Select(x => new GoogleAdsPublishedResourceDto(x.TipoRecurso, x.ResourceName, x.ExternalId, x.Nome, x.Status))
+            .ToArray();
+        if (!resources.Any(x => x.TipoRecurso == "Campaign"))
+        {
+            throw new InvalidOperationException("Campaign resource name ausente.");
+        }
+
+        return resources;
+    }
+
+    private static int ActivationOrder(GoogleAdsRecursoPublicado resource) => resource.TipoRecurso switch
+    {
+        "AdGroup" => 0,
+        "Keyword" => 1,
+        "ResponsiveSearchAd" => 2,
+        "Campaign" => 3,
+        _ => 10
+    };
 
     private async Task<GoogleAdsRemoteStatusSnapshot> SnapshotAsync(GoogleAdsPublicacao publication, CancellationToken cancellationToken)
     {

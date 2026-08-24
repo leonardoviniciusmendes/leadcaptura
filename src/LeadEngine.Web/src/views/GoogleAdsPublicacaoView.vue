@@ -7,6 +7,7 @@
         <p class="subtitle">Timeline e recursos criados sem expor segredos.</p>
       </div>
       <button class="button secondary" :disabled="busy || !publicacao" @click="reconciliar">Reconciliar</button>
+      <button v-if="publicacao?.status === 'Reconciliada'" class="button" :disabled="busy" @click="ativar">Ativar campanha</button>
     </section>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -50,8 +51,8 @@
 import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import SkeletonBlock from '../components/SkeletonBlock.vue';
-import { showToast } from '../components/uiEvents';
-import { historicoPublicacaoGoogleAds, obterPublicacaoGoogleAds, reconciliarPublicacaoGoogleAds, type GoogleAdsPublication, type GoogleAdsPublicationHistory } from '../services/api';
+import { confirmAction, showToast } from '../components/uiEvents';
+import { ativarPublicacaoGoogleAds, historicoPublicacaoGoogleAds, obterPublicacaoGoogleAds, reconciliarPublicacaoGoogleAds, type GoogleAdsPublication, type GoogleAdsPublicationHistory } from '../services/api';
 
 const route = useRoute();
 const publicacao = ref<GoogleAdsPublication | null>(null);
@@ -84,6 +85,33 @@ async function reconciliar() {
   } finally {
     busy.value = false;
   }
+}
+
+async function ativar() {
+  if (!publicacao.value || publicacao.value.status !== 'Reconciliada') return;
+  const confirmed = await confirmAction({
+    title: 'Ativar campanha Google Ads',
+    message: 'Confirme a ativacao dos recursos desta publicacao na conta de teste configurada. A campanha podera comecar a veicular.',
+    confirmLabel: 'Ativar'
+  });
+  if (!confirmed) return;
+  busy.value = true;
+  error.value = '';
+  try {
+    publicacao.value = await ativarPublicacaoGoogleAds(publicacao.value.id);
+    historico.value = await historicoPublicacaoGoogleAds(publicacao.value.id);
+    showToast({ type: 'success', title: 'Ativacao enviada', message: 'Recursos desta publicacao foram ativados.' });
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel ativar a campanha.');
+    showToast({ type: 'error', title: 'Ativacao bloqueada', message: error.value });
+  } finally {
+    busy.value = false;
+  }
+}
+
+function message(err: unknown, fallback: string) {
+  const response = err as { response?: { data?: { mensagem?: string; message?: string; detail?: string } } };
+  return response.response?.data?.mensagem || response.response?.data?.message || response.response?.data?.detail || fallback;
 }
 
 function formatDate(value: string) {

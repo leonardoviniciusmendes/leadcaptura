@@ -55,6 +55,7 @@ public sealed class GoogleAdsPublishingTests
 
         Assert.Equal(StatusPublicacaoGoogleAds.Publicada, published.Status);
         Assert.All(ctx.Mutation.LastPlan!.Operations, op => Assert.Contains("PAUSED", op.PayloadJson));
+        Assert.DoesNotContain(ctx.Mutation.LastPlan.Operations, op => op.PayloadJson.Contains("ENABLED", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(published.Recursos, x => x.TipoRecurso == "Campaign" && x.ResourceName.Contains("/campaigns/"));
     }
 

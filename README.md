@@ -1,5 +1,36 @@
 # LeadEngine
 
+
+publicacao vps
+Primeiro entre na pasta:
+
+cd /opt/leadengine
+
+Confirme que recebeu a versão nova:
+
+git status
+git branch --show-current
+git log -1 --oneline
+ls -l docker-compose.prod.yml
+
+Se o git log -1 ainda não mostrar o commit fix: corrige cpc e localizacao no Google Ads, rode:
+
+git pull --ff-only origin instagram
+git log -1 --oneline
+
+Depois faça o deploy:
+
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml up -d
+
+E valide:
+
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs --tail=100 leadengine-api
+
+Não execute novamente a publicação da campanha ainda. Depois que os containers subirem, vamos
+
+
 ## Endurecimento Google Ads para conta de teste
 
 A publicacao controlada usa `GoogleAdsPlanoPublicacao` valido como fonte unica e foi reforcada para validacao em conta de teste real. `GET /api/googleads/ambiente` informa modo, CustomerId mascarado, pendencias e se a publicacao real esta permitida. `POST /api/googleads/publicacoes/preview/{previewId}/dry-run` monta as operacoes tipadas e nao chama o Google Ads. `validateOnly=true` e `partialFailure=false` usam a mesma lista tipada da publicacao.
