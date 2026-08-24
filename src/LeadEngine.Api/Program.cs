@@ -5,6 +5,8 @@ using LeadEngine.Application.Interfaces;
 using LeadEngine.Infrastructure;
 using LeadEngine.Infrastructure.Persistence;
 using LeadEngine.Application.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -33,12 +35,39 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 builder.Services
-    .AddControllers()
+    .AddControllers(options =>
+    {
+        options.Filters.Add(new AuthorizeFilter());
+    })
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
 
+builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
+builder.Services.AddScoped<AdminAuthService>();
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "LeadEngineAdmin";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.SlidingExpiration = true;
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.Events.OnRedirectToLogin = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        };
+    });
+builder.Services.AddAuthorization();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHttpContextAccessor();
@@ -55,7 +84,8 @@ builder.Services.AddCors(options =>
     options.AddPolicy("DefaultCors", policy =>
         policy.WithOrigins(allowedOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod());
+            .AllowAnyMethod()
+            .AllowCredentials());
 });
 
 builder.Services.AddRateLimiter(options =>
@@ -120,6 +150,8 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors("DefaultCors");
 app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
@@ -132,6 +164,8 @@ app.MapGet("/health", async (LeadEngineDbContext db, CancellationToken ct) =>
 {
     await db.Database.CanConnectAsync(ct);
     return Results.Ok(new { status = "healthy" });
-});
+}).AllowAnonymous();
 
 app.Run();
+
+public partial class Program;

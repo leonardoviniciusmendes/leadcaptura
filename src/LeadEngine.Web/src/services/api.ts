@@ -2,8 +2,49 @@ import axios from 'axios';
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '/' : 'http://localhost:5018'),
-  timeout: 15000
+  timeout: 15000,
+  withCredentials: true
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const url = String(error?.config?.url || '');
+    const isAuthCheck = url.includes('/api/auth/me');
+    const isLogin = url.includes('/api/auth/login');
+    const isPublicPage = window.location.pathname.startsWith(`${import.meta.env.BASE_URL}lp/`);
+    const isLoginPage = window.location.pathname.startsWith(`${import.meta.env.BASE_URL}login`);
+    if (status === 401 && !isAuthCheck && !isLogin && !isPublicPage && !isLoginPage) {
+      const current = `${window.location.pathname}${window.location.search}`;
+      window.location.assign(`${import.meta.env.BASE_URL}login?redirect=${encodeURIComponent(current)}`);
+    }
+    return Promise.reject(error);
+  }
+);
+
+export interface AuthUser {
+  email: string;
+}
+
+export interface AuthLoginRequest {
+  email: string;
+  password: string;
+}
+
+export async function login(payload: AuthLoginRequest): Promise<AuthUser> {
+  const { data } = await api.post<AuthUser>('/api/auth/login', payload);
+  return data;
+}
+
+export async function me(): Promise<AuthUser> {
+  const { data } = await api.get<AuthUser>('/api/auth/me');
+  return data;
+}
+
+export async function logout(): Promise<void> {
+  await api.post('/api/auth/logout');
+}
 
 export type TipoPublicoCampanha = 'Individual' | 'Casal' | 'Familia' | 'Mei' | 'Empresa';
 export type StatusCampanha = 'Rascunho' | 'Gerando' | 'Gerada' | 'Revisada' | 'Publicada' | 'Pausada' | 'Erro';

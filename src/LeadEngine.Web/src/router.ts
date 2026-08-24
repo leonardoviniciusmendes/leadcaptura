@@ -9,10 +9,12 @@ import ConfiguracoesView from './views/ConfiguracoesView.vue';
 import GoogleAdsPreviewView from './views/GoogleAdsPreviewView.vue';
 import GoogleAdsPublicacaoView from './views/GoogleAdsPublicacaoView.vue';
 import GoogleAdsDashboardView from './views/GoogleAdsDashboardView.vue';
+import LoginView from './views/LoginView.vue';
 import MetaAdsPreviewView from './views/MetaAdsPreviewView.vue';
 import PrivacyPolicyView from './views/PrivacyPolicyView.vue';
 import TermsOfUseView from './views/TermsOfUseView.vue';
 import DataDeletionView from './views/DataDeletionView.vue';
+import { ensureAuthenticated } from './services/auth';
 
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -27,9 +29,19 @@ export const router = createRouter({
     { path: '/googleads/dashboard', component: GoogleAdsDashboardView, meta: { title: 'Google Ads', subtitle: 'Metricas, sincronizacao e otimizacao' } },
     { path: '/leads', component: LeadsView, meta: { title: 'Leads', subtitle: 'Capturas da landing page' } },
     { path: '/configuracoes', component: ConfiguracoesView, meta: { title: 'Configuracoes', subtitle: 'Operacao e integracoes' } },
+    { path: '/login', component: LoginView, meta: { public: true } },
     { path: '/politica-de-privacidade', component: PrivacyPolicyView, meta: { public: true } },
     { path: '/termos-de-uso', component: TermsOfUseView, meta: { public: true } },
     { path: '/exclusao-de-dados', component: DataDeletionView, meta: { public: true } },
     { path: '/lp/:slug', component: PublicLandingView, meta: { public: true } }
   ]
+});
+
+router.beforeEach(async (to) => {
+  if (to.meta.public) return true;
+
+  const user = await ensureAuthenticated();
+  if (user) return true;
+
+  return { path: '/login', query: { redirect: to.fullPath } };
 });

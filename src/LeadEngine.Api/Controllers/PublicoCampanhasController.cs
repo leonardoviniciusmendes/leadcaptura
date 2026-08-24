@@ -1,5 +1,6 @@
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -7,6 +8,7 @@ namespace LeadEngine.Api.Controllers;
 
 [ApiController]
 [Route("api/publico/campanhas")]
+[AllowAnonymous]
 public sealed class PublicoCampanhasController(ILeadService leadService) : ControllerBase
 {
     [HttpGet("{slug}")]

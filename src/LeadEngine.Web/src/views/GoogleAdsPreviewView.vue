@@ -326,10 +326,33 @@ async function carregarPublicacaoExistente() {
 
   try {
     const publicacoes = await listarPublicacoesGoogleAdsPorCampanha(campanhaId);
-    publicacao.value = publicacoes.find((item) => item.previewId === preview.value?.id) ?? null;
+    publicacao.value = selecionarPublicacaoDoPreview(publicacoes, preview.value.id);
   } catch {
     publicacao.value = null;
   }
+}
+
+function selecionarPublicacaoDoPreview(publicacoes: GoogleAdsPublication[], previewId: string) {
+  return publicacoes
+    .filter((item) => item.previewId === previewId)
+    .sort((a, b) => {
+      const priority = prioridadePublicacao(b) - prioridadePublicacao(a);
+      if (priority !== 0) return priority;
+      return dataPublicacao(b) - dataPublicacao(a);
+    })[0] ?? null;
+}
+
+function prioridadePublicacao(publicacao: GoogleAdsPublication) {
+  if (publicacao.status === 'Reconciliada') return 50;
+  if (publicacao.status === 'Publicada') return 40;
+  if (publicacao.status === 'ParcialmentePublicada' && publicacao.recursos.length > 0) return 30;
+  if (publicacao.status === 'RequerIntervencao' && publicacao.recursos.length > 0) return 20;
+  if (publicacao.requestIdPublicacao || publicacao.recursos.length > 0) return 10;
+  return 0;
+}
+
+function dataPublicacao(publicacao: GoogleAdsPublication) {
+  return new Date(publicacao.dataAtualizacao || publicacao.dataCriacao).getTime();
 }
 
 async function gerar() {
