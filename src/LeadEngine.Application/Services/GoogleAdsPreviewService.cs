@@ -302,12 +302,17 @@ public sealed class GoogleAdsPreviewService(
     {
         var mappedAdGroup = mappedPayload.AdGroups.FirstOrDefault();
         var existingAdGroup = existingPayload.AdGroups.FirstOrDefault();
+        var preservedPayload = mappedPayload with
+        {
+            Campaign = mappedPayload.Campaign with { Name = existingPayload.Campaign.Name }
+        };
+
         if (mappedAdGroup is null || existingAdGroup is null || existingAdGroup.CpcBid is null)
         {
-            return mappedPayload;
+            return preservedPayload;
         }
 
-        return mappedPayload with
+        return preservedPayload with
         {
             AdGroups =
             [

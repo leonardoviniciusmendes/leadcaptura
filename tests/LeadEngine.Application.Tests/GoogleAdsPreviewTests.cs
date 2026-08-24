@@ -300,6 +300,31 @@ public sealed class GoogleAdsPreviewTests
         Assert.DoesNotContain(plan.Operations, x => x.TipoRecurso == "CampaignCriterion" && x.PayloadJson.Contains("\"geoTargetResourceName\":\"geoTargetConstants/2076\""));
     }
 
+    [Fact]
+    public async Task NomeEditadoDaCampaignPersisteEAlimentaOperationPlan()
+    {
+        var ctx = Context();
+        ctx.Campanha.Nome = "Captação Plano Familiar Zona Sul RJ";
+        var service = Service(ctx);
+        var preview = await service.GerarOuAtualizarAsync(ctx.Campanha.Id, CancellationToken.None);
+        var nomeEditado = "Captação Plano Familiar Zona Sul RJ - V2";
+
+        await service.AtualizarAsync(preview.Id, new AtualizarGoogleAdsPreviewRequest(nomeEditado, null, null, null, null, null, null, null, null, null), CancellationToken.None);
+        var reloaded = await service.ObterAsync(preview.Id, CancellationToken.None);
+        var regenerated = await service.GerarOuAtualizarAsync(ctx.Campanha.Id, CancellationToken.None);
+        var plan = await new GoogleAdsOperationBuilder(new GoogleAdsGeoTargetResolver(), new GoogleAdsLanguageResolver())
+            .BuildAsync(ctx.Planos.Items.Single(), "1234567890", CancellationToken.None);
+        var typedOperations = new GoogleAdsTypedOperationFactory().Create(plan);
+        using var campaignOperationPayload = System.Text.Json.JsonDocument.Parse(plan.Operations.Single(x => x.TipoRecurso == "Campaign").PayloadJson);
+
+        Assert.Equal(nomeEditado, reloaded.Payload.Campaign.Name);
+        Assert.Equal(nomeEditado, reloaded.NomeCampanha);
+        Assert.Equal(nomeEditado, regenerated.Payload.Campaign.Name);
+        Assert.Equal(nomeEditado, campaignOperationPayload.RootElement.GetProperty("name").GetString());
+        Assert.Equal(nomeEditado, typedOperations.Single(x => x.CampaignOperation is not null).CampaignOperation.Create.Name);
+        Assert.NotEqual("Captação Plano Familiar Zona Sul RJ", campaignOperationPayload.RootElement.GetProperty("name").GetString());
+    }
+
     private static TestContext Context()
     {
         var campanha = new Campanha
