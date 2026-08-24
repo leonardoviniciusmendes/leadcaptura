@@ -65,6 +65,58 @@ public sealed class ConfiguracoesTests
     }
 
     [Fact]
+    public async Task OpcionalNaoSensivel_ComDefaultVazio_RemoveOverrideAoReceberVazio()
+    {
+        var repo = new Repo();
+        var resolver = Resolver(repo);
+        var service = Service(repo, resolver);
+        await service.AtualizarCategoriaAsync(CategoriaConfiguracao.GoogleAds, new Dictionary<string, object?> { ["LoginCustomerId"] = "1948459907" }, CancellationToken.None);
+
+        await service.AtualizarCategoriaAsync(CategoriaConfiguracao.GoogleAds, new Dictionary<string, object?> { ["LoginCustomerId"] = "" }, CancellationToken.None);
+
+        var config = repo.Configs.Single(x => x.Chave == "GoogleAds.LoginCustomerId");
+        Assert.False(config.Ativo);
+        Assert.Null(config.Valor);
+        Assert.Null(config.ValorProtegido);
+    }
+
+    [Fact]
+    public async Task Resolver_AposLimparLoginCustomerId_NaoRetornaOrigemBanco()
+    {
+        var repo = new Repo();
+        var resolver = Resolver(repo);
+        var service = Service(repo, resolver);
+        await service.AtualizarCategoriaAsync(CategoriaConfiguracao.GoogleAds, new Dictionary<string, object?> { ["LoginCustomerId"] = "1948459907" }, CancellationToken.None);
+        Assert.Equal(OrigemConfiguracao.Banco, (await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "LoginCustomerId", CancellationToken.None)).Origem);
+
+        await service.AtualizarCategoriaAsync(CategoriaConfiguracao.GoogleAds, new Dictionary<string, object?> { ["LoginCustomerId"] = "   " }, CancellationToken.None);
+
+        var result = await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "LoginCustomerId", CancellationToken.None);
+        Assert.NotEqual(OrigemConfiguracao.Banco, result.Origem);
+        Assert.Equal(OrigemConfiguracao.Padrao, result.Origem);
+        Assert.False(result.Configured);
+        Assert.Equal("", result.Value);
+    }
+
+    [Theory]
+    [InlineData("DefaultCpcBid", "1.25")]
+    [InlineData("TestCustomerId", "1234567890")]
+    [InlineData("OptimizationModel", "google-ads-optimizer")]
+    public async Task OpcionaisGoogleAds_ComDefaultVazio_SeguemMesmaRegraDeRemocao(string key, string value)
+    {
+        var repo = new Repo();
+        var service = Service(repo);
+        await service.AtualizarCategoriaAsync(CategoriaConfiguracao.GoogleAds, new Dictionary<string, object?> { [key] = value }, CancellationToken.None);
+
+        await service.AtualizarCategoriaAsync(CategoriaConfiguracao.GoogleAds, new Dictionary<string, object?> { [key] = "" }, CancellationToken.None);
+
+        var config = repo.Configs.Single(x => x.Chave == $"GoogleAds.{key}");
+        Assert.False(config.Ativo);
+        Assert.Null(config.Valor);
+        Assert.Null(config.ValorProtegido);
+    }
+
+    [Fact]
     public async Task Segredo_RemocaoExplicita()
     {
         var repo = new Repo();
@@ -112,6 +164,17 @@ public sealed class ConfiguracoesTests
             new Dictionary<string, object?> { ["TimeoutSeconds"] = 2 },
             CancellationToken.None));
         Assert.Contains("TimeoutSeconds", ex.Message);
+    }
+
+    [Fact]
+    public async Task CampoObrigatorio_ComDefaultNaoVazio_ContinuaRejeitandoVazio()
+    {
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => Service(new Repo()).AtualizarCategoriaAsync(
+            CategoriaConfiguracao.GoogleAds,
+            new Dictionary<string, object?> { ["RedirectUri"] = "" },
+            CancellationToken.None));
+
+        Assert.Contains("RedirectUri", ex.Message);
     }
 
     [Fact]

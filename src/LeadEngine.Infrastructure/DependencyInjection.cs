@@ -46,6 +46,7 @@ public static class DependencyInjection
         services.AddScoped<IGoogleAdsOAuthClient, GoogleAdsOAuthClient>();
         services.AddScoped<IGoogleAdsTokenService, GoogleAdsTokenService>();
         services.AddScoped<IGoogleAdsConnectionService, GoogleAdsConnectionService>();
+        services.AddScoped<IGoogleAdsDiagnosticsService, GoogleAdsDiagnosticsService>();
         services.AddScoped<IGoogleAdsPlanoPublicacaoRepository, GoogleAdsPlanoPublicacaoRepository>();
         services.AddScoped<IGoogleAdsPublicationRepository, GoogleAdsPublicationRepository>();
         services.AddScoped<IGoogleAdsMetricsRepository, GoogleAdsMetricsRepository>();
@@ -66,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<IGoogleAdsMutationClient, GoogleAdsMutationClient>();
         services.AddScoped<IGoogleAdsResourceQueryClient, GoogleAdsResourceQueryClient>();
         services.AddScoped<GoogleAdsGaqlClient>();
+        services.AddScoped<IGoogleAdsDiagnosticsQueryClient, GoogleAdsDiagnosticsQueryClient>();
         services.AddScoped<IGoogleAdsMetricsQueryClient, GoogleAdsMetricsQueryClient>();
         services.AddScoped<IGoogleAdsSynchronizationQueryClient, GoogleAdsSynchronizationQueryClient>();
         services.AddScoped<IGoogleAdsRemoteValidationService, GoogleAdsRemoteValidationService>();

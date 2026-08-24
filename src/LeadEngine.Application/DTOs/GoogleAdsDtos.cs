@@ -65,3 +65,76 @@ public sealed record GoogleAdsTokenResult(
 public sealed record GoogleAdsUserInfo(string? Email, string? Name);
 
 public sealed record GoogleAdsAccessibleAccount(string CustomerId, string Nome);
+
+public sealed record GoogleAdsDiagnosticAccountResponse(
+    Guid Id,
+    string CustomerId,
+    string CustomerIdMascarado,
+    string Nome,
+    bool Ativa,
+    bool Padrao);
+
+public sealed record GoogleAdsDiagnosticCampaignDto(
+    string ResourceName,
+    string Id,
+    string? Name,
+    string? Status);
+
+public sealed record GoogleAdsDiagnosticAdGroupDto(
+    string ResourceName,
+    string Id,
+    string? Name,
+    string? Status,
+    string? CampaignResourceName);
+
+public sealed record GoogleAdsDiagnosticKeywordDto(
+    string ResourceName,
+    string Id,
+    string? Text,
+    string? MatchType,
+    string? Status,
+    string? AdGroupResourceName);
+
+public sealed record GoogleAdsDiagnosticResponsiveSearchAdDto(
+    string ResourceName,
+    string Id,
+    string? Status,
+    string? AdGroupResourceName);
+
+public sealed record CreateGoogleAdsDiagnosticCampaignRequest(
+    string Name,
+    long DailyBudgetMicros);
+
+public sealed record CreateGoogleAdsDiagnosticCampaignResponse(
+    string? RequestId,
+    IReadOnlyList<GoogleAdsPublishedResourceDto> Resources);
+
+public sealed record CreateGoogleAdsDiagnosticAdGroupRequest(
+    string CampaignResourceName,
+    string Name);
+
+public sealed record CreateGoogleAdsDiagnosticAdGroupResponse(
+    string? RequestId,
+    IReadOnlyList<GoogleAdsPublishedResourceDto> Resources);
+
+public sealed record CreateGoogleAdsDiagnosticKeywordItem(
+    string Text,
+    string MatchType);
+
+public sealed record CreateGoogleAdsDiagnosticKeywordsRequest(
+    string AdGroupResourceName,
+    IReadOnlyList<CreateGoogleAdsDiagnosticKeywordItem> Keywords);
+
+public sealed record CreateGoogleAdsDiagnosticKeywordsResponse(
+    string? RequestId,
+    IReadOnlyList<GoogleAdsPublishedResourceDto> Resources);
+
+public sealed record CreateGoogleAdsDiagnosticResponsiveSearchAdRequest(
+    string AdGroupResourceName,
+    string FinalUrl,
+    IReadOnlyList<string> Headlines,
+    IReadOnlyList<string> Descriptions);
+
+public sealed record CreateGoogleAdsDiagnosticResponsiveSearchAdResponse(
+    string? RequestId,
+    IReadOnlyList<GoogleAdsPublishedResourceDto> Resources);

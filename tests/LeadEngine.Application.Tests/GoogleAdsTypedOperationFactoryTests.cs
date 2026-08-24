@@ -1,5 +1,6 @@
 using LeadEngine.Application.DTOs;
 using LeadEngine.Infrastructure.GoogleAds;
+using Google.Ads.GoogleAds.V22.Enums;
 
 namespace LeadEngine.Application.Tests;
 
@@ -25,6 +26,9 @@ public sealed class GoogleAdsTypedOperationFactoryTests
         Assert.NotNull(operations[0].CampaignBudgetOperation);
         Assert.NotNull(operations[1].CampaignOperation);
         Assert.Equal(Google.Ads.GoogleAds.V22.Enums.CampaignStatusEnum.Types.CampaignStatus.Paused, operations[1].CampaignOperation.Create.Status);
+        Assert.Equal(
+            EuPoliticalAdvertisingStatusEnum.Types.EuPoliticalAdvertisingStatus.DoesNotContainEuPoliticalAdvertising,
+            operations[1].CampaignOperation.Create.ContainsEuPoliticalAdvertising);
         Assert.Equal(Google.Ads.GoogleAds.V22.Enums.AdGroupStatusEnum.Types.AdGroupStatus.Paused, operations[4].AdGroupOperation.Create.Status);
         Assert.Equal(Google.Ads.GoogleAds.V22.Enums.AdGroupAdStatusEnum.Types.AdGroupAdStatus.Paused, operations[6].AdGroupAdOperation.Create.Status);
     }

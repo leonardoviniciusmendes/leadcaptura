@@ -9,12 +9,14 @@ public sealed class GoogleAdsExceptionFormatter(ILogger<GoogleAdsExceptionFormat
 {
     public GoogleAdsDiagnosticResponse FromRestError(string body, string? requestId, string? statusCode = null, string? detail = null)
     {
-        var errors = ParseRestErrors(body, requestId, statusCode, detail);
+        var sanitizedBody = Sanitize(body) ?? "{}";
+        var sanitizedDetail = Sanitize(detail);
+        var errors = ParseRestErrors(sanitizedBody, requestId, statusCode, sanitizedDetail);
         var code = errors.FirstOrDefault()?.Codigo ?? statusCode ?? "google_ads_error";
-        var message = errors.FirstOrDefault()?.Mensagem ?? detail ?? "Google Ads rejeitou a operacao.";
-        var responseRequestId = requestId ?? ExtractRequestId(body);
-        LogDiagnostic("REST", responseRequestId, body, null);
-        return new GoogleAdsDiagnosticResponse(false, code, message, responseRequestId, errors, statusCode, detail);
+        var message = errors.FirstOrDefault()?.Mensagem ?? sanitizedDetail ?? "Google Ads rejeitou a operacao.";
+        var responseRequestId = requestId ?? ExtractRequestId(sanitizedBody);
+        LogDiagnostic("REST", responseRequestId, sanitizedBody, null);
+        return new GoogleAdsDiagnosticResponse(false, code, message, responseRequestId, errors, statusCode, sanitizedDetail);
     }
 
     public GoogleAdsDiagnosticResponse FromException(Exception exception, string? requestId = null)
@@ -42,7 +44,7 @@ public sealed class GoogleAdsExceptionFormatter(ILogger<GoogleAdsExceptionFormat
             var failure = exception.GetType().GetProperty("Failure")?.GetValue(exception);
             var errors = ExtractSdkErrors(failure, responseRequestId);
 
-            LogDiagnostic("GoogleAdsException", responseRequestId, failure?.ToString(), exception);
+            LogDiagnostic("GoogleAdsException", responseRequestId, Sanitize(failure?.ToString()), exception);
             return new GoogleAdsDiagnosticResponse(
                 false,
                 errors.FirstOrDefault()?.Codigo ?? "google_ads_error",
@@ -54,9 +56,10 @@ public sealed class GoogleAdsExceptionFormatter(ILogger<GoogleAdsExceptionFormat
 
         if (exception is RpcException rpcException)
         {
+            var sanitizedRpcDetail = Sanitize(rpcException.Status.Detail);
             var error = new GoogleAdsPublicationErrorDto(
                 rpcException.StatusCode.ToString(),
-                string.IsNullOrWhiteSpace(rpcException.Status.Detail) ? "Erro RPC ao chamar Google Ads." : rpcException.Status.Detail,
+                string.IsNullOrWhiteSpace(sanitizedRpcDetail) ? "Erro RPC ao chamar Google Ads." : sanitizedRpcDetail,
                 null,
                 null,
                 null,
@@ -65,18 +68,18 @@ public sealed class GoogleAdsExceptionFormatter(ILogger<GoogleAdsExceptionFormat
                 IsRecoverable(rpcException.StatusCode.ToString()),
                 Suggested(rpcException.StatusCode.ToString()),
                 StatusCode: rpcException.StatusCode.ToString(),
-                Detail: rpcException.Status.Detail);
-            LogDiagnostic("RpcException", requestId, rpcException.Status.Detail, exception);
-            return new GoogleAdsDiagnosticResponse(false, error.Codigo, error.Mensagem, requestId, [error], rpcException.StatusCode.ToString(), rpcException.Status.Detail, DevelopmentStack(exception));
+                Detail: sanitizedRpcDetail);
+            LogDiagnostic("RpcException", requestId, sanitizedRpcDetail, exception);
+            return new GoogleAdsDiagnosticResponse(false, error.Codigo, error.Mensagem, requestId, [error], rpcException.StatusCode.ToString(), sanitizedRpcDetail, DevelopmentStack(exception));
         }
 
-        LogDiagnostic(exception.GetType().Name, requestId, exception.InnerException?.ToString(), exception);
+        LogDiagnostic(exception.GetType().Name, requestId, Sanitize(exception.InnerException?.ToString()), exception);
         return new GoogleAdsDiagnosticResponse(
             false,
             "google_ads_error",
-            string.IsNullOrWhiteSpace(exception.Message) ? "Falha ao chamar Google Ads." : exception.Message,
+            string.IsNullOrWhiteSpace(exception.Message) ? "Falha ao chamar Google Ads." : Sanitize(exception.Message)!,
             requestId,
-            [GenericError("google_ads_error", exception.Message, requestId)],
+            [GenericError("google_ads_error", Sanitize(exception.Message) ?? string.Empty, requestId)],
             StackTrace: DevelopmentStack(exception));
     }
 
@@ -101,7 +104,7 @@ public sealed class GoogleAdsExceptionFormatter(ILogger<GoogleAdsExceptionFormat
             var result = new List<GoogleAdsPublicationErrorDto>();
             if (root.TryGetProperty("error", out var errorRoot))
             {
-                var topMessage = S(errorRoot, "message") ?? detail ?? "Google Ads rejeitou a operacao.";
+                var topMessage = Sanitize(S(errorRoot, "message")) ?? detail ?? "Google Ads rejeitou a operacao.";
                 var topStatus = S(errorRoot, "status") ?? statusCode ?? "google_ads_error";
                 if (errorRoot.TryGetProperty("details", out var details) && details.ValueKind == JsonValueKind.Array)
                 {
@@ -121,7 +124,7 @@ public sealed class GoogleAdsExceptionFormatter(ILogger<GoogleAdsExceptionFormat
                                 var code = ErrorCode(item) ?? topStatus;
                                 result.Add(new GoogleAdsPublicationErrorDto(
                                     code,
-                                    S(item, "message") ?? topMessage,
+                                    Sanitize(S(item, "message")) ?? topMessage,
                                     OperationFromFieldPath(fieldPath),
                                     IndexFromFieldPath(fieldPath),
                                     location,
@@ -131,7 +134,7 @@ public sealed class GoogleAdsExceptionFormatter(ILogger<GoogleAdsExceptionFormat
                                     Suggested(code),
                                     location,
                                     fieldPath,
-                                    Trigger(item),
+                                    Sanitize(Trigger(item)),
                                     statusCode,
                                     detail));
                             }
@@ -241,8 +244,8 @@ public sealed class GoogleAdsExceptionFormatter(ILogger<GoogleAdsExceptionFormat
             }
 
             var errorCode = error.GetType().GetProperty("ErrorCode")?.GetValue(error)?.ToString() ?? "google_ads_error";
-            var message = error.GetType().GetProperty("Message")?.GetValue(error)?.ToString() ?? "Erro retornado pelo Google Ads.";
-            var trigger = error.GetType().GetProperty("Trigger")?.GetValue(error)?.ToString();
+            var message = Sanitize(error.GetType().GetProperty("Message")?.GetValue(error)?.ToString()) ?? "Erro retornado pelo Google Ads.";
+            var trigger = Sanitize(error.GetType().GetProperty("Trigger")?.GetValue(error)?.ToString());
             var fieldPath = ExtractSdkFieldPath(error.GetType().GetProperty("Location")?.GetValue(error));
             var location = fieldPath.Length == 0 ? null : string.Join(".", fieldPath);
             result.Add(new GoogleAdsPublicationErrorDto(
@@ -339,7 +342,7 @@ public sealed class GoogleAdsExceptionFormatter(ILogger<GoogleAdsExceptionFormat
     }
 
     private static string? S(JsonElement e, string p) => e.TryGetProperty(p, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
-    private static string? DevelopmentStack(Exception exception) => Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development" ? exception.ToString() : null;
+    private static string? DevelopmentStack(Exception exception) => Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development" ? Sanitize(exception.ToString()) : null;
 
     private static string? OperationFromFieldPath(IReadOnlyList<string> fieldPath)
     {
@@ -386,5 +389,23 @@ public sealed class GoogleAdsExceptionFormatter(ILogger<GoogleAdsExceptionFormat
         if (code.Contains("quota", StringComparison.OrdinalIgnoreCase)) return "Tente novamente mais tarde.";
         if (code.Contains("timeout", StringComparison.OrdinalIgnoreCase) || code.Contains("unavailable", StringComparison.OrdinalIgnoreCase)) return "Tente novamente.";
         return "Consulte o requestId e revise a configuracao.";
+    }
+
+    private static string? Sanitize(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var sanitized = value
+            .Replace("\r", " ")
+            .Replace("\n", " ")
+            .Replace("\t", " ")
+            .Trim();
+        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "(access_token|refresh_token|developer_token|developer-token|client_secret|client-secret)=([^\\s&\"}]+)", "$1=[redacted]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "\"(access_token|refresh_token|developer_token|developer-token|client_secret|client-secret)\"\\s*:\\s*\"[^\"]+\"", "\"$1\":\"[redacted]\"", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "Bearer\\s+[^\\s\"}]+", "Bearer [redacted]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return sanitized.Length <= 2000 ? sanitized : sanitized[..2000];
     }
 }

@@ -71,6 +71,7 @@ public sealed class GoogleAdsTypedOperationFactory
             Name = S(root, "name"),
             Status = CampaignStatusEnum.Types.CampaignStatus.Paused,
             AdvertisingChannelType = AdvertisingChannelTypeEnum.Types.AdvertisingChannelType.Search,
+            ContainsEuPoliticalAdvertising = EuPoliticalAdvertisingStatusEnum.Types.EuPoliticalAdvertisingStatus.DoesNotContainEuPoliticalAdvertising,
             CampaignBudget = S(root, "budgetResource"),
             NetworkSettings = new Campaign.Types.NetworkSettings
             {

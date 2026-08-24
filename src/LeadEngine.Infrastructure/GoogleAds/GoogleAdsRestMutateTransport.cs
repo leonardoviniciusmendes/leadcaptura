@@ -23,6 +23,7 @@ public sealed class GoogleAdsRestMutateTransport(
         CancellationToken cancellationToken)
     {
         var baseUrl = (await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "ApiBaseUrl", cancellationToken)).Value ?? "https://googleads.googleapis.com/v22";
+        var loginCustomerId = (await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "LoginCustomerId", cancellationToken)).Value;
         var timeoutSeconds = int.TryParse((await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "ApiTimeoutSeconds", cancellationToken)).Value, out var timeout) ? timeout : 60;
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(timeoutSeconds, 10, 300)));
@@ -32,6 +33,10 @@ public sealed class GoogleAdsRestMutateTransport(
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/customers/{GoogleAdsCustomerId.Normalize(customerId)}/googleAds:mutate");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         request.Headers.TryAddWithoutValidation("developer-token", developerToken);
+        if (!string.IsNullOrWhiteSpace(loginCustomerId))
+        {
+            request.Headers.TryAddWithoutValidation("login-customer-id", new string(loginCustomerId.Where(char.IsDigit).ToArray()));
+        }
         request.Content = new StringContent(WithExecutionFlags(doc.RootElement, validateOnly), Encoding.UTF8, "application/json");
         using var response = await httpClientFactory.CreateClient("googleads").SendAsync(request, timeoutCts.Token);
         var requestId = response.Headers.TryGetValues("request-id", out var values) ? values.FirstOrDefault() : null;

@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using LeadEngine.Application.Common;
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
@@ -9,7 +10,8 @@ namespace LeadEngine.Infrastructure.GoogleAds;
 
 public sealed class GoogleAdsOAuthClient(
     IHttpClientFactory httpClientFactory,
-    IConfigurationResolver resolver) : IGoogleAdsOAuthClient
+    IConfigurationResolver resolver,
+    GoogleAdsExceptionFormatter exceptionFormatter) : IGoogleAdsOAuthClient
 {
     public async Task<GoogleAdsTokenResult> ExchangeCodeAsync(string code, string redirectUri, CancellationToken cancellationToken)
     {
@@ -65,7 +67,13 @@ public sealed class GoogleAdsOAuthClient(
         using var response = await httpClientFactory.CreateClient("googleads").SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            throw new InvalidOperationException("Nao foi possivel listar contas Google Ads.");
+            var text = await response.Content.ReadAsStringAsync(cancellationToken);
+            var requestId = response.Headers.TryGetValues("request-id", out var values) ? values.FirstOrDefault() : null;
+            throw new GoogleAdsDiagnosticException(exceptionFormatter.FromRestError(
+                text,
+                requestId,
+                ((int)response.StatusCode).ToString(),
+                "Nao foi possivel listar contas Google Ads."));
         }
 
         using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);

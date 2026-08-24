@@ -84,17 +84,26 @@ public sealed class ConfiguracaoService(
             {
                 var value = NormalizeValue(raw);
                 Validate(definition, value);
-                config.Ativo = true;
-                if (definition.Sensivel)
+                if (ShouldRemoveEmptyOptionalOverride(definition, value))
                 {
-                    if (value is not null)
-                    {
-                        config.ValorProtegido = protector.Protect(value);
-                    }
+                    config.Valor = null;
+                    config.ValorProtegido = null;
+                    config.Ativo = false;
                 }
                 else
                 {
-                    config.Valor = value;
+                    config.Ativo = true;
+                    if (definition.Sensivel)
+                    {
+                        if (value is not null)
+                        {
+                            config.ValorProtegido = protector.Protect(value);
+                        }
+                    }
+                    else
+                    {
+                        config.Valor = value;
+                    }
                 }
             }
 
@@ -344,6 +353,13 @@ public sealed class ConfiguracaoService(
     private static bool ToBool(object? raw)
     {
         return bool.TryParse(NormalizeValue(raw), out var value) && value;
+    }
+
+    private static bool ShouldRemoveEmptyOptionalOverride(ConfigDefinition definition, string? value)
+    {
+        return !definition.Sensivel
+            && string.IsNullOrWhiteSpace(definition.DefaultValue)
+            && string.IsNullOrWhiteSpace(value);
     }
 
     private static void Validate(ConfigDefinition definition, string? value)
