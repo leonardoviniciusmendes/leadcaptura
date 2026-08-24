@@ -1,0 +1,148 @@
+warning: in the working copy of 'src/LeadEngine.Infrastructure/GoogleAds/GoogleAdsResourceQueryClient.cs', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/src/LeadEngine.Infrastructure/GoogleAds/GoogleAdsResourceQueryClient.cs b/src/LeadEngine.Infrastructure/GoogleAds/GoogleAdsResourceQueryClient.cs[m
+[1mindex 6e12f19..7f556d7 100644[m
+[1m--- a/src/LeadEngine.Infrastructure/GoogleAds/GoogleAdsResourceQueryClient.cs[m
+[1m+++ b/src/LeadEngine.Infrastructure/GoogleAds/GoogleAdsResourceQueryClient.cs[m
+[36m@@ -23,31 +23,49 @@[m [mpublic sealed class GoogleAdsResourceQueryClient([m
+         IReadOnlyList<GoogleAdsPublishedResourceDto> resources,[m
+         CancellationToken cancellationToken)[m
+     {[m
+[31m-        var result = new List<GoogleAdsPublishedResourceCheckDto>();[m
+[31m-        foreach (var resource in resources.Where(x => !string.IsNullOrWhiteSpace(x.ResourceName)))[m
+[32m+[m[32m        var validResources = resources.Where(x => !string.IsNullOrWhiteSpace(x.ResourceName)).ToArray();[m
+[32m+[m[32m        var checks = new Dictionary<string, GoogleAdsPublishedResourceCheckDto>(StringComparer.OrdinalIgnoreCase);[m
+[32m+[m[32m        foreach (var resource in validResources.Where(x => QueryKindFor(x) is null))[m
+         {[m
+[31m-            var check = await CheckOneAsync(customerId, accessToken, developerToken, resource, cancellationToken);[m
+[31m-            result.Add(check);[m
+[32m+[m[32m            checks[resource.ResourceName] = new GoogleAdsPublishedResourceCheckDto(resource.TipoRecurso, resource.ResourceName, resource.ExternalId, resource.Nome, resource.Status, false, false, "Tipo de recurso sem consulta de reconciliacao.");[m
+         }[m
+ [m
+[31m-        return result;[m
+[32m+[m[32m        foreach (var group in validResources.Where(x => QueryKindFor(x) is not null).GroupBy(QueryKindFor))[m
+[32m+[m[32m        {[m
+[32m+[m[32m            foreach (var check in await CheckBatchAsync(customerId, accessToken, developerToken, group.ToArray(), cancellationToken))[m
+[32m+[m[32m            {[m
+[32m+[m[32m                checks[check.ResourceName] = check;[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        return validResources[m
+[32m+[m[32m            .Select(resource => checks.TryGetValue(resource.ResourceName, out var check)[m
+[32m+[m[32m                ? check[m
+[32m+[m[32m                : new GoogleAdsPublishedResourceCheckDto(resource.TipoRecurso, resource.ResourceName, resource.ExternalId, resource.Nome, resource.Status, false, false, "Recurso ausente."))[m
+[32m+[m[32m            .ToArray();[m
+     }[m
+ [m
+[31m-    private async Task<GoogleAdsPublishedResourceCheckDto> CheckOneAsync(string customerId, string accessToken, string developerToken, GoogleAdsPublishedResourceDto resource, CancellationToken cancellationToken)[m
+[32m+[m[32m    private async Task<IReadOnlyList<GoogleAdsPublishedResourceCheckDto>> CheckBatchAsync(string customerId, string accessToken, string developerToken, IReadOnlyList<GoogleAdsPublishedResourceDto> resources, CancellationToken cancellationToken)[m
+     {[m
+[31m-        var query = QueryFor(resource);[m
+[32m+[m[32m        var query = QueryFor(resources);[m
+         if (query is null)[m
+         {[m
+[31m-            return new GoogleAdsPublishedResourceCheckDto(resource.TipoRecurso, resource.ResourceName, resource.ExternalId, resource.Nome, resource.Status, false, false, "Tipo de recurso sem consulta de reconciliacao.");[m
+[32m+[m[32m            return resources.Select(resource => new GoogleAdsPublishedResourceCheckDto(resource.TipoRecurso, resource.ResourceName, resource.ExternalId, resource.Nome, resource.Status, false, false, "Tipo de recurso sem consulta de reconciliacao.")).ToArray();[m
+         }[m
+ [m
+         var baseUrl = (await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "ApiBaseUrl", cancellationToken)).Value ?? "https://googleads.googleapis.com/v22";[m
+[32m+[m[32m        var loginCustomerId = (await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "LoginCustomerId", cancellationToken)).Value;[m
+         var timeoutSeconds = int.TryParse((await resolver.ResolveAsync(CategoriaConfiguracao.GoogleAds, "ApiTimeoutSeconds", cancellationToken)).Value, out var timeout) ? timeout : 60;[m
+         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);[m
+         timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(timeoutSeconds, 10, 300)));[m
+         using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/customers/{GoogleAdsCustomerId.Normalize(customerId)}/googleAds:search");[m
+         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);[m
+         request.Headers.TryAddWithoutValidation("developer-token", developerToken);[m
+[32m+[m[32m        if (!string.IsNullOrWhiteSpace(loginCustomerId))[m
+[32m+[m[32m        {[m
+[32m+[m[32m            request.Headers.TryAddWithoutValidation("login-customer-id", new string(loginCustomerId.Where(char.IsDigit).ToArray()));[m
+[32m+[m[32m        }[m
+[32m+[m
+         request.Content = new StringContent(JsonSerializer.Serialize(new { query }, JsonOptions), Encoding.UTF8, "application/json");[m
+         using var response = await httpClientFactory.CreateClient("googleads").SendAsync(request, timeoutCts.Token);[m
+         var body = await response.Content.ReadAsStringAsync(timeoutCts.Token);[m
+[36m@@ -57,28 +75,71 @@[m [mpublic sealed class GoogleAdsResourceQueryClient([m
+             throw new GoogleAdsDiagnosticException(exceptionFormatter.FromRestError(body, requestId, ((int)response.StatusCode).ToString(), "Nao foi possivel consultar o recurso no Google Ads."));[m
+         }[m
+ [m
+[31m-        var found = HasResult(body);[m
+[31m-        return new GoogleAdsPublishedResourceCheckDto(resource.TipoRecurso, resource.ResourceName, resource.ExternalId, resource.Nome, resource.Status, found, false, found ? "Recurso encontrado." : "Recurso ausente.");[m
+[32m+[m[32m        var found = FoundResourceNames(body);[m
+[32m+[m[32m        return resources[m
+[32m+[m[32m            .Where(resource => found.Contains(resource.ResourceName))[m
+[32m+[m[32m            .Select(resource => new GoogleAdsPublishedResourceCheckDto(resource.TipoRecurso, resource.ResourceName, resource.ExternalId, resource.Nome, resource.Status, true, false, "Recurso encontrado."))[m
+[32m+[m[32m            .ToArray();[m
+     }[m
+ [m
+[31m-    private static string? QueryFor(GoogleAdsPublishedResourceDto resource)[m
+[32m+[m[32m    private static string? QueryFor(IReadOnlyList<GoogleAdsPublishedResourceDto> resources)[m
+     {[m
+[31m-        var escaped = resource.ResourceName.Replace("'", "\\'", StringComparison.Ordinal);[m
+[31m-        return resource.TipoRecurso switch[m
+[32m+[m[32m        var kind = QueryKindFor(resources.First());[m
+[32m+[m[32m        if (kind is null)[m
+[32m+[m[32m        {[m
+[32m+[m[32m            return null;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        var names = string.Join(", ", resources.Select(x => $"'{Escape(x.ResourceName)}'"));[m
+[32m+[m[32m        return kind switch[m
+         {[m
+[31m-            "Budget" => $"SELECT campaign_budget.resource_name, campaign_budget.name, campaign_budget.status FROM campaign_budget WHERE campaign_budget.resource_name = '{escaped}' LIMIT 1",[m
+[31m-            "Campaign" => $"SELECT campaign.resource_name, campaign.name, campaign.status FROM campaign WHERE campaign.resource_name = '{escaped}' LIMIT 1",[m
+[31m-            "CampaignCriterion" or "NegativeKeyword" => $"SELECT campaign_criterion.resource_name, campaign_criterion.status FROM campaign_criterion WHERE campaign_criterion.resource_name = '{escaped}' LIMIT 1",[m
+[31m-            "AdGroup" => $"SELECT ad_group.resource_name, ad_group.name, ad_group.status FROM ad_group WHERE ad_group.resource_name = '{escaped}' LIMIT 1",[m
+[31m-            "Keyword" => $"SELECT ad_group_criterion.resource_name, ad_group_criterion.status FROM ad_group_criterion WHERE ad_group_criterion.resource_name = '{escaped}' LIMIT 1",[m
+[31m-            "ResponsiveSearchAd" => $"SELECT ad_group_ad.resource_name, ad_group_ad.status FROM ad_group_ad WHERE ad_group_ad.resource_name = '{escaped}' LIMIT 1",[m
+[32m+[m[32m            "Budget" => $"SELECT campaign_budget.resource_name, campaign_budget.name, campaign_budget.status FROM campaign_budget WHERE campaign_budget.resource_name IN ({names})",[m
+[32m+[m[32m            "Campaign" => $"SELECT campaign.resource_name, campaign.name, campaign.status FROM campaign WHERE campaign.resource_name IN ({names})",[m
+[32m+[m[32m            "CampaignCriterion" => $"SELECT campaign_criterion.resource_name, campaign_criterion.status FROM campaign_criterion WHERE campaign_criterion.resource_name IN ({names})",[m
+[32m+[m[32m            "AdGroup" => $"SELECT ad_group.resource_name, ad_group.name, ad_group.status FROM ad_group WHERE ad_group.resource_name IN ({names})",[m
+[32m+[m[32m            "Keyword" => $"SELECT ad_group_criterion.resource_name, ad_group_criterion.status FROM ad_group_criterion WHERE ad_group_criterion.resource_name IN ({names})",[m
+[32m+[m[32m            "ResponsiveSearchAd" => $"SELECT ad_group_ad.resource_name, ad_group_ad.status FROM ad_group_ad WHERE ad_group_ad.resource_name IN ({names})",[m
+             _ => null[m
+         };[m
+     }[m
+ [m
+[31m-    private static bool HasResult(string body)[m
+[32m+[m[32m    private static string? QueryKindFor(GoogleAdsPublishedResourceDto resource) => resource.TipoRecurso switch[m
+     {[m
+[32m+[m[32m        "Budget" => "Budget",[m
+[32m+[m[32m        "Campaign" => "Campaign",[m
+[32m+[m[32m        "CampaignCriterion" or "NegativeKeyword" => "CampaignCriterion",[m
+[32m+[m[32m        "AdGroup" => "AdGroup",[m
+[32m+[m[32m        "Keyword" => "Keyword",[m
+[32m+[m[32m        "ResponsiveSearchAd" => "ResponsiveSearchAd",[m
+[32m+[m[32m        _ => null[m
+[32m+[m[32m    };[m
+[32m+[m
+[32m+[m[32m    private static string Escape(string value) => value.Replace("'", "\\'", StringComparison.Ordinal);[m
+[32m+[m
+[32m+[m[32m    private static HashSet<string> FoundResourceNames(string body)[m
+[32m+[m[32m    {[m
+[32m+[m[32m        var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);[m
+         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);[m
+[31m-        return doc.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array && results.GetArrayLength() > 0;[m
+[32m+[m[32m        if (!doc.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)[m
+[32m+[m[32m        {[m
+[32m+[m[32m            return found;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        foreach (var row in results.EnumerateArray())[m
+[32m+[m[32m        {[m
+[32m+[m[32m            foreach (var entity in new[] { "campaignBudget", "campaign", "campaignCriterion", "adGroup", "adGroupCriterion", "adGroupAd" })[m
+[32m+[m[32m            {[m
+[32m+[m[32m                if (row.TryGetProperty(entity, out var value)[m
+[32m+[m[32m                    && value.TryGetProperty("resourceName", out var resourceName)[m
+[32m+[m[32m                    && resourceName.ValueKind == JsonValueKind.String[m
+[32m+[m[32m                    && !string.IsNullOrWhiteSpace(resourceName.GetString()))[m
+[32m+[m[32m                {[m
+[32m+[m[32m                    found.Add(resourceName.GetString()!);[m
+[32m+[m[32m                    break;[m
+[32m+[m[32m                }[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        return found;[m
+     }[m
+ }[m
