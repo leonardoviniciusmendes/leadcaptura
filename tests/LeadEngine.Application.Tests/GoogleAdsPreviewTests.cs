@@ -3,6 +3,7 @@ using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
 using LeadEngine.Domain.Entities;
 using LeadEngine.Domain.Enums;
+using LeadEngine.Infrastructure.GoogleAds;
 
 namespace LeadEngine.Application.Tests;
 
@@ -213,6 +214,55 @@ public sealed class GoogleAdsPreviewTests
 
         Assert.Equal("Campanha teste", ctx.Campanha.Nome);
         Assert.Empty(ctx.Planos.Items);
+    }
+
+    [Fact]
+    public async Task EditarCpcParaTresPersisteAposReloadERegeneracao()
+    {
+        var ctx = Context();
+        var service = Service(ctx);
+        var preview = await service.GerarOuAtualizarAsync(ctx.Campanha.Id, CancellationToken.None);
+
+        Assert.Null(preview.Payload.AdGroups[0].CpcBid);
+        Assert.Contains("CPC inicial nao configurado.", preview.Avisos);
+
+        await service.AtualizarAsync(preview.Id, new AtualizarGoogleAdsPreviewRequest(null, null, null, 3m, null, null, null, null, null, null), CancellationToken.None);
+        var reloaded = await service.ObterAsync(preview.Id, CancellationToken.None);
+        var regenerated = await service.GerarOuAtualizarAsync(ctx.Campanha.Id, CancellationToken.None);
+
+        Assert.Equal(3m, reloaded.Payload.AdGroups[0].CpcBid);
+        Assert.Equal(3_000_000, reloaded.Payload.AdGroups[0].CpcBidMicros);
+        Assert.DoesNotContain("CPC inicial nao configurado.", reloaded.Avisos);
+        Assert.Equal(3m, regenerated.Payload.AdGroups[0].CpcBid);
+        Assert.Equal(3_000_000, regenerated.Payload.AdGroups[0].CpcBidMicros);
+        Assert.DoesNotContain("CPC inicial nao configurado.", regenerated.Avisos);
+    }
+
+    [Fact]
+    public async Task LocalizacaoRioDeJaneiroPersisteEGeraCampaignCriterionSemFallbackBrasil()
+    {
+        var ctx = Context();
+        var service = Service(ctx);
+        var preview = await service.GerarOuAtualizarAsync(ctx.Campanha.Id, CancellationToken.None);
+        await service.AtualizarAsync(preview.Id, new AtualizarGoogleAdsPreviewRequest(null, null, null, 3m, null, null, null, null, null, null), CancellationToken.None);
+        var reloaded = await service.ObterAsync(preview.Id, CancellationToken.None);
+
+        var plan = await new GoogleAdsOperationBuilder(new GoogleAdsGeoTargetResolver(), new GoogleAdsLanguageResolver())
+            .BuildAsync(ctx.Planos.Items.Single(), "1234567890", CancellationToken.None);
+
+        Assert.Equal("BR", reloaded.Payload.Campaign.CountryCode);
+        Assert.Equal("Rio de Janeiro, State of Rio de Janeiro, Brazil", reloaded.Payload.Campaign.LocationName);
+        Assert.Equal("geoTargetConstants/1001655", reloaded.Payload.Campaign.GeoTargetResourceName);
+        Assert.Equal("geoTargetConstants/1001655", plan.GeoTargetResourceName);
+        Assert.NotEqual("geoTargetConstants/2076", plan.GeoTargetResourceName);
+        Assert.Contains(plan.Operations, x => x.TipoRecurso == "CampaignCriterion" && x.PayloadJson.Contains("\"geoTargetResourceName\":\"geoTargetConstants/1001655\""));
+        Assert.Contains(plan.Operations, x => x.TipoRecurso == "AdGroup" && x.PayloadJson.Contains("\"cpcBidMicros\":3000000"));
+        Assert.All(plan.Operations, x => Assert.DoesNotContain("ENABLED", x.PayloadJson, StringComparison.OrdinalIgnoreCase));
+        var operations = new GoogleAdsTypedOperationFactory().Create(plan);
+        Assert.Equal(Google.Ads.GoogleAds.V22.Enums.CampaignStatusEnum.Types.CampaignStatus.Paused, operations[1].CampaignOperation.Create.Status);
+        Assert.Equal(Google.Ads.GoogleAds.V22.Enums.AdGroupStatusEnum.Types.AdGroupStatus.Paused, operations.Single(x => x.AdGroupOperation is not null).AdGroupOperation.Create.Status);
+        Assert.All(operations.Where(x => x.AdGroupCriterionOperation is not null), x => Assert.Equal(Google.Ads.GoogleAds.V22.Enums.AdGroupCriterionStatusEnum.Types.AdGroupCriterionStatus.Paused, x.AdGroupCriterionOperation.Create.Status));
+        Assert.Equal(Google.Ads.GoogleAds.V22.Enums.AdGroupAdStatusEnum.Types.AdGroupAdStatus.Paused, operations.Single(x => x.AdGroupAdOperation is not null).AdGroupAdOperation.Create.Status);
     }
 
     private static TestContext Context()

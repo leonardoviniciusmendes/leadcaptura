@@ -349,7 +349,18 @@ async function salvar() {
   if (!preview.value) return;
   busy.value = true;
   try {
-    preview.value = await atualizarGoogleAdsPreview(preview.value.id, { ...form });
+    preview.value = await atualizarGoogleAdsPreview(preview.value.id, {
+      nomeCampanha: form.nomeCampanha,
+      orcamentoDiario: form.orcamentoDiario,
+      nomeGrupo: form.nomeGrupo,
+      cpcBid: form.cpcBid,
+      keywords: form.keywords,
+      negativas: form.negativas,
+      headlines: form.headlines,
+      descriptions: form.descriptions,
+      path1: form.path1,
+      path2: form.path2
+    });
     hydrate();
     showToast({ type: 'success', title: 'Preview salvo' });
   } catch (err: unknown) {

@@ -28,6 +28,7 @@ public sealed class GoogleAdsCampaignMappingService(IConfigurationResolver resol
         var urlBuilder = publicUrlBuilder ?? new CampaignPublicUrlBuilder(resolver);
         var url = (await urlBuilder.BuildAsync(campanha.Slug, campanha.UrlPublica, cancellationToken)).Url ?? campanha.UrlPublica ?? string.Empty;
         var cpcMicros = config.DefaultCpcBid is > 0 ? GoogleAdsMoney.ToMicros(config.DefaultCpcBid.Value) : (long?)null;
+        var geoTarget = GeoTargetFor(campanha, config.DefaultCountryCode);
 
         return new GoogleAdsPreviewPayload(
             new GoogleAdsCampaignPlan(
@@ -42,7 +43,9 @@ public sealed class GoogleAdsCampaignMappingService(IConfigurationResolver resol
                 config.DefaultCurrencyCode,
                 config.DefaultLanguageCode,
                 config.DefaultCountryCode,
-                url),
+                url,
+                geoTarget.LocationName,
+                geoTarget.ResourceName),
             new GoogleAdsBudgetPlan($"{campanha.Nome} - diario", budget, GoogleAdsMoney.ToMicros(budget), "STANDARD", false),
             [
                 new GoogleAdsAdGroupPlan(
@@ -156,6 +159,35 @@ public sealed class GoogleAdsCampaignMappingService(IConfigurationResolver resol
         return JsonSerializer.Deserialize<IReadOnlyList<T>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
     }
 
+    private static GoogleAdsGeoTargetPlan GeoTargetFor(Campanha campanha, string countryCode)
+    {
+        var city = Normalize(campanha.Cidade);
+        var state = Normalize(campanha.Estado);
+        if (city == "rio de janeiro" && state is "rj" or "rio de janeiro")
+        {
+            return new GoogleAdsGeoTargetPlan("Rio de Janeiro, State of Rio de Janeiro, Brazil", "geoTargetConstants/1001655");
+        }
+
+        if (state is "rj" or "rio de janeiro")
+        {
+            return new GoogleAdsGeoTargetPlan("State of Rio de Janeiro, Brazil", "geoTargetConstants/20102");
+        }
+
+        if (!string.IsNullOrWhiteSpace(campanha.Cidade) || !string.IsNullOrWhiteSpace(campanha.Estado))
+        {
+            throw new ArgumentException("Localizacao Google Ads nao suportada nesta etapa.");
+        }
+
+        if (countryCode.Equals("BR", StringComparison.OrdinalIgnoreCase))
+        {
+            return new GoogleAdsGeoTargetPlan("Brazil", "geoTargetConstants/2076");
+        }
+
+        throw new ArgumentException("Localizacao Google Ads nao suportada nesta etapa.");
+    }
+
+    private static string Normalize(string? value) => RemoveAccents(value ?? string.Empty).Trim().ToLowerInvariant();
+
     private static string RemoveAccents(string value)
     {
         var normalized = value.Normalize(NormalizationForm.FormD);
@@ -169,4 +201,6 @@ public sealed class GoogleAdsCampaignMappingService(IConfigurationResolver resol
         }
         return builder.ToString().Normalize(NormalizationForm.FormC);
     }
+
+    private sealed record GoogleAdsGeoTargetPlan(string LocationName, string ResourceName);
 }

@@ -85,7 +85,9 @@ public sealed record GoogleAdsCampaignPlan(
     string CurrencyCode,
     string LanguageCode,
     string CountryCode,
-    string FinalUrl);
+    string FinalUrl,
+    string? LocationName = null,
+    string? GeoTargetResourceName = null);
 
 public sealed record GoogleAdsBudgetPlan(
     string Name,

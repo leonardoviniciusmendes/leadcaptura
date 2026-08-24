@@ -69,6 +69,12 @@ public sealed class GoogleAdsPreviewService(
             Versao = 0
         };
 
+        if (existing is not null)
+        {
+            payload = PreservePreviewOverrides(payload, DeserializePayload(existing.PayloadPreviewJson));
+            validacao = validationService.ValidarPayload(payload, config);
+        }
+
         if (existing is null)
         {
             await planoRepository.AdicionarAsync(plano, cancellationToken);
@@ -283,6 +289,28 @@ public sealed class GoogleAdsPreviewService(
                 adGroup?.NegativeKeywords.Count ?? 0,
                 erros.Count,
                 avisos.Count));
+    }
+
+    private static GoogleAdsPreviewPayload PreservePreviewOverrides(GoogleAdsPreviewPayload mappedPayload, GoogleAdsPreviewPayload existingPayload)
+    {
+        var mappedAdGroup = mappedPayload.AdGroups.FirstOrDefault();
+        var existingAdGroup = existingPayload.AdGroups.FirstOrDefault();
+        if (mappedAdGroup is null || existingAdGroup is null || existingAdGroup.CpcBid is null)
+        {
+            return mappedPayload;
+        }
+
+        return mappedPayload with
+        {
+            AdGroups =
+            [
+                mappedAdGroup with
+                {
+                    CpcBid = existingAdGroup.CpcBid,
+                    CpcBidMicros = existingAdGroup.CpcBidMicros ?? GoogleAdsMoney.ToMicros(existingAdGroup.CpcBid.Value)
+                }
+            ]
+        };
     }
 
     private async Task<GoogleAdsConfigurationSnapshot> Config(CancellationToken cancellationToken)

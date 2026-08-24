@@ -553,12 +553,13 @@ export interface GoogleAdsPreview {
 }
 
 export interface GoogleAdsPreviewPayload {
-  campaign: Record<string, unknown>;
+  campaign: Record<string, unknown> & { countryCode?: string; locationName?: string; geoTargetResourceName?: string };
   budget: Record<string, unknown>;
   adGroups: Array<{
     name: string;
     status: string;
     cpcBid?: number;
+    cpcBidMicros?: number;
     keywords: Array<{ text: string; matchType: string; status: string; origem: string }>;
     negativeKeywords: Array<{ text: string; matchType: string; origem: string }>;
     responsiveSearchAd: {

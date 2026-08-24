@@ -21,7 +21,9 @@ public sealed class GoogleAdsOperationBuilder(
         var budgetResource = $"customers/{normalizedCustomerId}/campaignBudgets/-1";
         var campaignResource = $"customers/{normalizedCustomerId}/campaigns/-2";
         var adGroupResource = $"customers/{normalizedCustomerId}/adGroups/-3";
-        var geo = await geoTargetResolver.ResolveAsync(preview.Pais, cancellationToken);
+        var geo = !string.IsNullOrWhiteSpace(payload.Campaign.GeoTargetResourceName)
+            ? payload.Campaign.GeoTargetResourceName
+            : await geoTargetResolver.ResolveAsync(preview.Pais, cancellationToken);
         var language = await languageResolver.ResolveAsync(preview.Idioma, cancellationToken);
         var warnings = new List<string>();
         if (!string.Equals(payload.Campaign.Status, "PAUSED", StringComparison.OrdinalIgnoreCase)) warnings.Add("Status solicitado foi substituido por PAUSED por seguranca.");
