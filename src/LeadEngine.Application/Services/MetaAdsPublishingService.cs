@@ -91,7 +91,7 @@ public sealed class MetaAdsPublishingService(
         }
 
         var preview = await previewService.GerarAsync(new MetaAdsPreviewRequest(publicacao.CampanhaId), cancellationToken);
-        if (!preview.Preflight.ReadyToPublish)
+        if (!preview.Preflight.ReadyToPublish && !CanResumePartial(publicacao))
         {
             var blockers = preview.Preflight.Items.Where(x => string.Equals(x.Status, "ERROR", StringComparison.OrdinalIgnoreCase)).Select(x => x.Message);
             throw new InvalidOperationException("Preflight Meta Ads bloqueou a publicacao. " + string.Join(" ", blockers));
@@ -141,7 +141,7 @@ public sealed class MetaAdsPublishingService(
         }
         catch (MetaAdsGraphApiException ex)
         {
-            await FailAsync(publicacao, HasAnyExternalId(publicacao) ? StatusPublicacaoMetaAds.FalhaParcial : StatusPublicacaoMetaAds.Falha, ex.Code, ex.ErrorSubcode, ex.Type, ex.Message, ex.HttpStatusCode?.ToString(), ex.FbTraceId, cancellationToken);
+            await FailAsync(publicacao, HasAnyExternalId(publicacao) ? StatusPublicacaoMetaAds.FalhaParcial : StatusPublicacaoMetaAds.Falha, ex.Code, ex.ErrorSubcode, ex.Type, DetailedMetaError(ex), ex.HttpStatusCode?.ToString(), ex.FbTraceId, cancellationToken);
             return ToResponse(publicacao, "Falha ao publicar na Meta. Recursos ja criados permaneceram pausados.");
         }
         catch (TaskCanceledException ex)
@@ -338,6 +338,40 @@ public sealed class MetaAdsPublishingService(
             || !string.IsNullOrWhiteSpace(publicacao.AdSetExternalId)
             || !string.IsNullOrWhiteSpace(publicacao.CreativeExternalId)
             || !string.IsNullOrWhiteSpace(publicacao.AdExternalId);
+    }
+
+    private static bool CanResumePartial(MetaAdsPublicacao publicacao)
+    {
+        return publicacao.Status == StatusPublicacaoMetaAds.FalhaParcial
+            && (!string.IsNullOrWhiteSpace(publicacao.CampaignExternalId)
+                || !string.IsNullOrWhiteSpace(publicacao.AdSetExternalId)
+                || !string.IsNullOrWhiteSpace(publicacao.CreativeExternalId)
+                || !string.IsNullOrWhiteSpace(publicacao.AdExternalId));
+    }
+
+    private static string DetailedMetaError(MetaAdsGraphApiException ex)
+    {
+        var parts = new List<string>();
+        Add(parts, "HTTP", ex.HttpStatusCode?.ToString());
+        Add(parts, "message", ex.MetaMessage ?? ex.Message);
+        Add(parts, "type", ex.Type);
+        Add(parts, "code", ex.Code);
+        Add(parts, "error_subcode", ex.ErrorSubcode);
+        Add(parts, "error_user_title", ex.ErrorUserTitle);
+        Add(parts, "error_user_msg", ex.ErrorUserMessage);
+        Add(parts, "fbtrace_id", ex.FbTraceId);
+        Add(parts, "blame_field", ex.BlameField);
+        Add(parts, "blame_field_specs", ex.BlameFieldSpecs);
+        Add(parts, "error_data", ex.ErrorData);
+        return string.Join("; ", parts);
+    }
+
+    private static void Add(List<string> parts, string name, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            parts.Add($"{name}={value}");
+        }
     }
 
     private static string Name(string value)
