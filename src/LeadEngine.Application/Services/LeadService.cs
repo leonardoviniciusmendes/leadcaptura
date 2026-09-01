@@ -29,7 +29,7 @@ public sealed class LeadService(
 
         if (!string.IsNullOrWhiteSpace(request.Website))
         {
-            return new CapturarLeadPublicoResponse(Guid.Empty, "Lead registrado com sucesso.", whatsAppUrlBuilder.Build(FakeLead(request), campanha));
+            return new CapturarLeadPublicoResponse(Guid.Empty, "Lead registrado com sucesso.", whatsAppUrlBuilder.Build(FakeLead(request), campanha), false);
         }
 
         ValidateAntiSpam(request);
@@ -41,14 +41,14 @@ public sealed class LeadService(
         var duplicado = await leadRepository.ObterDuplicadoRecenteAsync(campanha.Id, telefone, janela, cancellationToken);
         if (duplicado is not null)
         {
-            return new CapturarLeadPublicoResponse(duplicado.Id, "Lead registrado com sucesso.", whatsAppUrlBuilder.Build(duplicado, campanha));
+            return new CapturarLeadPublicoResponse(duplicado.Id, "Lead registrado com sucesso.", whatsAppUrlBuilder.Build(duplicado, campanha), false);
         }
 
         var lead = CriarLead(campanha, request, telefone);
         await leadRepository.AdicionarAsync(lead, cancellationToken);
         await leadRepository.SalvarAsync(cancellationToken);
 
-        return new CapturarLeadPublicoResponse(lead.Id, "Lead registrado com sucesso.", whatsAppUrlBuilder.Build(lead, campanha));
+        return new CapturarLeadPublicoResponse(lead.Id, "Lead registrado com sucesso.", whatsAppUrlBuilder.Build(lead, campanha), true);
     }
 
     private Lead CriarLead(Campanha campanha, CapturarLeadPublicoRequest request, string telefone)

@@ -27,4 +27,5 @@ public sealed record CapturarLeadPublicoRequest
 public sealed record CapturarLeadPublicoResponse(
     Guid LeadId,
     string Mensagem,
-    string WhatsAppUrl);
+    string WhatsAppUrl,
+    bool ConversaoConfirmada);

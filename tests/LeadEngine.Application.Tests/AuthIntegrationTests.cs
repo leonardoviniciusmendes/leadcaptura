@@ -132,7 +132,7 @@ public sealed class AuthIntegrationTests
 
         public Task<CapturarLeadPublicoResponse> CapturarLeadPublicoAsync(string slug, CapturarLeadPublicoRequest request, CancellationToken cancellationToken)
         {
-            return Task.FromResult(new CapturarLeadPublicoResponse(Guid.NewGuid(), "Lead recebido.", "https://wa.me/5521999999999"));
+            return Task.FromResult(new CapturarLeadPublicoResponse(Guid.NewGuid(), "Lead recebido.", "https://wa.me/5521999999999", true));
         }
     }
 

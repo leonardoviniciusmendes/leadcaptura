@@ -111,6 +111,8 @@ services:
         VITE_BASE_PATH: /
         VITE_API_BASE_URL: https://planos.consultoriadev.com
         VITE_CORRETOR_WHATSAPP: ${VITE_CORRETOR_WHATSAPP}
+        VITE_GOOGLE_ADS_CONVERSION_ID: ${VITE_GOOGLE_ADS_CONVERSION_ID:-AW-18343324236}
+        VITE_GOOGLE_ADS_CONVERSION_LABEL: ${VITE_GOOGLE_ADS_CONVERSION_LABEL:-4vIsCI7_0uscEMzU46pE}
     container_name: leadengine-web
     depends_on:
       - leadengine-api

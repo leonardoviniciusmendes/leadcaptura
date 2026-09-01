@@ -173,6 +173,7 @@ export interface CapturarLeadPublicoResponse {
   leadId: string;
   mensagem: string;
   whatsAppUrl: string;
+  conversaoConfirmada: boolean;
 }
 
 export interface Lead {

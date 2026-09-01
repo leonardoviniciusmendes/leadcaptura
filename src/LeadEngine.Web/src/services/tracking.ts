@@ -15,6 +15,9 @@ const keys = [
   'device'
 ];
 
+const googleAdsConversionId = import.meta.env.VITE_GOOGLE_ADS_CONVERSION_ID?.trim();
+const googleAdsConversionLabel = import.meta.env.VITE_GOOGLE_ADS_CONVERSION_LABEL?.trim();
+
 export function captureCampaignParams(): void {
   const params = new URLSearchParams(window.location.search);
   const stored = readCampaignParams();
@@ -44,6 +47,11 @@ export function pushDataLayer(event: Record<string, unknown>): void {
 
 export function trackGoogleAdsConversion(): Promise<void> {
   return new Promise((resolve) => {
+    if (!googleAdsConversionId || !googleAdsConversionLabel) {
+      resolve();
+      return;
+    }
+
     if (!window.gtag) {
       resolve();
       return;
@@ -58,7 +66,7 @@ export function trackGoogleAdsConversion(): Promise<void> {
 
     window.setTimeout(finish, 1500);
     window.gtag('event', 'conversion', {
-      send_to: 'AW-18343324236/JiGoCKCw99UcEMzU46pE',
+      send_to: `${googleAdsConversionId}/${googleAdsConversionLabel}`,
       event_callback: finish,
       event_timeout: 1500
     });

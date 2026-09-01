@@ -5,13 +5,15 @@ declare module '*.vue' {
 }
 
 interface Window {
-  dataLayer?: Array<Record<string, unknown>>;
+  dataLayer?: unknown[];
   gtag?: (...args: unknown[]) => void;
 }
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
   readonly VITE_CORRETOR_WHATSAPP?: string;
+  readonly VITE_GOOGLE_ADS_CONVERSION_ID?: string;
+  readonly VITE_GOOGLE_ADS_CONVERSION_LABEL?: string;
 }
 
 interface ImportMeta {

@@ -151,6 +151,7 @@ const submitError = ref('');
 const success = ref('');
 const whatsAppUrl = ref('');
 const openedAt = Date.now();
+const trackedConversionLeadIds = new Set<string>();
 
 const form = reactive<CapturarLeadPublicoRequest>({
   nome: '',
@@ -203,7 +204,10 @@ async function submit() {
   try {
     const telefone = form.telefone.replace(/\D/g, '');
     const response = await capturarLeadPublico(String(route.params.slug), { ...form, telefone, estado: form.estado.toUpperCase(), formOpenedAt: openedAt });
-    await trackGoogleAdsConversion();
+    if (response.conversaoConfirmada && !trackedConversionLeadIds.has(response.leadId)) {
+      trackedConversionLeadIds.add(response.leadId);
+      await trackGoogleAdsConversion();
+    }
     success.value = response.mensagem;
     whatsAppUrl.value = response.whatsAppUrl;
     window.open(response.whatsAppUrl, '_blank', 'noopener');
