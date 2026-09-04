@@ -1,4 +1,5 @@
 using System.Net;
+using System.Diagnostics;
 using LeadEngine.Application.Common;
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
@@ -45,21 +46,7 @@ public sealed class MetaAdsPublishingServiceTests
     public async Task Retry_ErroMetaNoCreative_MantemFalhaParcialIdsEDetalhes()
     {
         var ctx = TestContext.Create();
-        ctx.Graph.CreativeException = new MetaAdsGraphApiException(
-            "Invalid parameter",
-            "100",
-            false,
-            HttpStatusCode.BadRequest,
-            "1885183",
-            "OAuthException",
-            "trace123",
-            "Invalid parameter",
-            "Creative invalido",
-            "Campo image_hash rejeitado",
-            "{\"blame_field\":\"image_hash\"}",
-            "[\"object_story_spec\",\"link_data\",\"image_hash\"]",
-            null,
-            false);
+        ctx.Graph.CreativeException = CreativeInvalidException();
 
         var result = await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
 
@@ -81,6 +68,55 @@ public sealed class MetaAdsPublishingServiceTests
         Assert.Contains("error_user_title=Creative invalido", ctx.Publicacao.UltimoErroMensagem);
         Assert.Contains("error_user_msg=Campo image_hash rejeitado", ctx.Publicacao.UltimoErroMensagem);
         Assert.Contains("fbtrace_id=trace123", ctx.Publicacao.UltimoErroMensagem);
+    }
+
+    [Fact]
+    public async Task Retry_ErroMetaNoCreative_TokenOriginalCancelado_PersisteFalhaComTokenIndependente()
+    {
+        var ctx = TestContext.Create();
+        using var requestCts = new CancellationTokenSource();
+        ctx.Graph.CancelBeforeCreativeException = requestCts;
+        ctx.Graph.CreativeException = CreativeInvalidException();
+
+        var result = await Service(ctx).RetentarAsync(ctx.Publicacao.Id, requestCts.Token);
+
+        Assert.True(requestCts.IsCancellationRequested);
+        Assert.Equal("FalhaParcial", result.Status);
+        Assert.Equal("CriandoCreative", result.UltimaEtapaConcluida);
+        Assert.Equal("120249268268550352", result.CampaignExternalId);
+        Assert.Equal("120249268268890352", result.AdSetExternalId);
+        Assert.Null(result.CreativeExternalId);
+        Assert.Null(result.AdExternalId);
+        Assert.False(ctx.Publicacoes.FailureSaveTokenWasCancellationRequested);
+        Assert.True(ctx.Publicacoes.FailureSaveTokenCanBeCanceled);
+        Assert.Equal(0, ctx.Graph.CampaignCreates);
+        Assert.Equal(0, ctx.Graph.AdSetCreates);
+        Assert.Equal(1, ctx.Graph.CreativeCreates);
+        Assert.Equal(0, ctx.Graph.AdCreates);
+        Assert.Contains("message=Invalid parameter", ctx.Publicacao.UltimoErroMensagem);
+        Assert.Contains("fbtrace_id=trace123", ctx.Publicacao.UltimoErroMensagem);
+    }
+
+    [Fact]
+    public async Task Retry_ErroMetaNoCreative_PersistenciaDeFalhaTemTimeoutProprio()
+    {
+        var ctx = TestContext.Create();
+        ctx.Graph.CreativeException = CreativeInvalidException();
+        ctx.Publicacoes.WaitForFailurePersistenceTimeout = true;
+
+        var elapsed = Stopwatch.StartNew();
+        await Assert.ThrowsAsync<TaskCanceledException>(() => Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None));
+        elapsed.Stop();
+
+        Assert.True(ctx.Publicacoes.FailurePersistenceTimedOut);
+        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(10));
+        Assert.Equal(StatusPublicacaoMetaAds.FalhaParcial, ctx.Publicacao.Status);
+        Assert.Equal("CriandoCreative", ctx.Publicacao.UltimaEtapaConcluida);
+        Assert.Equal("120249268268550352", ctx.Publicacao.CampaignExternalId);
+        Assert.Equal("120249268268890352", ctx.Publicacao.AdSetExternalId);
+        Assert.Contains("message=Invalid parameter", ctx.Publicacao.UltimoErroMensagem);
+        Assert.Equal(0, ctx.Graph.CampaignCreates);
+        Assert.Equal(0, ctx.Graph.AdSetCreates);
     }
 
     [Fact]
@@ -109,6 +145,22 @@ public sealed class MetaAdsPublishingServiceTests
         ctx.Preview,
         ctx.Resolver,
         ctx.Protector);
+
+    private static MetaAdsGraphApiException CreativeInvalidException() => new(
+        "Invalid parameter",
+        "100",
+        false,
+        HttpStatusCode.BadRequest,
+        "1885183",
+        "OAuthException",
+        "trace123",
+        "Invalid parameter",
+        "Creative invalido",
+        "Campo image_hash rejeitado",
+        "{\"blame_field\":\"image_hash\"}",
+        "[\"object_story_spec\",\"link_data\",\"image_hash\"]",
+        null,
+        false);
 
     private sealed class TestContext
     {
@@ -175,6 +227,7 @@ public sealed class MetaAdsPublishingServiceTests
         public int AdCreates { get; private set; }
         public List<string> CallOrder { get; } = [];
         public MetaAdsGraphApiException? CreativeException { get; set; }
+        public CancellationTokenSource? CancelBeforeCreativeException { get; set; }
         public Task<bool> ResourceExistsAsync(MetaAdsConfiguration config, string accessToken, string resourceId, CancellationToken cancellationToken) => Task.FromResult(true);
         public Task<MetaAdsCreateResult> CreateCampaignAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsCampaignCreatePayload payload, CancellationToken cancellationToken) { CampaignCreates++; CallOrder.Add("campaign"); return Task.FromResult(new MetaAdsCreateResult("campaign_1")); }
         public Task<MetaAdsCreateResult> CreateAdSetAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsAdSetCreatePayload payload, CancellationToken cancellationToken) { AdSetCreates++; CallOrder.Add("adset"); return Task.FromResult(new MetaAdsCreateResult("adset_1")); }
@@ -182,7 +235,11 @@ public sealed class MetaAdsPublishingServiceTests
         {
             CreativeCreates++;
             CallOrder.Add("creative");
-            if (CreativeException is not null) throw CreativeException;
+            if (CreativeException is not null)
+            {
+                CancelBeforeCreativeException?.Cancel();
+                throw CreativeException;
+            }
             return Task.FromResult(new MetaAdsCreateResult("creative_1"));
         }
         public Task<MetaAdsCreateResult> CreateAdAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsAdCreatePayload payload, CancellationToken cancellationToken) { AdCreates++; CallOrder.Add("ad"); return Task.FromResult(new MetaAdsCreateResult("ad_1")); }
@@ -208,10 +265,39 @@ public sealed class MetaAdsPublishingServiceTests
 
     private sealed class Publicacoes(MetaAdsPublicacao publicacao) : IMetaAdsPublicacaoRepository
     {
+        public bool? FailureSaveTokenWasCancellationRequested { get; private set; }
+        public bool? FailureSaveTokenCanBeCanceled { get; private set; }
+        public bool WaitForFailurePersistenceTimeout { get; set; }
+        public bool FailurePersistenceTimedOut { get; private set; }
         public Task<MetaAdsPublicacao?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(id == publicacao.Id ? publicacao : null);
         public Task<MetaAdsPublicacao?> ObterPorCampanhaAdAccountAsync(Guid campanhaId, string adAccountId, CancellationToken cancellationToken) => Task.FromResult(campanhaId == publicacao.CampanhaId && adAccountId == publicacao.AdAccountId ? publicacao : null);
         public Task AdicionarAsync(MetaAdsPublicacao publicacao, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task SalvarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public async Task SalvarAsync(CancellationToken cancellationToken)
+        {
+            if (IsFailureSave())
+            {
+                FailureSaveTokenWasCancellationRequested = cancellationToken.IsCancellationRequested;
+                FailureSaveTokenCanBeCanceled = cancellationToken.CanBeCanceled;
+                if (WaitForFailurePersistenceTimeout)
+                {
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        FailurePersistenceTimedOut = true;
+                        throw;
+                    }
+                }
+            }
+        }
+
+        private bool IsFailureSave()
+        {
+            return publicacao.Status is StatusPublicacaoMetaAds.FalhaParcial or StatusPublicacaoMetaAds.Falha or StatusPublicacaoMetaAds.EstadoIndeterminado or StatusPublicacaoMetaAds.Inconsistente
+                && !string.IsNullOrWhiteSpace(publicacao.UltimoErroCodigo);
+        }
     }
 
     private sealed class Contas(MetaAdsConta conta) : IMetaAdsContaRepository

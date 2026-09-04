@@ -6,9 +6,8 @@
       <p>{{ error }}</p>
     </section>
     <template v-else-if="campanha">
-      <section class="public-hero">
+      <section class="public-hero" :style="{ backgroundImage: `url(${heroImage})` }">
         <div class="public-hero-copy">
-          <p class="eyebrow">{{ contextoCampanha }}</p>
           <h1>{{ campanha.titulo }}</h1>
           <p class="subtitle">{{ campanha.subtitulo }}</p>
 
@@ -44,7 +43,7 @@
           <p v-if="success" class="success">{{ success }}</p>
           <button class="button public-cta" :disabled="submitting">{{ submitting ? 'Enviando...' : ctaText }}</button>
           <a v-if="whatsAppUrl" class="button secondary" :href="whatsAppUrl" target="_blank" rel="noopener">Abrir WhatsApp</a>
-          <small>Sem compromisso. O atendimento depende do seu consentimento.</small>
+          <small class="form-trust">Sem compromisso. O atendimento depende do seu consentimento.</small>
         </form>
       </section>
 
@@ -141,6 +140,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { capturarLeadPublico, obterCampanhaPublica, type CampanhaPublica, type CapturarLeadPublicoRequest } from '../services/api';
 import { trackGoogleAdsConversion } from '../services/tracking';
+import heroImage from '../imagens/Pf1.png';
 
 const route = useRoute();
 const campanha = ref<CampanhaPublica | null>(null);
@@ -172,7 +172,7 @@ const contextoCampanha = computed(() => {
 });
 
 const heroBeneficios = computed(() => {
-  const lista = campanha.value?.beneficios.slice(0, 3) ?? [];
+  const lista = campanha.value?.beneficios.slice(0, 2) ?? [];
   return lista.length > 0 ? lista : ['Cotacao personalizada', 'Compare opcoes', 'Atendimento consultivo'];
 });
 

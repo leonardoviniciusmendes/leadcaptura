@@ -17,6 +17,7 @@ public sealed class MetaAdsPublishingService(
     ISecretProtector protector) : IMetaAdsPublishingService
 {
     private const string Paused = "PAUSED";
+    private static readonly TimeSpan FailurePersistenceTimeout = TimeSpan.FromSeconds(5);
 
     public async Task<MetaAdsPublicationStatusResponse> ObterPorCampanhaAsync(Guid campanhaId, CancellationToken cancellationToken)
     {
@@ -141,12 +142,12 @@ public sealed class MetaAdsPublishingService(
         }
         catch (MetaAdsGraphApiException ex)
         {
-            await FailAsync(publicacao, HasAnyExternalId(publicacao) ? StatusPublicacaoMetaAds.FalhaParcial : StatusPublicacaoMetaAds.Falha, ex.Code, ex.ErrorSubcode, ex.Type, DetailedMetaError(ex), ex.HttpStatusCode?.ToString(), ex.FbTraceId, cancellationToken);
+            await FailAsync(publicacao, HasAnyExternalId(publicacao) ? StatusPublicacaoMetaAds.FalhaParcial : StatusPublicacaoMetaAds.Falha, ex.Code, ex.ErrorSubcode, ex.Type, DetailedMetaError(ex), ex.HttpStatusCode?.ToString(), ex.FbTraceId);
             return ToResponse(publicacao, "Falha ao publicar na Meta. Recursos ja criados permaneceram pausados.");
         }
         catch (TaskCanceledException ex)
         {
-            await FailAsync(publicacao, StatusPublicacaoMetaAds.EstadoIndeterminado, "timeout_ambiguous", null, "Timeout", "Timeout durante chamada Meta. A criacao pode ter sido concluida remotamente; nao retente antes de reconciliar.", null, null, cancellationToken);
+            await FailAsync(publicacao, StatusPublicacaoMetaAds.EstadoIndeterminado, "timeout_ambiguous", null, "Timeout", "Timeout durante chamada Meta. A criacao pode ter sido concluida remotamente; nao retente antes de reconciliar.", null, null);
             return ToResponse(publicacao, ex.Message);
         }
     }
@@ -162,7 +163,7 @@ public sealed class MetaAdsPublishingService(
 
             if (!await graphClient.ResourceExistsAsync(config, token, id, cancellationToken))
             {
-                await FailAsync(publicacao, StatusPublicacaoMetaAds.Inconsistente, "meta_resource_missing", null, null, $"{etapa} persistido nao foi encontrado na Meta.", null, null, cancellationToken);
+                await FailAsync(publicacao, StatusPublicacaoMetaAds.Inconsistente, "meta_resource_missing", null, null, $"{etapa} persistido nao foi encontrado na Meta.", null, null);
                 return false;
             }
         }
@@ -290,7 +291,7 @@ public sealed class MetaAdsPublishingService(
         await publicacaoRepository.SalvarAsync(cancellationToken);
     }
 
-    private async Task FailAsync(MetaAdsPublicacao publicacao, StatusPublicacaoMetaAds status, string? code, string? subcode, string? type, string? message, string? httpStatus, string? traceId, CancellationToken cancellationToken)
+    private async Task FailAsync(MetaAdsPublicacao publicacao, StatusPublicacaoMetaAds status, string? code, string? subcode, string? type, string? message, string? httpStatus, string? traceId)
     {
         publicacao.Status = status;
         publicacao.DataAtualizacao = DateTime.UtcNow;
@@ -300,7 +301,13 @@ public sealed class MetaAdsPublishingService(
         publicacao.UltimoErroMensagem = message is { Length: > 500 } ? message[..500] : message;
         publicacao.UltimoErroHttpStatus = httpStatus;
         publicacao.FbTraceId = traceId;
-        await publicacaoRepository.SalvarAsync(cancellationToken);
+        await PersistFailureAsync();
+    }
+
+    private async Task PersistFailureAsync()
+    {
+        using var persistenceCts = new CancellationTokenSource(FailurePersistenceTimeout);
+        await publicacaoRepository.SalvarAsync(persistenceCts.Token);
     }
 
     private static MetaAdsPublicacaoResponse ToResponse(MetaAdsPublicacao publicacao, string? mensagem = null)
