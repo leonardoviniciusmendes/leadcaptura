@@ -25,7 +25,7 @@
             <p>{{ campanha.cidade }}/{{ campanha.estado }} - {{ labelPublico(campanha.tipoPublico) }}</p>
           </div>
 
-          <label>Nome<input v-model.trim="form.nome" required maxlength="120" autocomplete="name" /></label>
+          <label>Nome<input ref="nomeInput" v-model.trim="form.nome" required maxlength="120" autocomplete="name" autofocus /></label>
           <label>WhatsApp<input v-model="form.telefone" required maxlength="15" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" @input="maskPhone" /></label>
           <label>Quantidade de vidas<input v-model.number="form.quantidadeVidas" required type="number" min="1" max="999" /></label>
 
@@ -136,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { capturarLeadPublico, obterCampanhaPublica, type CampanhaPublica, type CapturarLeadPublicoRequest } from '../services/api';
 import { trackGoogleAdsConversion } from '../services/tracking';
@@ -150,6 +150,7 @@ const error = ref('');
 const submitError = ref('');
 const success = ref('');
 const whatsAppUrl = ref('');
+const nomeInput = ref<HTMLInputElement | null>(null);
 const openedAt = Date.now();
 const trackedConversionLeadIds = new Set<string>();
 
@@ -189,6 +190,8 @@ onMounted(async () => {
     form.estado = campanha.value.estado;
     form.tipoContratacao = tipoContratacaoPadrao(campanha.value.tipoPublico);
     applyTracking();
+    await nextTick();
+    nomeInput.value?.focus();
   } catch {
     error.value = 'A campanha nao esta ativa ou nao existe.';
   } finally {
