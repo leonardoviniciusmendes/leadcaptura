@@ -181,6 +181,111 @@ public sealed class MetaAdsPublishingServiceTests
     }
 
     [Fact]
+    public async Task Retry_CampaignValidaAdSetDeletedCreativeExistente_CriaSomenteNovoAdSetEAd()
+    {
+        var ctx = TestContext.CreateWithCreative();
+        ctx.Graph.SetStatus(ctx.Publicacao.AdSetExternalId!, "DELETED");
+
+        var result = await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal("Concluida", result.Status);
+        Assert.Equal(0, ctx.Graph.CampaignCreates);
+        Assert.Equal(1, ctx.Graph.AdSetCreates);
+        Assert.Equal(0, ctx.Graph.CreativeCreates);
+        Assert.Equal(1, ctx.Graph.AdCreates);
+        Assert.Equal("120249268268550352", ctx.Publicacao.CampaignExternalId);
+        Assert.Equal("adset_1", ctx.Publicacao.AdSetExternalId);
+        Assert.Equal("creative_1", ctx.Publicacao.CreativeExternalId);
+        Assert.Equal("ad_1", ctx.Publicacao.AdExternalId);
+        Assert.Equal("adset_1", ctx.Graph.LastAdPayload?.AdSetId);
+        Assert.Equal("creative_1", ctx.Graph.LastAdPayload?.CreativeId);
+    }
+
+    [Fact]
+    public async Task Retry_CampaignValidaAdSetValidoCreativeExistente_CriaSomenteAd()
+    {
+        var ctx = TestContext.CreateWithCreative();
+
+        var result = await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal("Concluida", result.Status);
+        Assert.Equal(0, ctx.Graph.CampaignCreates);
+        Assert.Equal(0, ctx.Graph.AdSetCreates);
+        Assert.Equal(0, ctx.Graph.CreativeCreates);
+        Assert.Equal(1, ctx.Graph.AdCreates);
+        Assert.Equal("120249268268890352", ctx.Graph.LastAdPayload?.AdSetId);
+        Assert.Equal("creative_1", ctx.Graph.LastAdPayload?.CreativeId);
+    }
+
+    [Fact]
+    public async Task Retry_AdSetDeleted_NuncaTentaCriarAdNoAdSetAntigo()
+    {
+        var ctx = TestContext.CreateWithCreative();
+        var oldAdSetId = ctx.Publicacao.AdSetExternalId!;
+        ctx.Graph.SetStatus(oldAdSetId, "DELETED");
+
+        await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.DoesNotContain(ctx.Graph.AdPayloads, x => x.AdSetId == oldAdSetId);
+        Assert.Contains(ctx.Graph.AdPayloads, x => x.AdSetId == "adset_1");
+    }
+
+    [Fact]
+    public async Task Retry_NovoAdSetCriado_PersisteNovoExternalIdAntesDeCreateAd()
+    {
+        var ctx = TestContext.CreateWithCreative();
+        ctx.Graph.SetStatus(ctx.Publicacao.AdSetExternalId!, "DELETED");
+        ctx.Graph.RequireNewAdSetPersistedBeforeAd = true;
+
+        await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.True(ctx.Graph.NewAdSetWasPersistedBeforeAd);
+    }
+
+    [Fact]
+    public async Task Retry_AposRecriacaoDoAdSet_NaoCriaOutroAdSet()
+    {
+        var ctx = TestContext.CreateWithCreative();
+        ctx.Publicacao.AdSetExternalId = "adset_1";
+        ctx.Graph.SetStatus("adset_1", "PAUSED");
+
+        await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal(0, ctx.Graph.AdSetCreates);
+        Assert.Equal(1, ctx.Graph.AdCreates);
+    }
+
+    [Fact]
+    public async Task Retry_CreativeExistenteContinuaReutilizadoComNovoAdSet()
+    {
+        var ctx = TestContext.CreateWithCreative();
+        ctx.Graph.SetStatus(ctx.Publicacao.AdSetExternalId!, "ARCHIVED");
+
+        await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal(0, ctx.Graph.CreativeCreates);
+        Assert.Equal("creative_1", ctx.Graph.LastAdPayload?.CreativeId);
+    }
+
+    [Fact]
+    public async Task Retry_Erro1487861DuranteCreateAd_RecriaAdSetSemDuplicarCampaignOuCreative()
+    {
+        var ctx = TestContext.CreateWithCreative();
+        ctx.Graph.ThrowDeletedAdSetOnceOnCreateAd = true;
+
+        var result = await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal("Concluida", result.Status);
+        Assert.Equal(0, ctx.Graph.CampaignCreates);
+        Assert.Equal(1, ctx.Graph.AdSetCreates);
+        Assert.Equal(0, ctx.Graph.CreativeCreates);
+        Assert.Equal(2, ctx.Graph.AdCreates);
+        Assert.Equal("adset_1", ctx.Publicacao.AdSetExternalId);
+        Assert.Equal("creative_1", ctx.Publicacao.CreativeExternalId);
+        Assert.Equal("ad_2", ctx.Publicacao.AdExternalId);
+    }
+
+    [Fact]
     public async Task Retry_PublicacaoJaConcluida_NaoDuplicaRecursos()
     {
         var ctx = TestContext.Create();
@@ -266,6 +371,15 @@ public sealed class MetaAdsPublishingServiceTests
         }
 
         public static TestContext Create() => new();
+
+        public static TestContext CreateWithCreative()
+        {
+            var ctx = new TestContext();
+            ctx.Publicacao.Status = StatusPublicacaoMetaAds.CreativeCriado;
+            ctx.Publicacao.UltimaEtapaConcluida = "CreativeCriado";
+            ctx.Publicacao.CreativeExternalId = "creative_1";
+            return ctx;
+        }
     }
 
     private sealed class Preview(TestContext ctx) : IMetaAdsPreviewService
@@ -296,10 +410,28 @@ public sealed class MetaAdsPublishingServiceTests
         public MetaAdsCreativeCreatePayload? LastCreativePayload { get; private set; }
         public bool RequireCreativeIdPersistedBeforeAd { get; set; }
         public bool CreativeIdWasPersistedBeforeAd { get; private set; }
+        public bool RequireNewAdSetPersistedBeforeAd { get; set; }
+        public bool NewAdSetWasPersistedBeforeAd { get; private set; }
+        public bool ThrowDeletedAdSetOnceOnCreateAd { get; set; }
         public TestContext? Context { get; set; }
+        public MetaAdsAdCreatePayload? LastAdPayload { get; private set; }
+        public List<MetaAdsAdCreatePayload> AdPayloads { get; } = [];
+        private readonly Dictionary<string, MetaAdsResourceStatusDto> statuses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["120249268268550352"] = new("120249268268550352", "PAUSED", "PAUSED"),
+            ["120249268268890352"] = new("120249268268890352", "PAUSED", "PAUSED"),
+            ["creative_1"] = new("creative_1", "ACTIVE", "ACTIVE"),
+            ["creative_existente"] = new("creative_existente", "ACTIVE", "ACTIVE")
+        };
         public Task<bool> ResourceExistsAsync(MetaAdsConfiguration config, string accessToken, string resourceId, CancellationToken cancellationToken) => Task.FromResult(true);
         public Task<MetaAdsCreateResult> CreateCampaignAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsCampaignCreatePayload payload, CancellationToken cancellationToken) { CampaignCreates++; CallOrder.Add("campaign"); return Task.FromResult(new MetaAdsCreateResult("campaign_1")); }
-        public Task<MetaAdsCreateResult> CreateAdSetAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsAdSetCreatePayload payload, CancellationToken cancellationToken) { AdSetCreates++; CallOrder.Add("adset"); return Task.FromResult(new MetaAdsCreateResult("adset_1")); }
+        public Task<MetaAdsCreateResult> CreateAdSetAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsAdSetCreatePayload payload, CancellationToken cancellationToken)
+        {
+            AdSetCreates++;
+            CallOrder.Add("adset");
+            statuses["adset_1"] = new("adset_1", "PAUSED", "PAUSED");
+            return Task.FromResult(new MetaAdsCreateResult("adset_1"));
+        }
         public Task<MetaAdsCreateResult> CreateAdCreativeAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsCreativeCreatePayload payload, CancellationToken cancellationToken)
         {
             CreativeCreates++;
@@ -316,11 +448,28 @@ public sealed class MetaAdsPublishingServiceTests
         {
             AdCreates++;
             CallOrder.Add("ad");
+            LastAdPayload = payload;
+            AdPayloads.Add(payload);
             if (RequireCreativeIdPersistedBeforeAd)
             {
                 CreativeIdWasPersistedBeforeAd = Context?.Publicacao.CreativeExternalId == payload.CreativeId && !string.IsNullOrWhiteSpace(payload.CreativeId);
             }
-            return Task.FromResult(new MetaAdsCreateResult("ad_1"));
+            if (RequireNewAdSetPersistedBeforeAd)
+            {
+                NewAdSetWasPersistedBeforeAd = Context?.Publicacao.AdSetExternalId == payload.AdSetId && payload.AdSetId == "adset_1";
+            }
+            if (ThrowDeletedAdSetOnceOnCreateAd)
+            {
+                ThrowDeletedAdSetOnceOnCreateAd = false;
+                throw DeletedAdSetException();
+            }
+            return Task.FromResult(new MetaAdsCreateResult($"ad_{AdCreates}"));
+        }
+        public void SetStatus(string resourceId, string status) => statuses[resourceId] = new MetaAdsResourceStatusDto(resourceId, status, status);
+        public Task<MetaAdsResourceStatusDto?> GetResourceStatusAsync(MetaAdsConfiguration config, string accessToken, string resourceId, CancellationToken cancellationToken)
+        {
+            statuses.TryGetValue(resourceId, out var status);
+            return Task.FromResult<MetaAdsResourceStatusDto?>(status);
         }
         public Task<MetaAdAccountDto> GetAdAccountAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaCampaignDto>> GetCampaignsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -341,6 +490,22 @@ public sealed class MetaAdsPublishingServiceTests
         public Task DeleteAdCreativeAsync(MetaAdsConfiguration config, string accessToken, string creativeId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task DeleteAdAsync(MetaAdsConfiguration config, string accessToken, string adId, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
+
+    private static MetaAdsGraphApiException DeletedAdSetException() => new(
+        "Status de anuncio invalido para conjunto de anuncios excluido",
+        "100",
+        false,
+        HttpStatusCode.BadRequest,
+        "1487861",
+        "OAuthException",
+        "trace-deleted-adset",
+        "Status de anuncio invalido para conjunto de anuncios excluido",
+        "Status de anuncio invalido para conjunto de anuncios excluido",
+        "Os conjuntos de anuncios excluidos so podem conter anuncios excluidos.",
+        null,
+        null,
+        null,
+        false);
 
     private sealed class Publicacoes(MetaAdsPublicacao publicacao) : IMetaAdsPublicacaoRepository
     {

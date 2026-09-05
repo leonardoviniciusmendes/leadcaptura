@@ -57,6 +57,29 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
             .ToArray();
     }
 
+    public async Task<MetaAdsResourceStatusDto?> GetResourceStatusAsync(MetaAdsConfiguration config, string accessToken, string resourceId, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, GraphUrl(config, resourceId, new() { ["fields"] = "id,status,effective_status" }));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var response = await httpClientFactory.CreateClient("metaads").SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            if ((int)response.StatusCode == 404 || response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                return null;
+            }
+
+            var text = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw ParseError(text, response.StatusCode, "resource-status");
+        }
+
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+        var id = S(json.RootElement, "id");
+        return string.IsNullOrWhiteSpace(id)
+            ? null
+            : new MetaAdsResourceStatusDto(id, S(json.RootElement, "status"), S(json.RootElement, "effective_status"));
+    }
+
     public async Task<IReadOnlyList<MetaAdsBusinessResponse>> ListBusinessesAsync(MetaAdsConfiguration config, string accessToken, CancellationToken cancellationToken)
     {
         var url = GraphUrl(config, "me/businesses", new() { ["fields"] = "id,name", ["limit"] = "100" });
@@ -159,7 +182,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
         if (!response.IsSuccessStatusCode)
         {
             var text = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw ParseError(text, response.StatusCode);
+            throw ParseError(text, response.StatusCode, "adimages");
         }
 
         using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
@@ -240,7 +263,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
         if (!response.IsSuccessStatusCode)
         {
             var text = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw ParseError(text, response.StatusCode);
+            throw ParseError(text, response.StatusCode, "campaigns");
         }
 
         using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
@@ -287,7 +310,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
         if (!response.IsSuccessStatusCode)
         {
             var text = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw ParseError(text, response.StatusCode);
+            throw ParseError(text, response.StatusCode, "adsets");
         }
 
         using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
@@ -412,7 +435,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
         if (!response.IsSuccessStatusCode)
         {
             var text = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw ParseError(text, response.StatusCode);
+            throw ParseError(text, response.StatusCode, "ads");
         }
 
         using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
@@ -475,7 +498,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
         if (!response.IsSuccessStatusCode)
         {
             var text = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw ParseError(text, response.StatusCode);
+            throw ParseError(text, response.StatusCode, edge);
         }
 
         using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);

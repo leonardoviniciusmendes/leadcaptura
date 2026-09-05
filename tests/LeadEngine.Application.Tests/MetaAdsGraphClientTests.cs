@@ -301,6 +301,25 @@ public sealed class MetaAdsGraphClientTests
     }
 
     [Fact]
+    public async Task GetResourceStatusAsync_LeStatusEEffectiveStatusSemTokenNaUrl()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonResponse("""
+        { "id": "120249268268890352", "status": "DELETED", "effective_status": "DELETED" }
+        """));
+        var client = Client(handler);
+
+        var result = await client.GetResourceStatusAsync(Config(), "token-secreto", "120249268268890352", CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal("120249268268890352", result.Id);
+        Assert.Equal("DELETED", result.Status);
+        Assert.Equal("DELETED", result.EffectiveStatus);
+        Assert.Contains("/v23.0/120249268268890352", handler.LastRequestUri);
+        Assert.Contains("fields=id%2Cstatus%2Ceffective_status", handler.LastRequestUri);
+        Assert.DoesNotContain("access_token", handler.LastRequestUri);
+    }
+
+    [Fact]
     public async Task CreateDiagnosticAdCreativeAsync_EnviaPayloadMinimoSemInstagramSemCtaSemDescription()
     {
         var handler = new StubHttpMessageHandler(_ => JsonResponse("""{ "id": "creative_1" }"""));
@@ -947,6 +966,7 @@ public sealed class MetaAdsGraphClientTests
         public Task<IReadOnlyList<MetaAdSetDto>> GetAdSetsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaAdDto>> GetAdsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaCreativeDto>> GetAdCreativesAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<MetaAdsResourceStatusDto?> GetResourceStatusAsync(MetaAdsConfiguration config, string accessToken, string resourceId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaAdsBusinessResponse>> ListBusinessesAsync(MetaAdsConfiguration config, string accessToken, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaAdsAdAccountResponse>> ListAdAccountsAsync(MetaAdsConfiguration config, string accessToken, string businessId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaAdsPageResponse>> ListPagesAsync(MetaAdsConfiguration config, string accessToken, CancellationToken cancellationToken) => throw new NotSupportedException();

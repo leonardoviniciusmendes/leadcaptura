@@ -100,13 +100,10 @@ public sealed class MetaAdsPublishingService(
             throw new InvalidOperationException("Preflight Meta Ads bloqueou a publicacao. " + string.Join(" ", blockers));
         }
 
-        if (!await ReconcileAsync(publicacao, token, config, cancellationToken))
-        {
-            return ToResponse(publicacao, "Publicacao em estado inconsistente. Verifique os recursos no Meta Ads antes de retentar.");
-        }
-
         try
         {
+            await EnsureReusableResourcesAsync(publicacao, preview, token, config, cancellationToken);
+
             if (string.IsNullOrWhiteSpace(publicacao.CampaignExternalId))
             {
                 await MarkAsync(publicacao, StatusPublicacaoMetaAds.CriandoCampaign, "CriandoCampaign", cancellationToken);
@@ -143,7 +140,7 @@ public sealed class MetaAdsPublishingService(
             if (string.IsNullOrWhiteSpace(publicacao.AdExternalId))
             {
                 await MarkAsync(publicacao, StatusPublicacaoMetaAds.CriandoAd, "CriandoAd", cancellationToken);
-                var created = await graphClient.CreateAdAsync(config, token, publicacao.AdAccountId, BuildAd(preview, publicacao.AdSetExternalId!, publicacao.CreativeExternalId!), cancellationToken);
+                var created = await CreateAdWithDeletedAdSetRecoveryAsync(publicacao, preview, token, config, cancellationToken);
                 publicacao.AdExternalId = created.Id;
                 publicacao.DataConclusao = DateTime.UtcNow;
                 await MarkAsync(publicacao, StatusPublicacaoMetaAds.Concluida, "AdCriado", cancellationToken);
@@ -197,6 +194,79 @@ public sealed class MetaAdsPublishingService(
         return true;
     }
 
+    private async Task EnsureReusableResourcesAsync(MetaAdsPublicacao publicacao, MetaAdsPreviewResponse preview, string token, MetaAdsConfiguration config, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(publicacao.CampaignExternalId))
+        {
+            var campaign = await graphClient.GetResourceStatusAsync(config, token, publicacao.CampaignExternalId, cancellationToken);
+            if (!IsReusable(campaign))
+            {
+                await FailAsync(publicacao, StatusPublicacaoMetaAds.Inconsistente, "meta_campaign_not_reusable", null, null, $"Campaign persistida nao pode ser reutilizada. Status remoto: {RemoteStatus(campaign)}.", null, null);
+                throw new InvalidOperationException("Campaign Meta persistida nao pode ser reutilizada.");
+            }
+
+            LogReconciliation("Campaign", publicacao.CampaignExternalId, campaign, "Reuse");
+        }
+
+        if (!string.IsNullOrWhiteSpace(publicacao.AdSetExternalId))
+        {
+            var adSet = await graphClient.GetResourceStatusAsync(config, token, publicacao.AdSetExternalId, cancellationToken);
+            if (!IsReusableForAdCreation(adSet))
+            {
+                LogReconciliation("AdSet", publicacao.AdSetExternalId, adSet, "Recreate");
+                await RecreateAdSetAsync(publicacao, preview, token, config, cancellationToken);
+            }
+            else
+            {
+                LogReconciliation("AdSet", publicacao.AdSetExternalId, adSet, "Reuse");
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(publicacao.CreativeExternalId))
+        {
+            var creative = await graphClient.GetResourceStatusAsync(config, token, publicacao.CreativeExternalId, cancellationToken);
+            if (!IsReusable(creative))
+            {
+                LogReconciliation("Creative", publicacao.CreativeExternalId, creative, "Recreate");
+                publicacao.CreativeExternalId = null;
+                await publicacaoRepository.SalvarAsync(cancellationToken);
+            }
+            else
+            {
+                LogReconciliation("Creative", publicacao.CreativeExternalId, creative, "Reuse");
+            }
+        }
+    }
+
+    private async Task RecreateAdSetAsync(MetaAdsPublicacao publicacao, MetaAdsPreviewResponse preview, string token, MetaAdsConfiguration config, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(publicacao.CampaignExternalId))
+        {
+            throw new InvalidOperationException("Campaign Meta obrigatoria para recriar Ad Set.");
+        }
+
+        publicacao.AdExternalId = null;
+        await MarkAsync(publicacao, StatusPublicacaoMetaAds.CriandoAdSet, "CriandoAdSet", cancellationToken);
+        var created = await graphClient.CreateAdSetAsync(config, token, publicacao.AdAccountId, BuildAdSet(preview, publicacao.CampaignExternalId), cancellationToken);
+        publicacao.AdSetExternalId = created.Id;
+        await MarkAsync(publicacao, StatusPublicacaoMetaAds.AdSetCriado, "AdSetCriado", cancellationToken);
+        LogReconciliation("AdSet", publicacao.AdSetExternalId, new MetaAdsResourceStatusDto(publicacao.AdSetExternalId, Paused, Paused), "Created");
+    }
+
+    private async Task<MetaAdsCreateResult> CreateAdWithDeletedAdSetRecoveryAsync(MetaAdsPublicacao publicacao, MetaAdsPreviewResponse preview, string token, MetaAdsConfiguration config, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await graphClient.CreateAdAsync(config, token, publicacao.AdAccountId, BuildAd(preview, publicacao.AdSetExternalId!, publicacao.CreativeExternalId!), cancellationToken);
+        }
+        catch (MetaAdsGraphApiException ex) when (IsDeletedAdSetError(ex))
+        {
+            await RecreateAdSetAsync(publicacao, preview, token, config, cancellationToken);
+            await MarkAsync(publicacao, StatusPublicacaoMetaAds.CriandoAd, "CriandoAd", cancellationToken);
+            return await graphClient.CreateAdAsync(config, token, publicacao.AdAccountId, BuildAd(preview, publicacao.AdSetExternalId!, publicacao.CreativeExternalId!), cancellationToken);
+        }
+    }
+
     private static MetaAdsCampaignCreatePayload BuildCampaign(MetaAdsPreviewResponse preview)
     {
         return new MetaAdsCampaignCreatePayload(Name("LeadEngine - " + preview.Campaign.Name), "OUTCOME_TRAFFIC", preview.Campaign.SpecialAdCategories, Paused);
@@ -242,6 +312,49 @@ public sealed class MetaAdsPublishingService(
     private static MetaAdsAdCreatePayload BuildAd(MetaAdsPreviewResponse preview, string adSetId, string creativeId)
     {
         return new MetaAdsAdCreatePayload(Name("LeadEngine - " + preview.Campaign.Name + " - Ad"), adSetId, creativeId, Paused);
+    }
+
+    private void LogReconciliation(string resourceType, string externalId, MetaAdsResourceStatusDto? status, string action)
+    {
+        logger.LogInformation(
+            "Meta resource reconciliation. ResourceType={ResourceType} ExternalId={ExternalId} RemoteStatus={RemoteStatus} RemoteEffectiveStatus={RemoteEffectiveStatus} Action={Action}",
+            resourceType,
+            externalId,
+            status?.Status,
+            status?.EffectiveStatus,
+            action);
+    }
+
+    private static bool IsReusable(MetaAdsResourceStatusDto? status)
+    {
+        return status is not null && !IsDeletedOrArchived(status);
+    }
+
+    private static bool IsReusableForAdCreation(MetaAdsResourceStatusDto? status)
+    {
+        return IsReusable(status);
+    }
+
+    private static bool IsDeletedOrArchived(MetaAdsResourceStatusDto status)
+    {
+        return IsTerminal(status.Status) || IsTerminal(status.EffectiveStatus);
+    }
+
+    private static bool IsTerminal(string? status)
+    {
+        return status is not null
+            && (status.Equals("DELETED", StringComparison.OrdinalIgnoreCase)
+                || status.Equals("ARCHIVED", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string RemoteStatus(MetaAdsResourceStatusDto? status)
+    {
+        return status is null ? "NOT_FOUND" : status.EffectiveStatus ?? status.Status ?? "UNKNOWN";
+    }
+
+    private static bool IsDeletedAdSetError(MetaAdsGraphApiException ex)
+    {
+        return ex.Code == "100" && ex.ErrorSubcode == "1487861";
     }
 
     private static MetaAdsTargetingCreatePayload BuildTargeting(MetaAdsTargetingPreview targeting)
@@ -333,6 +446,18 @@ public sealed class MetaAdsPublishingService(
 
     private async Task FailAndRethrowAsync(MetaAdsPublicacao publicacao, string code, string type, string? message, string? httpStatus = null)
     {
+        if (!string.IsNullOrWhiteSpace(publicacao.UltimoErroCodigo))
+        {
+            logger.LogError(
+                "Meta publishing failed after controlled persistence. Stage={Stage} Status={Status} ErrorCode={ErrorCode} ErrorType={ErrorType} Message={Message}",
+                FailureStep(publicacao),
+                publicacao.Status,
+                publicacao.UltimoErroCodigo,
+                publicacao.UltimoErroTipo,
+                message);
+            return;
+        }
+
         var status = HasAnyExternalId(publicacao) ? StatusPublicacaoMetaAds.FalhaParcial : StatusPublicacaoMetaAds.Falha;
         logger.LogError(
             "Meta publishing failed. Stage={Stage} Status={Status} ErrorCode={ErrorCode} ErrorType={ErrorType} HttpStatus={HttpStatus} Message={Message}",

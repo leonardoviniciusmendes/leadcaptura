@@ -261,6 +261,11 @@ public sealed record MetaCreativeDto(
     string? ObjectStoryId,
     string? ObjectStorySpec);
 
+public sealed record MetaAdsResourceStatusDto(
+    string Id,
+    string? Status,
+    string? EffectiveStatus);
+
 public sealed record CreateMetaCampaignRequest(
     string Name,
     string? Objective = null,
