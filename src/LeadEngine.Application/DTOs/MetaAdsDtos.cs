@@ -252,7 +252,9 @@ public sealed record MetaAdDto(
     string? Status,
     string? EffectiveStatus,
     string? AdSetId,
-    string? CampaignId);
+    string? CampaignId,
+    string? CreativeId = null,
+    DateTimeOffset? CreatedTime = null);
 
 public sealed record MetaCreativeDto(
     string Id,

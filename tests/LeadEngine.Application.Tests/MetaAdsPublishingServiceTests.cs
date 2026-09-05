@@ -286,6 +286,88 @@ public sealed class MetaAdsPublishingServiceTests
     }
 
     [Fact]
+    public async Task Retry_EstadoIndeterminadoCriandoAd_AdRemotoEncontrado_RecuperaIdENaoCriaNovoAd()
+    {
+        var ctx = TestContext.CreateIndeterminadoCriandoAd();
+        ctx.Graph.AddRemoteAd("remote_ad_1", ctx.Publicacao.AdSetExternalId!, ctx.Publicacao.CreativeExternalId!, "LeadEngine - Campanha - Ad", ctx.Publicacao.DataAtualizacao!.Value);
+
+        var result = await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal("Concluida", result.Status);
+        Assert.Equal("remote_ad_1", ctx.Publicacao.AdExternalId);
+        Assert.Equal(0, ctx.Graph.AdCreates);
+        Assert.Equal("PAUSED", ctx.Graph.RemoteAds.Single().Status);
+        Assert.Equal("PAUSED", ctx.Graph.RemoteAds.Single().EffectiveStatus);
+    }
+
+    [Fact]
+    public async Task Retry_EstadoIndeterminadoCriandoAd_SemAdRemoto_CriaAdUmaUnicaVez()
+    {
+        var ctx = TestContext.CreateIndeterminadoCriandoAd();
+
+        var result = await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal("Concluida", result.Status);
+        Assert.Equal(1, ctx.Graph.AdCreates);
+        Assert.Equal("ad_1", ctx.Publicacao.AdExternalId);
+        Assert.Equal("PAUSED", ctx.Graph.LastAdPayload?.Status);
+    }
+
+    [Fact]
+    public async Task Retry_EstadoIndeterminadoCriandoAd_DoisCandidatos_MantemIndeterminadoENaoCriaNovoAd()
+    {
+        var ctx = TestContext.CreateIndeterminadoCriandoAd();
+        ctx.Graph.AddRemoteAd("remote_ad_1", ctx.Publicacao.AdSetExternalId!, ctx.Publicacao.CreativeExternalId!, "LeadEngine - Campanha - Ad", ctx.Publicacao.DataAtualizacao!.Value);
+        ctx.Graph.AddRemoteAd("remote_ad_2", ctx.Publicacao.AdSetExternalId!, ctx.Publicacao.CreativeExternalId!, "LeadEngine - Campanha - Ad", ctx.Publicacao.DataAtualizacao!.Value);
+
+        var result = await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal("EstadoIndeterminado", result.Status);
+        Assert.Equal("CriandoAd", result.UltimaEtapaConcluida);
+        Assert.Null(ctx.Publicacao.AdExternalId);
+        Assert.Equal(0, ctx.Graph.AdCreates);
+    }
+
+    [Fact]
+    public async Task Retry_ComAdExternalIdExistente_NuncaCriaAdNovamente()
+    {
+        var ctx = TestContext.CreateWithCreative();
+        ctx.Publicacao.AdExternalId = "ad_existente";
+
+        await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal(0, ctx.Graph.AdCreates);
+        Assert.Equal("ad_existente", ctx.Publicacao.AdExternalId);
+    }
+
+    [Fact]
+    public async Task Retry_AdRecuperado_FinalizaPublicacaoComoConcluida()
+    {
+        var ctx = TestContext.CreateIndeterminadoCriandoAd();
+        ctx.Graph.AddRemoteAd("remote_ad_1", ctx.Publicacao.AdSetExternalId!, ctx.Publicacao.CreativeExternalId!, "LeadEngine - Campanha - Ad", ctx.Publicacao.DataAtualizacao!.Value);
+
+        var result = await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal("Concluida", result.Status);
+        Assert.Equal(StatusPublicacaoMetaAds.Concluida, ctx.Publicacao.Status);
+        Assert.Equal("AdCriado", ctx.Publicacao.UltimaEtapaConcluida);
+        Assert.NotNull(ctx.Publicacao.DataConclusao);
+    }
+
+    [Fact]
+    public async Task Retry_EstadoIndeterminadoCriandoAd_RecursosContinuamPaused()
+    {
+        var ctx = TestContext.CreateIndeterminadoCriandoAd();
+
+        await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal("PAUSED", ctx.Graph.LastAdPayload?.Status);
+        Assert.Equal("120249268268550352", ctx.Publicacao.CampaignExternalId);
+        Assert.Equal("120249501634610352", ctx.Publicacao.AdSetExternalId);
+        Assert.Equal("1396055402057813", ctx.Publicacao.CreativeExternalId);
+    }
+
+    [Fact]
     public async Task Retry_PublicacaoJaConcluida_NaoDuplicaRecursos()
     {
         var ctx = TestContext.Create();
@@ -380,6 +462,21 @@ public sealed class MetaAdsPublishingServiceTests
             ctx.Publicacao.CreativeExternalId = "creative_1";
             return ctx;
         }
+
+        public static TestContext CreateIndeterminadoCriandoAd()
+        {
+            var ctx = new TestContext();
+            ctx.Publicacao.Status = StatusPublicacaoMetaAds.EstadoIndeterminado;
+            ctx.Publicacao.UltimaEtapaConcluida = "CriandoAd";
+            ctx.Publicacao.CampaignExternalId = "120249268268550352";
+            ctx.Publicacao.AdSetExternalId = "120249501634610352";
+            ctx.Publicacao.CreativeExternalId = "1396055402057813";
+            ctx.Publicacao.AdExternalId = null;
+            ctx.Publicacao.DataAtualizacao = DateTime.UtcNow.AddMinutes(-5);
+            ctx.Graph.SetStatus("120249501634610352", "PAUSED");
+            ctx.Graph.SetStatus("1396055402057813", "ACTIVE");
+            return ctx;
+        }
     }
 
     private sealed class Preview(TestContext ctx) : IMetaAdsPreviewService
@@ -416,6 +513,7 @@ public sealed class MetaAdsPublishingServiceTests
         public TestContext? Context { get; set; }
         public MetaAdsAdCreatePayload? LastAdPayload { get; private set; }
         public List<MetaAdsAdCreatePayload> AdPayloads { get; } = [];
+        public List<MetaAdDto> RemoteAds { get; } = [];
         private readonly Dictionary<string, MetaAdsResourceStatusDto> statuses = new(StringComparer.OrdinalIgnoreCase)
         {
             ["120249268268550352"] = new("120249268268550352", "PAUSED", "PAUSED"),
@@ -466,6 +564,10 @@ public sealed class MetaAdsPublishingServiceTests
             return Task.FromResult(new MetaAdsCreateResult($"ad_{AdCreates}"));
         }
         public void SetStatus(string resourceId, string status) => statuses[resourceId] = new MetaAdsResourceStatusDto(resourceId, status, status);
+        public void AddRemoteAd(string id, string adSetId, string creativeId, string name, DateTime createdTime)
+        {
+            RemoteAds.Add(new MetaAdDto(id, name, "PAUSED", "PAUSED", adSetId, Context?.Publicacao.CampaignExternalId, creativeId, new DateTimeOffset(DateTime.SpecifyKind(createdTime, DateTimeKind.Utc))));
+        }
         public Task<MetaAdsResourceStatusDto?> GetResourceStatusAsync(MetaAdsConfiguration config, string accessToken, string resourceId, CancellationToken cancellationToken)
         {
             statuses.TryGetValue(resourceId, out var status);
@@ -474,7 +576,7 @@ public sealed class MetaAdsPublishingServiceTests
         public Task<MetaAdAccountDto> GetAdAccountAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaCampaignDto>> GetCampaignsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaAdSetDto>> GetAdSetsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlyList<MetaAdDto>> GetAdsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<MetaAdDto>> GetAdsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<MetaAdDto>>(RemoteAds);
         public Task<IReadOnlyList<MetaCreativeDto>> GetAdCreativesAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaAdsBusinessResponse>> ListBusinessesAsync(MetaAdsConfiguration config, string accessToken, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaAdsAdAccountResponse>> ListAdAccountsAsync(MetaAdsConfiguration config, string accessToken, string businessId, CancellationToken cancellationToken) => throw new NotSupportedException();

@@ -52,6 +52,28 @@ public sealed class MetaAdsGraphClientTests
     }
 
     [Fact]
+    public async Task GetAdsAsync_ParseiaCreativeECreatedTime()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonResponse("""
+        { "data": [{ "id": "ad_1", "name": "LeadEngine - Campanha - Ad", "status": "PAUSED", "effective_status": "PAUSED", "adset_id": "adset_1", "campaign_id": "campaign_1", "creative": { "id": "creative_1" }, "created_time": "2026-09-05T12:30:00+0000" }] }
+        """));
+        var client = Client(handler);
+
+        var result = await client.GetAdsAsync(Config(), "token-secreto", "1668410610924666", CancellationToken.None);
+
+        var item = Assert.Single(result);
+        Assert.Equal("ad_1", item.Id);
+        Assert.Equal("creative_1", item.CreativeId);
+        Assert.Equal("PAUSED", item.Status);
+        Assert.Equal("adset_1", item.AdSetId);
+        Assert.Equal(2026, item.CreatedTime?.Year);
+        Assert.Contains("/v23.0/act_1668410610924666/ads", handler.LastRequestUri);
+        Assert.Contains("creative", handler.LastRequestUri);
+        Assert.Contains("created_time", handler.LastRequestUri);
+        Assert.DoesNotContain("access_token", handler.LastRequestUri);
+    }
+
+    [Fact]
     public async Task CreateCampaignAsync_ForcaPausedMesmoSePayloadVierActive()
     {
         var handler = new StubHttpMessageHandler(_ => JsonResponse("""{ "id": "2381" }"""));

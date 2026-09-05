@@ -20,6 +20,7 @@ public sealed class MetaAdsPublishingService(
 {
     private const string Paused = "PAUSED";
     private static readonly TimeSpan FailurePersistenceTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan AdTimeoutRecoveryWindow = TimeSpan.FromHours(2);
 
     public async Task<MetaAdsPublicationStatusResponse> ObterPorCampanhaAsync(Guid campanhaId, CancellationToken cancellationToken)
     {
@@ -88,13 +89,13 @@ public sealed class MetaAdsPublishingService(
         {
             return ToResponse(publicacao, "Campanha ja publicada na Meta em estado pausado.");
         }
-        if (publicacao.Status == StatusPublicacaoMetaAds.EstadoIndeterminado)
+        if (publicacao.Status == StatusPublicacaoMetaAds.EstadoIndeterminado && !CanReconcileAdAfterTimeout(publicacao))
         {
             return ToResponse(publicacao, "Publicacao em estado indeterminado apos timeout. Reconciliacao manual e necessaria antes de qualquer novo POST.");
         }
 
         var preview = await previewService.GerarAsync(new MetaAdsPreviewRequest(publicacao.CampanhaId), cancellationToken);
-        if (!preview.Preflight.ReadyToPublish && !CanResumePartial(publicacao))
+        if (!preview.Preflight.ReadyToPublish && !CanResumePartial(publicacao) && !CanReconcileAdAfterTimeout(publicacao))
         {
             var blockers = preview.Preflight.Items.Where(x => string.Equals(x.Status, "ERROR", StringComparison.OrdinalIgnoreCase)).Select(x => x.Message);
             throw new InvalidOperationException("Preflight Meta Ads bloqueou a publicacao. " + string.Join(" ", blockers));
@@ -139,9 +140,22 @@ public sealed class MetaAdsPublishingService(
 
             if (string.IsNullOrWhiteSpace(publicacao.AdExternalId))
             {
+                if (CanReconcileAdAfterTimeout(publicacao))
+                {
+                    var recovery = await ReconcileAdAfterTimeoutAsync(publicacao, preview, token, config, cancellationToken);
+                    if (recovery != AdTimeoutRecoveryResult.NotFound)
+                    {
+                        return ToResponse(publicacao, recovery == AdTimeoutRecoveryResult.Recovered
+                            ? "Publicacao reconciliada com anuncio ja criado na Meta - PAUSADO."
+                            : "Publicacao permanece em estado indeterminado. Multiplos anuncios candidatos encontrados na Meta.");
+                    }
+                }
+
                 await MarkAsync(publicacao, StatusPublicacaoMetaAds.CriandoAd, "CriandoAd", cancellationToken);
                 var created = await CreateAdWithDeletedAdSetRecoveryAsync(publicacao, preview, token, config, cancellationToken);
                 publicacao.AdExternalId = created.Id;
+                await publicacaoRepository.SalvarAsync(cancellationToken);
+                LogAdCreated(publicacao.AdExternalId, publicacao.AdSetExternalId!, publicacao.CreativeExternalId!);
                 publicacao.DataConclusao = DateTime.UtcNow;
                 await MarkAsync(publicacao, StatusPublicacaoMetaAds.Concluida, "AdCriado", cancellationToken);
             }
@@ -267,6 +281,64 @@ public sealed class MetaAdsPublishingService(
         }
     }
 
+    private async Task<AdTimeoutRecoveryResult> ReconcileAdAfterTimeoutAsync(MetaAdsPublicacao publicacao, MetaAdsPreviewResponse preview, string token, MetaAdsConfiguration config, CancellationToken cancellationToken)
+    {
+        var expected = BuildAd(preview, publicacao.AdSetExternalId!, publicacao.CreativeExternalId!);
+        var referenceTime = publicacao.DataAtualizacao ?? publicacao.DataInicio;
+        var ads = await graphClient.GetAdsAsync(config, token, publicacao.AdAccountId, cancellationToken);
+        var candidates = ads
+            .Where(ad => IsExpectedAdAfterTimeout(ad, expected, referenceTime))
+            .ToArray();
+
+        if (candidates.Length == 1)
+        {
+            var recovered = candidates[0];
+            publicacao.AdExternalId = recovered.Id;
+            await publicacaoRepository.SalvarAsync(cancellationToken);
+            LogReconciliation("Ad", recovered.Id, new MetaAdsResourceStatusDto(recovered.Id, recovered.Status, recovered.EffectiveStatus), "RecoveredAfterTimeout");
+            publicacao.DataConclusao = DateTime.UtcNow;
+            await MarkAsync(publicacao, StatusPublicacaoMetaAds.Concluida, "AdCriado", cancellationToken);
+            return AdTimeoutRecoveryResult.Recovered;
+        }
+
+        if (candidates.Length == 0)
+        {
+            LogReconciliation("Ad", expected.Name, null, "NotFoundAfterTimeout");
+            return AdTimeoutRecoveryResult.NotFound;
+        }
+
+        logger.LogWarning(
+            "Meta resource reconciliation. ResourceType=Ad ExternalId={ExternalId} Action={Action} CandidateIds={CandidateIds} AdSetId={AdSetId} CreativeId={CreativeId} ExpectedName={ExpectedName}",
+            null,
+            "AmbiguousAfterTimeout",
+            string.Join(",", candidates.Select(x => x.Id)),
+            expected.AdSetId,
+            expected.CreativeId,
+            expected.Name);
+        return AdTimeoutRecoveryResult.Ambiguous;
+    }
+
+    private static bool IsExpectedAdAfterTimeout(MetaAdDto ad, MetaAdsAdCreatePayload expected, DateTime referenceTime)
+    {
+        return string.Equals(ad.AdSetId, expected.AdSetId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(ad.CreativeId, expected.CreativeId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(ad.Name, expected.Name, StringComparison.Ordinal)
+            && IsNearTimeoutAttempt(ad.CreatedTime, referenceTime);
+    }
+
+    private static bool IsNearTimeoutAttempt(DateTimeOffset? createdTime, DateTime referenceTime)
+    {
+        if (createdTime is null)
+        {
+            return false;
+        }
+
+        var reference = referenceTime.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(referenceTime, DateTimeKind.Utc)
+            : referenceTime.ToUniversalTime();
+        return (createdTime.Value.UtcDateTime - reference).Duration() <= AdTimeoutRecoveryWindow;
+    }
+
     private static MetaAdsCampaignCreatePayload BuildCampaign(MetaAdsPreviewResponse preview)
     {
         return new MetaAdsCampaignCreatePayload(Name("LeadEngine - " + preview.Campaign.Name), "OUTCOME_TRAFFIC", preview.Campaign.SpecialAdCategories, Paused);
@@ -323,6 +395,15 @@ public sealed class MetaAdsPublishingService(
             status?.Status,
             status?.EffectiveStatus,
             action);
+    }
+
+    private void LogAdCreated(string adId, string adSetId, string creativeId)
+    {
+        logger.LogInformation(
+            "Meta Ad created. AdId={AdId} AdSetId={AdSetId} CreativeId={CreativeId}",
+            adId,
+            adSetId,
+            creativeId);
     }
 
     private static bool IsReusable(MetaAdsResourceStatusDto? status)
@@ -527,6 +608,23 @@ public sealed class MetaAdsPublishingService(
                 || !string.IsNullOrWhiteSpace(publicacao.AdSetExternalId)
                 || !string.IsNullOrWhiteSpace(publicacao.CreativeExternalId)
                 || !string.IsNullOrWhiteSpace(publicacao.AdExternalId));
+    }
+
+    private static bool CanReconcileAdAfterTimeout(MetaAdsPublicacao publicacao)
+    {
+        return publicacao.Status == StatusPublicacaoMetaAds.EstadoIndeterminado
+            && string.Equals(publicacao.UltimaEtapaConcluida, "CriandoAd", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(publicacao.AdExternalId)
+            && !string.IsNullOrWhiteSpace(publicacao.CampaignExternalId)
+            && !string.IsNullOrWhiteSpace(publicacao.AdSetExternalId)
+            && !string.IsNullOrWhiteSpace(publicacao.CreativeExternalId);
+    }
+
+    private enum AdTimeoutRecoveryResult
+    {
+        Recovered,
+        NotFound,
+        Ambiguous
     }
 
     private static string DetailedMetaError(MetaAdsGraphApiException ex)

@@ -43,8 +43,8 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
 
     public async Task<IReadOnlyList<MetaAdDto>> GetAdsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken)
     {
-        var rows = await GetPagedDataAsync(GraphUrl(config, $"{NormalizeAdAccountId(adAccountId)}/ads", new() { ["fields"] = "id,name,status,effective_status,adset_id,campaign_id", ["limit"] = "100" }), accessToken, cancellationToken);
-        return rows.Select(x => new MetaAdDto(S(x, "id") ?? string.Empty, S(x, "name"), S(x, "status"), S(x, "effective_status"), S(x, "adset_id"), S(x, "campaign_id")))
+        var rows = await GetPagedDataAsync(GraphUrl(config, $"{NormalizeAdAccountId(adAccountId)}/ads", new() { ["fields"] = "id,name,status,effective_status,adset_id,campaign_id,creative,created_time", ["limit"] = "100" }), accessToken, cancellationToken);
+        return rows.Select(x => new MetaAdDto(S(x, "id") ?? string.Empty, S(x, "name"), S(x, "status"), S(x, "effective_status"), S(x, "adset_id"), S(x, "campaign_id"), CreativeId(x), DateTimeOffsetValue(x, "created_time")))
             .Where(x => !string.IsNullOrWhiteSpace(x.Id))
             .ToArray();
     }
@@ -721,6 +721,22 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
     private static string? S(JsonElement element, string property)
     {
         return element.TryGetProperty(property, out var value) ? value.ToString() : null;
+    }
+
+    private static string? CreativeId(JsonElement element)
+    {
+        if (!element.TryGetProperty("creative", out var creative) || creative.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        return S(creative, "id") ?? S(creative, "creative_id");
+    }
+
+    private static DateTimeOffset? DateTimeOffsetValue(JsonElement element, string property)
+    {
+        var value = S(element, property);
+        return DateTimeOffset.TryParse(value, out var parsed) ? parsed : null;
     }
 
     private static string NormalizeAdAccountId(string adAccountId)
