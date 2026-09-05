@@ -6,6 +6,7 @@ using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
 using LeadEngine.Domain.Entities;
 using LeadEngine.Domain.Enums;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LeadEngine.Application.Tests;
 
@@ -28,6 +29,8 @@ public sealed class MetaAdsPublishingServiceTests
         Assert.Equal("120249268268890352", ctx.Publicacao.AdSetExternalId);
         Assert.Equal("creative_1", ctx.Publicacao.CreativeExternalId);
         Assert.Equal("ad_1", ctx.Publicacao.AdExternalId);
+        Assert.Equal("page_1", ctx.Graph.LastCreativePayload?.PageId);
+        Assert.Equal("image_hash_1", ctx.Graph.LastCreativePayload?.ImageHash);
     }
 
     [Fact]
@@ -60,6 +63,8 @@ public sealed class MetaAdsPublishingServiceTests
         Assert.Equal(0, ctx.Graph.AdSetCreates);
         Assert.Equal(1, ctx.Graph.CreativeCreates);
         Assert.Equal(0, ctx.Graph.AdCreates);
+        Assert.Equal(StatusPublicacaoMetaAds.FalhaParcial, ctx.Publicacao.Status);
+        Assert.Equal("CriandoCreative", ctx.Publicacao.UltimaEtapaConcluida);
         Assert.Contains("HTTP=BadRequest", ctx.Publicacao.UltimoErroMensagem);
         Assert.Contains("message=Invalid parameter", ctx.Publicacao.UltimoErroMensagem);
         Assert.Contains("type=OAuthException", ctx.Publicacao.UltimoErroMensagem);
@@ -120,6 +125,62 @@ public sealed class MetaAdsPublishingServiceTests
     }
 
     [Fact]
+    public async Task Retry_BuildCreativeInvalido_NaoPermaneceCriandoCreative()
+    {
+        var ctx = TestContext.Create();
+        ctx.PreviewPageId = null;
+        ctx.Publicacao.Status = StatusPublicacaoMetaAds.AdSetCriado;
+        ctx.Publicacao.UltimaEtapaConcluida = "AdSetCriado";
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None));
+
+        Assert.Equal(StatusPublicacaoMetaAds.FalhaParcial, ctx.Publicacao.Status);
+        Assert.Equal("CriandoCreative", ctx.Publicacao.UltimaEtapaConcluida);
+        Assert.Equal("invalid_operation", ctx.Publicacao.UltimoErroCodigo);
+        Assert.Equal("120249268268550352", ctx.Publicacao.CampaignExternalId);
+        Assert.Equal("120249268268890352", ctx.Publicacao.AdSetExternalId);
+        Assert.Null(ctx.Publicacao.CreativeExternalId);
+        Assert.Null(ctx.Publicacao.AdExternalId);
+        Assert.Equal(0, ctx.Graph.CampaignCreates);
+        Assert.Equal(0, ctx.Graph.AdSetCreates);
+        Assert.Equal(0, ctx.Graph.CreativeCreates);
+        Assert.Equal(0, ctx.Graph.AdCreates);
+    }
+
+    [Fact]
+    public async Task Retry_CreativeCriado_SalvaCreativeExternalIdAntesDeCriarAd()
+    {
+        var ctx = TestContext.Create();
+        ctx.Graph.RequireCreativeIdPersistedBeforeAd = true;
+
+        var result = await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal("Concluida", result.Status);
+        Assert.True(ctx.Graph.CreativeIdWasPersistedBeforeAd);
+        Assert.Equal("creative_1", ctx.Publicacao.CreativeExternalId);
+        Assert.Equal("ad_1", ctx.Publicacao.AdExternalId);
+    }
+
+    [Fact]
+    public async Task Retry_ProcessoReiniciadoAposCreativeCriado_NaoDuplicaCreative()
+    {
+        var ctx = TestContext.Create();
+        ctx.Publicacao.Status = StatusPublicacaoMetaAds.CreativeCriado;
+        ctx.Publicacao.UltimaEtapaConcluida = "CreativeCriado";
+        ctx.Publicacao.CreativeExternalId = "creative_existente";
+
+        var result = await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal("Concluida", result.Status);
+        Assert.Equal(0, ctx.Graph.CampaignCreates);
+        Assert.Equal(0, ctx.Graph.AdSetCreates);
+        Assert.Equal(0, ctx.Graph.CreativeCreates);
+        Assert.Equal(1, ctx.Graph.AdCreates);
+        Assert.Equal("creative_existente", ctx.Publicacao.CreativeExternalId);
+        Assert.Equal("ad_1", ctx.Publicacao.AdExternalId);
+    }
+
+    [Fact]
     public async Task Retry_PublicacaoJaConcluida_NaoDuplicaRecursos()
     {
         var ctx = TestContext.Create();
@@ -144,7 +205,8 @@ public sealed class MetaAdsPublishingServiceTests
         ctx.Graph,
         ctx.Preview,
         ctx.Resolver,
-        ctx.Protector);
+        ctx.Protector,
+        NullLogger<MetaAdsPublishingService>.Instance);
 
     private static MetaAdsGraphApiException CreativeInvalidException() => new(
         "Invalid parameter",
@@ -168,6 +230,8 @@ public sealed class MetaAdsPublishingServiceTests
         public MetaAdsAtivoSelecionado Selecao { get; }
         public MetaAdsPublicacao Publicacao { get; }
         public bool PreviewReady { get; set; } = true;
+        public string? PreviewPageId { get; set; } = "page_1";
+        public string? PreviewImageHash { get; set; } = "image_hash_1";
         public Campanhas Campanhas { get; }
         public Contas Contas { get; }
         public Selecoes Selecoes { get; }
@@ -198,6 +262,7 @@ public sealed class MetaAdsPublishingServiceTests
             Selecoes = new Selecoes(Selecao);
             Publicacoes = new Publicacoes(Publicacao);
             Preview = new Preview(this);
+            Graph.Context = this;
         }
 
         public static TestContext Create() => new();
@@ -210,10 +275,10 @@ public sealed class MetaAdsPublishingServiceTests
             var preflight = new MetaAdsPreflight(ctx.PreviewReady, ctx.PreviewReady ? [] : [new MetaAdsPreflightItem("DiagnosticOnly", "ERROR", "Bloqueio que nao deve impedir retomada parcial.")]);
             return Task.FromResult(new MetaAdsPreviewResponse(
                 request.CampanhaId,
-                new MetaAdsPreviewAssets(null, null, "act_1", null, "page_1", null, null, null, null, null),
+                new MetaAdsPreviewAssets(null, null, "act_1", null, ctx.PreviewPageId, null, null, null, null, null),
                 new MetaAdsCampaignPreview("Campanha", "OUTCOME_TRAFFIC", "PAUSED", "NONE", ["NONE"]),
                 new MetaAdsAdSetPreview("AdSet", "OUTCOME_TRAFFIC", 20m, 2000, "BRL", "IMPRESSIONS", "LINK_CLICKS", "LOWEST_COST_WITHOUT_CAP", new MetaAdsTargetingPreview(["BR"], new MetaAdsLocationResponse("1001655", "Rio", "city", "BR", "Brazil", "RJ", null, false, true), null, null, 18, 65), null, null, null),
-                new MetaAdsCreativePreview("page_1", null, "Texto principal", "Headline", "Descricao", "https://example.com", "LEARN_MORE", null, "hash", "image_hash_1", true),
+                new MetaAdsCreativePreview(ctx.PreviewPageId, null, "Texto principal", "Headline", "Descricao", "https://example.com", "LEARN_MORE", null, "hash", ctx.PreviewImageHash, !string.IsNullOrWhiteSpace(ctx.PreviewImageHash)),
                 new MetaAdsAdPreview("Ad", "PAUSED"),
                 preflight));
         }
@@ -228,6 +293,10 @@ public sealed class MetaAdsPublishingServiceTests
         public List<string> CallOrder { get; } = [];
         public MetaAdsGraphApiException? CreativeException { get; set; }
         public CancellationTokenSource? CancelBeforeCreativeException { get; set; }
+        public MetaAdsCreativeCreatePayload? LastCreativePayload { get; private set; }
+        public bool RequireCreativeIdPersistedBeforeAd { get; set; }
+        public bool CreativeIdWasPersistedBeforeAd { get; private set; }
+        public TestContext? Context { get; set; }
         public Task<bool> ResourceExistsAsync(MetaAdsConfiguration config, string accessToken, string resourceId, CancellationToken cancellationToken) => Task.FromResult(true);
         public Task<MetaAdsCreateResult> CreateCampaignAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsCampaignCreatePayload payload, CancellationToken cancellationToken) { CampaignCreates++; CallOrder.Add("campaign"); return Task.FromResult(new MetaAdsCreateResult("campaign_1")); }
         public Task<MetaAdsCreateResult> CreateAdSetAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsAdSetCreatePayload payload, CancellationToken cancellationToken) { AdSetCreates++; CallOrder.Add("adset"); return Task.FromResult(new MetaAdsCreateResult("adset_1")); }
@@ -235,6 +304,7 @@ public sealed class MetaAdsPublishingServiceTests
         {
             CreativeCreates++;
             CallOrder.Add("creative");
+            LastCreativePayload = payload;
             if (CreativeException is not null)
             {
                 CancelBeforeCreativeException?.Cancel();
@@ -242,7 +312,16 @@ public sealed class MetaAdsPublishingServiceTests
             }
             return Task.FromResult(new MetaAdsCreateResult("creative_1"));
         }
-        public Task<MetaAdsCreateResult> CreateAdAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsAdCreatePayload payload, CancellationToken cancellationToken) { AdCreates++; CallOrder.Add("ad"); return Task.FromResult(new MetaAdsCreateResult("ad_1")); }
+        public Task<MetaAdsCreateResult> CreateAdAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsAdCreatePayload payload, CancellationToken cancellationToken)
+        {
+            AdCreates++;
+            CallOrder.Add("ad");
+            if (RequireCreativeIdPersistedBeforeAd)
+            {
+                CreativeIdWasPersistedBeforeAd = Context?.Publicacao.CreativeExternalId == payload.CreativeId && !string.IsNullOrWhiteSpace(payload.CreativeId);
+            }
+            return Task.FromResult(new MetaAdsCreateResult("ad_1"));
+        }
         public Task<MetaAdAccountDto> GetAdAccountAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaCampaignDto>> GetCampaignsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaAdSetDto>> GetAdSetsAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();

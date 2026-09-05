@@ -3,6 +3,7 @@ using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
 using LeadEngine.Domain.Entities;
 using LeadEngine.Domain.Enums;
+using Microsoft.Extensions.Logging;
 
 namespace LeadEngine.Application.Services;
 
@@ -14,7 +15,8 @@ public sealed class MetaAdsPublishingService(
     IMetaAdsGraphClient graphClient,
     IMetaAdsPreviewService previewService,
     IConfigurationResolver resolver,
-    ISecretProtector protector) : IMetaAdsPublishingService
+    ISecretProtector protector,
+    ILogger<MetaAdsPublishingService> logger) : IMetaAdsPublishingService
 {
     private const string Paused = "PAUSED";
     private static readonly TimeSpan FailurePersistenceTimeout = TimeSpan.FromSeconds(5);
@@ -123,8 +125,17 @@ public sealed class MetaAdsPublishingService(
 
             if (string.IsNullOrWhiteSpace(publicacao.CreativeExternalId))
             {
+                var creativePayload = BuildCreative(preview);
                 await MarkAsync(publicacao, StatusPublicacaoMetaAds.CriandoCreative, "CriandoCreative", cancellationToken);
-                var created = await graphClient.CreateAdCreativeAsync(config, token, publicacao.AdAccountId, BuildCreative(preview), cancellationToken);
+                logger.LogInformation(
+                    "Meta creative create step. Edge={MetaEdge} AdAccountId={AdAccountId} CampaignId={CampaignId} AdSetId={AdSetId} PageId={PageId} ImageHash={ImageHash}",
+                    "adcreatives",
+                    publicacao.AdAccountId,
+                    publicacao.CampaignExternalId,
+                    publicacao.AdSetExternalId,
+                    creativePayload.PageId,
+                    creativePayload.ImageHash);
+                var created = await graphClient.CreateAdCreativeAsync(config, token, publicacao.AdAccountId, creativePayload, cancellationToken);
                 publicacao.CreativeExternalId = created.Id;
                 await MarkAsync(publicacao, StatusPublicacaoMetaAds.CreativeCriado, "CreativeCriado", cancellationToken);
             }
@@ -149,6 +160,21 @@ public sealed class MetaAdsPublishingService(
         {
             await FailAsync(publicacao, StatusPublicacaoMetaAds.EstadoIndeterminado, "timeout_ambiguous", null, "Timeout", "Timeout durante chamada Meta. A criacao pode ter sido concluida remotamente; nao retente antes de reconciliar.", null, null);
             return ToResponse(publicacao, ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            await FailAndRethrowAsync(publicacao, "invalid_operation", nameof(InvalidOperationException), ex.Message);
+            throw;
+        }
+        catch (HttpRequestException ex)
+        {
+            await FailAndRethrowAsync(publicacao, "http_request_error", nameof(HttpRequestException), ex.Message, ex.StatusCode?.ToString());
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await FailAndRethrowAsync(publicacao, "unexpected_error", ex.GetType().Name, ex.Message);
+            throw;
         }
     }
 
@@ -294,6 +320,7 @@ public sealed class MetaAdsPublishingService(
     private async Task FailAsync(MetaAdsPublicacao publicacao, StatusPublicacaoMetaAds status, string? code, string? subcode, string? type, string? message, string? httpStatus, string? traceId)
     {
         publicacao.Status = status;
+        publicacao.UltimaEtapaConcluida = FailureStep(publicacao);
         publicacao.DataAtualizacao = DateTime.UtcNow;
         publicacao.UltimoErroCodigo = code;
         publicacao.UltimoErroSubcodigo = subcode;
@@ -302,6 +329,27 @@ public sealed class MetaAdsPublishingService(
         publicacao.UltimoErroHttpStatus = httpStatus;
         publicacao.FbTraceId = traceId;
         await PersistFailureAsync();
+    }
+
+    private async Task FailAndRethrowAsync(MetaAdsPublicacao publicacao, string code, string type, string? message, string? httpStatus = null)
+    {
+        var status = HasAnyExternalId(publicacao) ? StatusPublicacaoMetaAds.FalhaParcial : StatusPublicacaoMetaAds.Falha;
+        logger.LogError(
+            "Meta publishing failed. Stage={Stage} Status={Status} ErrorCode={ErrorCode} ErrorType={ErrorType} HttpStatus={HttpStatus} Message={Message}",
+            FailureStep(publicacao),
+            status,
+            code,
+            type,
+            httpStatus,
+            message);
+        await FailAsync(publicacao, status, code, null, type, message, httpStatus, null);
+    }
+
+    private static string FailureStep(MetaAdsPublicacao publicacao)
+    {
+        return publicacao.UltimaEtapaConcluida == "AdSetCriado" && string.IsNullOrWhiteSpace(publicacao.CreativeExternalId)
+            ? "CriandoCreative"
+            : publicacao.UltimaEtapaConcluida;
     }
 
     private async Task PersistFailureAsync()

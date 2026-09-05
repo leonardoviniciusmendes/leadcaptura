@@ -321,6 +321,18 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
             spec["instagram_actor_id"] = payload.InstagramActorId;
         }
 
+        logger.LogInformation(
+            "Meta Ad Creative create request. Edge={MetaEdge} AdAccountId={AdAccountId} PageId={PageId} ImageHash={ImageHash} Link={Link} Message={Message} Name={Headline} Description={Description} CallToActionType={CallToActionType}",
+            "adcreatives",
+            NormalizeAdAccountId(adAccountId),
+            payload.PageId,
+            payload.ImageHash,
+            SanitizeMetaMessage(payload.Link),
+            SanitizeMetaMessage(payload.Message),
+            SanitizeMetaMessage(payload.Headline),
+            SanitizeMetaMessage(payload.Description),
+            payload.CallToAction);
+
         return await PostFormForIdAsync(config, accessToken, adAccountId, "adcreatives", new()
         {
             ["name"] = payload.Name,
@@ -371,7 +383,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
         if (!response.IsSuccessStatusCode)
         {
             var text = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw ParseError(text, response.StatusCode);
+            throw ParseError(text, response.StatusCode, "adcreatives");
         }
 
         using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
@@ -525,7 +537,7 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
         return utc.ToString("yyyy-MM-dd'T'HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) + "+0000";
     }
 
-    private MetaAdsGraphApiException ParseError(string body, System.Net.HttpStatusCode? statusCode = null)
+    private MetaAdsGraphApiException ParseError(string body, System.Net.HttpStatusCode? statusCode = null, string? edge = null)
     {
         try
         {
@@ -546,22 +558,23 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
                     ? transientValue.GetBoolean()
                     : (bool?)null;
                 var permission = code is "10" or "200" || string.Equals(type, "OAuthException", StringComparison.OrdinalIgnoreCase);
-                LogMetaError(statusCode, type, code, subcode, trace, metaMessage, errorUserTitle, errorUserMessage, errorData, blameField, blameFieldSpecs, isTransient);
+                LogMetaError(edge, statusCode, type, code, subcode, trace, metaMessage, errorUserTitle, errorUserMessage, errorData, blameField, blameFieldSpecs, isTransient);
                 var message = string.IsNullOrWhiteSpace(metaMessage) ? $"Falha Graph API Meta ({type} {code})." : metaMessage;
                 return new MetaAdsGraphApiException(message, code, permission, statusCode, subcode, type, trace, metaMessage, errorUserTitle, errorUserMessage, errorData, blameField, blameFieldSpecs, isTransient);
             }
         }
         catch (JsonException)
         {
-            LogMetaError(statusCode, null, "meta_api_error", null, null, "Resposta de erro Meta nao estava em JSON valido.", null, null, null, null, null, null);
+            LogMetaError(edge, statusCode, null, "meta_api_error", null, null, "Resposta de erro Meta nao estava em JSON valido.", null, null, null, null, null, null);
             return new MetaAdsGraphApiException("Falha ao consultar Graph API Meta.", "meta_api_error", false, statusCode);
         }
 
-        LogMetaError(statusCode, null, "meta_api_error", null, null, "Resposta de erro Meta sem objeto error.", null, null, null, null, null, null);
+        LogMetaError(edge, statusCode, null, "meta_api_error", null, null, "Resposta de erro Meta sem objeto error.", null, null, null, null, null, null);
         return new MetaAdsGraphApiException("Falha ao consultar Graph API Meta.", "meta_api_error", false, statusCode);
     }
 
     private void LogMetaError(
+        string? edge,
         System.Net.HttpStatusCode? statusCode,
         string? type,
         string? code,
@@ -576,15 +589,16 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
         bool? isTransient)
     {
         logger.LogWarning(
-            "Meta Graph API error. HttpStatus={HttpStatus} MetaType={MetaType} MetaCode={MetaCode} MetaSubcode={MetaSubcode} FbTraceId={FbTraceId} MetaMessage={MetaMessage} ErrorUserTitle={ErrorUserTitle} ErrorUserMessage={ErrorUserMessage} ErrorData={ErrorData} BlameField={BlameField} BlameFieldSpecs={BlameFieldSpecs} IsTransient={IsTransient}",
+            "Meta Graph API error. Edge={MetaEdge} HttpStatus={HttpStatus} MetaErrorMessage={MetaErrorMessage} MetaErrorType={MetaErrorType} MetaErrorCode={MetaErrorCode} MetaErrorSubcode={MetaErrorSubcode} MetaErrorUserTitle={MetaErrorUserTitle} MetaErrorUserMessage={MetaErrorUserMessage} FbTraceId={FbTraceId} ErrorData={ErrorData} BlameField={BlameField} BlameFieldSpecs={BlameFieldSpecs} IsTransient={IsTransient}",
+            edge,
             statusCode?.ToString(),
+            message,
             type,
             code,
             subcode,
-            trace,
-            message,
             errorUserTitle,
             errorUserMessage,
+            trace,
             errorData,
             blameField,
             blameFieldSpecs,

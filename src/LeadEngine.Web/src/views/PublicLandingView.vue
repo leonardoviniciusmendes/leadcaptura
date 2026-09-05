@@ -21,8 +21,6 @@
         <form class="panel public-form lead-card-form" @submit.prevent="submit">
           <div class="form-heading">
             <span>Receba sua cotação</span>
-            <h2>{{ ctaText }}</h2>
-            <p>{{ campanha.cidade }}/{{ campanha.estado }} - {{ labelPublico(campanha.tipoPublico) }}</p>
           </div>
 
           <label>Nome<input ref="nomeInput" v-model.trim="form.nome" required maxlength="120" autocomplete="name" autofocus /></label>

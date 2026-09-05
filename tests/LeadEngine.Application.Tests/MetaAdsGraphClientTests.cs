@@ -6,6 +6,7 @@ using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
 using LeadEngine.Domain.Enums;
 using LeadEngine.Infrastructure;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LeadEngine.Application.Tests;
@@ -388,6 +389,43 @@ public sealed class MetaAdsGraphClientTests
     }
 
     [Fact]
+    public async Task CreateAdCreativeAsync_RegistraPayloadSanitizadoSemToken()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonResponse("""{ "id": "creative_1" }"""));
+        var logger = new ListLogger<MetaAdsGraphClient>();
+        var client = Client(handler, logger);
+
+        await client.CreateAdCreativeAsync(
+            Config(),
+            "token-secreto",
+            "act_1668410610924666",
+            new MetaAdsCreativeCreatePayload(
+                "LeadEngine - Creative",
+                "1208718862333229",
+                null,
+                "f9a5427028fe70501c9ad7b032f6a93c",
+                "https://example.com/landing",
+                "Texto principal access_token=token-secreto",
+                "Titulo",
+                "Descricao",
+                "LEARN_MORE"),
+            CancellationToken.None);
+
+        var logs = string.Join('\n', logger.Messages);
+        Assert.Contains("Edge=adcreatives", logs);
+        Assert.Contains("AdAccountId=act_1668410610924666", logs);
+        Assert.Contains("PageId=1208718862333229", logs);
+        Assert.Contains("ImageHash=f9a5427028fe70501c9ad7b032f6a93c", logs);
+        Assert.Contains("Link=https://example.com/landing", logs);
+        Assert.Contains("Name=Titulo", logs);
+        Assert.Contains("Description=Descricao", logs);
+        Assert.Contains("CallToActionType=LEARN_MORE", logs);
+        Assert.Contains("access_token=[redacted]", logs);
+        Assert.DoesNotContain("token-secreto", logs);
+        Assert.DoesNotContain("Authorization", logs);
+    }
+
+    [Fact]
     public async Task CreateDiagnosticAdCreativeAsync_ErroMetaConvertidoESanitizado()
     {
         var handler = new StubHttpMessageHandler(_ => JsonResponse("""
@@ -427,6 +465,54 @@ public sealed class MetaAdsGraphClientTests
         Assert.Equal("Revise os campos.", ex.ErrorUserMessage);
         Assert.Equal("trace-creative", ex.FbTraceId);
         Assert.DoesNotContain("token-secreto", ex.Message);
+    }
+
+    [Fact]
+    public async Task CreateAdCreativeAsync_ErroMetaLogaCamposSeparadosSemToken()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonResponse("""
+        {
+          "error": {
+            "message": "Invalid OAuth access_token=token-secreto",
+            "type": "OAuthException",
+            "code": 100,
+            "error_subcode": 1885316,
+            "error_user_title": "Creative invalido",
+            "error_user_msg": "Revise os campos.",
+            "fbtrace_id": "trace-creative"
+          }
+        }
+        """, HttpStatusCode.BadRequest));
+        var logger = new ListLogger<MetaAdsGraphClient>();
+        var client = Client(handler, logger);
+
+        await Assert.ThrowsAsync<MetaAdsGraphApiException>(() =>
+            client.CreateAdCreativeAsync(
+                Config(),
+                "token-secreto",
+                "act_1668410610924666",
+                new MetaAdsCreativeCreatePayload(
+                    "LeadEngine - Creative",
+                    "1208718862333229",
+                    null,
+                    "f9a5427028fe70501c9ad7b032f6a93c",
+                    "https://example.com/landing",
+                    "Texto principal",
+                    "Titulo",
+                    "Descricao",
+                    "LEARN_MORE"),
+                CancellationToken.None));
+
+        var logs = string.Join('\n', logger.Messages);
+        Assert.Contains("Edge=adcreatives", logs);
+        Assert.Contains("MetaErrorMessage=Invalid OAuth access_token=[redacted]", logs);
+        Assert.Contains("MetaErrorType=OAuthException", logs);
+        Assert.Contains("MetaErrorCode=100", logs);
+        Assert.Contains("MetaErrorSubcode=1885316", logs);
+        Assert.Contains("MetaErrorUserTitle=Creative invalido", logs);
+        Assert.Contains("MetaErrorUserMessage=Revise os campos.", logs);
+        Assert.Contains("FbTraceId=trace-creative", logs);
+        Assert.DoesNotContain("token-secreto", logs);
     }
 
     [Fact]
@@ -731,6 +817,11 @@ public sealed class MetaAdsGraphClientTests
         return new MetaAdsGraphClient(new StubHttpClientFactory(new HttpClient(handler)), NullLogger<MetaAdsGraphClient>.Instance);
     }
 
+    private static MetaAdsGraphClient Client(StubHttpMessageHandler handler, ILogger<MetaAdsGraphClient> logger)
+    {
+        return new MetaAdsGraphClient(new StubHttpClientFactory(new HttpClient(handler)), logger);
+    }
+
     private static MetaAdsConfiguration Config()
     {
         return new MetaAdsConfiguration(
@@ -817,6 +908,17 @@ public sealed class MetaAdsGraphClientTests
             LastRequestUri = request.RequestUri?.ToString() ?? string.Empty;
             LastRequestBody = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken);
             return responder(request);
+        }
+    }
+
+    private sealed class ListLogger<T> : ILogger<T>
+    {
+        public List<string> Messages { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Messages.Add(formatter(state, exception));
         }
     }
 
