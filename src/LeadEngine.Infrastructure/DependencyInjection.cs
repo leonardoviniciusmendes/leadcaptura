@@ -119,6 +119,7 @@ public static class DependencyInjection
             configuration.GetSection("CreativeAnalysis").Bind(options);
             var provider = Environment.GetEnvironmentVariable("CREATIVE_ANALYSIS_PROVIDER");
             var model = Environment.GetEnvironmentVariable("CREATIVE_ANALYSIS_MODEL");
+            var costTier = Environment.GetEnvironmentVariable("CREATIVE_ANALYSIS_COST_TIER");
             var fallback = Environment.GetEnvironmentVariable("CREATIVE_ANALYSIS_FALLBACK_TO_FAKE");
             if (!string.IsNullOrWhiteSpace(provider))
             {
@@ -130,9 +131,24 @@ public static class DependencyInjection
                 options.Model = model;
             }
 
+            if (!string.IsNullOrWhiteSpace(costTier))
+            {
+                options.CostTier = costTier;
+            }
+
             if (bool.TryParse(fallback, out var fallbackToFake))
             {
                 options.FallbackToFake = fallbackToFake;
+            }
+
+            if (string.IsNullOrWhiteSpace(options.Model))
+            {
+                options.Model = CreativeAnalysisOptions.DefaultModel;
+            }
+
+            if (string.IsNullOrWhiteSpace(options.CostTier))
+            {
+                options.CostTier = CreativeAnalysisOptions.DefaultCostTier;
             }
         });
         services.Configure<OpenRouterOptions>(options =>

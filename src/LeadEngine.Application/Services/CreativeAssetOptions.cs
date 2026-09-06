@@ -10,7 +10,11 @@ public sealed class CreativeAssetOptions
 
 public sealed class CreativeAnalysisOptions
 {
-    public string Provider { get; set; } = "Fake";
-    public string Model { get; set; } = string.Empty;
+    public const string DefaultModel = "openrouter/auto";
+    public const string DefaultCostTier = "low";
+
+    public string Provider { get; set; } = "OpenRouter";
+    public string Model { get; set; } = DefaultModel;
+    public string CostTier { get; set; } = DefaultCostTier;
     public bool FallbackToFake { get; set; }
 }
