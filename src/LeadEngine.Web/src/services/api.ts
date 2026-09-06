@@ -157,7 +157,7 @@ export interface CapturarLeadPublicoRequest {
   quantidadeVidas: number;
   tipoContratacao: TipoContratacaoLead;
   observacao?: string;
-  consentimento: boolean;
+  consentimento?: boolean;
   website?: string;
   formOpenedAt?: number;
   utmSource?: string;

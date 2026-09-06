@@ -74,7 +74,7 @@ public sealed class LeadService(
             QuantidadeVidas = request.QuantidadeVidas,
             Observacao = LeadSanitizer.Texto(request.Observacao, 1000),
             Status = StatusLead.Recebido,
-            ConsentimentoContato = true,
+            ConsentimentoContato = request.Consentimento,
             ConsentimentoEm = now,
             TextoConsentimentoVersao = EffectiveOptionsSync().ConsentVersion,
             CriadoEm = now,
@@ -193,11 +193,6 @@ public sealed class LeadService(
         if (!Enum.IsDefined(request.TipoContratacao))
         {
             erros.Add("Tipo de contratacao invalido.");
-        }
-
-        if (!request.Consentimento)
-        {
-            erros.Add("Consentimento obrigatorio.");
         }
 
         if (request.Observacao?.Length > 1000)

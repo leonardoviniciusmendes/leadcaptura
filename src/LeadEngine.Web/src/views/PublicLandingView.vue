@@ -32,16 +32,12 @@
             <span>{{ labelContratacao(form.tipoContratacao) }}</span>
           </div>
 
-          <label class="consent">
-            <input v-model="form.consentimento" type="checkbox" required />
-            Autorizo contato sobre esta cotação e entendo que meus dados serão usados apenas para essa solicitação.
-          </label>
           <input v-model="form.website" class="hp-field" tabindex="-1" autocomplete="off" />
           <p v-if="submitError" class="error">{{ submitError }}</p>
           <p v-if="success" class="success">{{ success }}</p>
           <button class="button public-cta" :disabled="submitting">{{ submitting ? 'Enviando...' : ctaText }}</button>
           <a v-if="whatsAppUrl" class="button secondary" :href="whatsAppUrl" target="_blank" rel="noopener">Abrir WhatsApp</a>
-          <small class="form-trust">Sem compromisso. O atendimento depende do seu consentimento.</small>
+          <small class="form-trust">Sem compromisso. Usaremos seus dados apenas para responder esta solicitação.</small>
         </form>
       </section>
 
@@ -159,7 +155,6 @@ const form = reactive<CapturarLeadPublicoRequest>({
   estado: '',
   quantidadeVidas: 1,
   tipoContratacao: 'Familiar',
-  consentimento: false,
   website: '',
   formOpenedAt: openedAt
 });

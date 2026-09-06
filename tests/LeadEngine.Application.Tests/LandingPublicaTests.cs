@@ -82,11 +82,17 @@ public sealed class LandingPublicaTests
     }
 
     [Fact]
-    public async Task CapturaLead_ValidaConsentimento()
+    public async Task CapturaLead_ConsentimentoNaoObrigatorio()
     {
-        var service = ServiceComCampanhaPublicada();
+        var campanhas = new CampanhaRepo();
+        var leads = new LeadRepo();
+        campanhas.Campanhas.Add(Campanha(StatusCampanha.Revisada, publicada: true));
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.CapturarLeadPublicoAsync("plano-familiar-amil-barra", RequestValido() with { Consentimento = false }, CancellationToken.None));
+        var result = await LeadService(campanhas, leads).CapturarLeadPublicoAsync("plano-familiar-amil-barra", RequestValido() with { Consentimento = false }, CancellationToken.None);
+
+        Assert.NotEqual(Guid.Empty, result.LeadId);
+        var lead = Assert.Single(leads.Leads);
+        Assert.False(lead.ConsentimentoContato);
     }
 
     [Fact]
