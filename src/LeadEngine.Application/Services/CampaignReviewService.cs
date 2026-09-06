@@ -41,6 +41,7 @@ public sealed class CampaignReviewService(
 
         campanha.Nome = CampanhaText.Limitar(request.Nome, 180) ?? string.Empty;
         ApplyContent(campanha, conteudo);
+        ApplyLeadForm(campanha, request.Form);
         campanha.Status = StatusCampanha.Gerada;
         campanha.Publicada = false;
         campanha.Ativo = false;
@@ -184,6 +185,21 @@ public sealed class CampaignReviewService(
         campanha.PalavrasChaveNegativasJson = Serialize(conteudo.PalavrasChaveNegativas);
         campanha.TitulosAnunciosJson = Serialize(conteudo.TitulosAnuncios);
         campanha.DescricoesAnunciosJson = Serialize(conteudo.DescricoesAnuncios);
+    }
+
+    private static void ApplyLeadForm(Campanha campanha, LeadFormResponse? form)
+    {
+        if (form is null)
+        {
+            return;
+        }
+
+        foreach (var current in campanha.LeadForms)
+        {
+            current.IsActive = false;
+        }
+
+        campanha.LeadForms.Add(LeadFormSchema.CreateRevision(campanha, form));
     }
 
     private static void ApplySnapshot(Campanha campanha, CampanhaContentSnapshot snapshot)

@@ -21,18 +21,26 @@ public static class CampanhaValidator
     public static void ValidarBriefing(GerarCampanhaRequest request)
     {
         var erros = new List<string>();
+        var usaContextoGenerico = UsaContextoGenerico(request);
 
-        if (!Enum.IsDefined(request.TipoPublico) || request.TipoPublico == 0)
+        if (!usaContextoGenerico && (!Enum.IsDefined(request.TipoPublico) || request.TipoPublico == 0))
         {
             erros.Add("Tipo de publico obrigatorio.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Cidade))
+        if (usaContextoGenerico)
+        {
+            ValidarObrigatorio(request.ProductOrService, "Produto ou servico", erros);
+            ValidarObrigatorio(request.TargetAudience, "Publico-alvo", erros);
+            ValidarObrigatorio(request.CampaignGoal, "Objetivo da campanha", erros);
+        }
+
+        if (!usaContextoGenerico && string.IsNullOrWhiteSpace(request.Cidade) && string.IsNullOrWhiteSpace(request.Location?.City))
         {
             erros.Add("Cidade obrigatoria.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Estado))
+        if (!usaContextoGenerico && string.IsNullOrWhiteSpace(request.Estado) && string.IsNullOrWhiteSpace(request.Location?.State))
         {
             erros.Add("Estado obrigatorio.");
         }
@@ -42,11 +50,11 @@ public static class CampanhaValidator
             erros.Add("Orcamento diario deve ser maior que zero.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Operadora))
+        if (!usaContextoGenerico && string.IsNullOrWhiteSpace(request.Operadora))
         {
             erros.Add("Operadora obrigatoria.");
         }
-        else if (!OperadorasPermitidas.Contains(RemoveAccents(request.Operadora)))
+        else if (!usaContextoGenerico && !OperadorasPermitidas.Contains(RemoveAccents(request.Operadora)))
         {
             erros.Add("Operadora invalida.");
         }
@@ -59,10 +67,19 @@ public static class CampanhaValidator
 
         ValidarTamanho(request.Cidade, 120, "Cidade", erros);
         ValidarTamanho(request.Estado, 2, "Estado", erros);
+        ValidarTamanho(request.Location?.City, 120, "Cidade", erros);
+        ValidarTamanho(request.Location?.State, 2, "Estado", erros);
+        ValidarTamanho(request.Location?.Region, 120, "Bairro ou regiao", erros);
         ValidarTamanho(request.Regiao, 120, "Bairro ou regiao", erros);
         ValidarTamanho(request.Operadora, 80, "Operadora", erros);
         ValidarTamanho(request.OperadoraOutra, 80, "Nome da operadora", erros);
         ValidarTamanho(request.Objetivo, 500, "Objetivo ou observacao", erros);
+        ValidarTamanho(request.BusinessDescription, 500, "Descricao do negocio", erros);
+        ValidarTamanho(request.ProductOrService, 180, "Produto ou servico", erros);
+        ValidarTamanho(request.TargetAudience, 300, "Publico-alvo", erros);
+        ValidarTamanho(request.CampaignGoal, 300, "Objetivo da campanha", erros);
+        ValidarTamanho(request.Offer, 300, "Oferta", erros);
+        ValidarTamanho(request.BrandTone, 120, "Tom de marca", erros);
 
         if (erros.Count > 0)
         {
@@ -136,9 +153,25 @@ public static class CampanhaValidator
 
     public static string OperadoraEfetiva(GerarCampanhaRequest request)
     {
+        if (UsaContextoGenerico(request) && string.IsNullOrWhiteSpace(request.Operadora))
+        {
+            return "Nao se aplica";
+        }
+
         return string.Equals(request.Operadora, "Outra", StringComparison.OrdinalIgnoreCase)
             ? request.OperadoraOutra!.Trim()
             : request.Operadora.Trim();
+    }
+
+    private static bool UsaContextoGenerico(GerarCampanhaRequest request)
+    {
+        return !string.IsNullOrWhiteSpace(request.BusinessDescription)
+            || !string.IsNullOrWhiteSpace(request.ProductOrService)
+            || !string.IsNullOrWhiteSpace(request.TargetAudience)
+            || !string.IsNullOrWhiteSpace(request.CampaignGoal)
+            || !string.IsNullOrWhiteSpace(request.Offer)
+            || !string.IsNullOrWhiteSpace(request.BrandTone)
+            || request.Restrictions is { Count: > 0 };
     }
 
     private static void ValidarCampanhaCompleta(CampanhaConteudoNormalizado conteudo, ICollection<string> erros)
@@ -150,7 +183,7 @@ public static class CampanhaValidator
 
         if (ContemPromessaProibida(conteudo.MensagemWhatsApp))
         {
-            erros.Add("Mensagem de WhatsApp nao deve prometer preco, aprovacao, cobertura ou carencia.");
+            erros.Add("Mensagem de WhatsApp nao deve conter promessa garantida ou enganosa.");
         }
 
         ValidarQuantidade("Titulos", conteudo.TitulosAnuncios, 8, 12, erros);

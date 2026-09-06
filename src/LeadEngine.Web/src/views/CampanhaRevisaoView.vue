@@ -26,8 +26,9 @@
       <ReviewBlock title="Informacoes gerais" secao="Nome" :dirty="dirty" :busy="busy" @save="save" @cancel="reset" @regenerate="startRegeneration('Nome')">
         <label>Nome<input v-model="form.nome" maxlength="180" /></label>
         <dl class="compact-list">
-          <dt>Publico</dt><dd>{{ campanha.tipoPublico }}</dd>
-          <dt>Operadora</dt><dd>{{ campanha.operadora }}</dd>
+          <template v-for="item in briefingItems" :key="item.label">
+            <dt>{{ item.label }}</dt><dd>{{ item.value }}</dd>
+          </template>
           <dt>Orcamento</dt><dd>{{ money(campanha.orcamentoDiario) }}</dd>
           <dt>Slug</dt><dd>{{ campanha.slug }}</dd>
           <dt>Publicacao</dt><dd>{{ campanha.publicada ? 'Publicada' : 'Despublicada' }}</dd>
@@ -51,6 +52,22 @@
       <ReviewBlock title="WhatsApp" secao="MensagemWhatsApp" :dirty="dirty" :busy="busy" @save="save" @cancel="reset" @regenerate="startRegeneration('MensagemWhatsApp')">
         <label>Mensagem<textarea v-model="form.mensagemWhatsApp" maxlength="500" rows="5" /></label>
       </ReviewBlock>
+
+      <section class="panel review-section">
+        <header class="review-section-header">
+          <div>
+            <h2>Formulario de lead</h2>
+            <span v-if="dirty" class="unsaved">alteracoes nao salvas</span>
+          </div>
+          <div class="actions">
+            <button class="button secondary" :disabled="busy" @click="reset">Cancelar</button>
+            <button class="button" :disabled="busy || !dirty" @click="save">Salvar</button>
+          </div>
+        </header>
+        <div class="review-fields">
+          <label>Schema JSON<textarea v-model="leadFormJson" rows="12" spellcheck="false" /></label>
+        </div>
+      </section>
 
       <ReviewBlock title="Beneficios" secao="Beneficios" :dirty="dirty" :busy="busy" @save="save" @cancel="reset" @regenerate="startRegeneration('Beneficios')">
         <div v-for="(_, index) in form.beneficios" :key="`beneficio-${index}`" class="inline-edit">
@@ -152,6 +169,8 @@ import {
 const route = useRoute();
 const campanha = ref<Campanha | null>(null);
 const baseline = ref('');
+const baselineLeadFormJson = ref('');
+const leadFormJson = ref('');
 const loading = ref(false);
 const saving = ref(false);
 const regenerating = ref(false);
@@ -175,13 +194,38 @@ const form = reactive<RevisarCampanhaRequest>({
   palavrasChave: [],
   palavrasChaveNegativas: [],
   titulosAnuncios: [],
-  descricoesAnuncios: []
+  descricoesAnuncios: [],
+  form: { submitButtonText: 'Enviar', fields: [] }
 });
 
 const busy = computed(() => loading.value || saving.value || regenerating.value || approving.value || publishing.value);
-const dirty = computed(() => JSON.stringify(form) !== baseline.value);
+const dirty = computed(() => JSON.stringify(form) !== baseline.value || leadFormJson.value !== baselineLeadFormJson.value);
 const localizacao = computed(() => campanha.value ? [campanha.value.regiao, campanha.value.cidade, campanha.value.estado].filter(Boolean).join(' / ') : '');
 const canPublicarLanding = computed(() => campanha.value?.status === 'Revisada');
+const briefingItems = computed(() => {
+  if (!campanha.value) return [];
+  if (campanha.value.usesLegacyBriefing) {
+    return [
+      { label: 'Segmento', value: campanha.value.segment?.name || 'Segmento legado' },
+      { label: 'Publico', value: campanha.value.tipoPublico },
+      { label: 'Operadora', value: campanha.value.operadora || 'Nenhuma especifica' },
+      { label: 'Localizacao', value: localizacao.value || '-' },
+      { label: 'Objetivo', value: campanha.value.objetivo || '-' }
+    ];
+  }
+
+  const briefing = campanha.value.briefing;
+  const location = briefing.location;
+  return [
+    { label: 'Segmento', value: campanha.value.segment?.name || '-' },
+    { label: 'Produto/servico', value: briefing.productOrService || '-' },
+    { label: 'Publico-alvo', value: briefing.targetAudience || '-' },
+    { label: 'Objetivo', value: briefing.campaignGoal || campanha.value.objetivo || '-' },
+    { label: 'Oferta', value: briefing.offer || '-' },
+    { label: 'Localizacao', value: [location?.region, location?.city, location?.state].filter(Boolean).join(' / ') || localizacao.value || '-' },
+    { label: 'Tom da marca', value: briefing.brandTone || '-' }
+  ];
+});
 const publicUrl = computed(() => {
   if (!campanha.value) return '';
   const base = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/+$/, '');
@@ -379,11 +423,20 @@ function hydrate(source: Campanha) {
   form.palavrasChaveNegativas = [...source.palavrasChaveNegativas];
   form.titulosAnuncios = [...source.titulosAnuncios];
   form.descricoesAnuncios = [...source.descricoesAnuncios];
+  form.form = source.form;
+  leadFormJson.value = JSON.stringify(source.form, null, 2);
+  baselineLeadFormJson.value = leadFormJson.value;
   baseline.value = JSON.stringify(form);
 }
 
 function payload(): RevisarCampanhaRequest {
-  return JSON.parse(JSON.stringify(form));
+  const result = JSON.parse(JSON.stringify(form));
+  if (leadFormJson.value !== baselineLeadFormJson.value) {
+    result.form = JSON.parse(leadFormJson.value);
+  } else {
+    delete result.form;
+  }
+  return result;
 }
 
 function removeItem<T>(items: T[], index: number) {

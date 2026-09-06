@@ -4,7 +4,7 @@ namespace LeadEngine.Application.Interfaces;
 
 public interface ICampaignGenerationService
 {
-    Task<CampaignGenerationResult> GenerateAsync(GerarCampanhaRequest briefing, CancellationToken cancellationToken);
+    Task<CampaignGenerationResult> GenerateAsync(CampaignGenerationContext context, CancellationToken cancellationToken);
 }
 
 public sealed record CampaignGenerationResult(

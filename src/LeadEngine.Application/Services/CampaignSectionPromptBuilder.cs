@@ -9,6 +9,7 @@ public sealed class CampaignSectionPromptBuilder
     public string Build(Campanha campanha, CampanhaSecao secao, string? instrucaoAdicional)
     {
         var atual = CampanhaContentSnapshot.From(campanha);
+        var context = CampaignGenerationContextFactory.FromCampaign(campanha);
         var formato = secao switch
         {
             CampanhaSecao.Nome => """{ "nome": "string" }""",
@@ -24,17 +25,11 @@ public sealed class CampaignSectionPromptBuilder
         };
 
         return $$"""
-        Voce e um especialista em campanhas de Google Ads para planos de saude no Brasil.
+        Voce e um especialista em campanhas digitais de aquisicao de leads.
         Regenere somente a secao solicitada da campanha. Nao gere a campanha inteira.
 
-        Briefing original:
-        - Tipo de publico: {{campanha.TipoPublico}}
-        - Cidade: {{campanha.Cidade}}
-        - Estado: {{campanha.Estado}}
-        - Bairro ou regiao: {{campanha.Regiao ?? "nao informado"}}
-        - Operadora: {{campanha.Operadora}}
-        - Orcamento diario: {{campanha.OrcamentoDiario}}
-        - Objetivo ou observacao: {{campanha.Objetivo ?? "nao informado"}}
+        Contexto de geracao:
+        {{JsonSerializer.Serialize(context)}}
 
         Conteudo atual da campanha:
         {{JsonSerializer.Serialize(atual)}}
@@ -42,17 +37,13 @@ public sealed class CampaignSectionPromptBuilder
         Secao a regenerar: {{secao}}
         Instrucao adicional: {{instrucaoAdicional ?? "nao informada"}}
 
-        Regras comerciais e restricoes de saude:
+        Regras:
         - Use portugues do Brasil.
         - Seja claro, profissional e objetivo.
-        - Nao faca promessa enganosa.
-        - Nao garanta preco, economia, cobertura, aprovacao, contratacao ou ausencia de carencia.
-        - Nao invente informacoes sobre operadoras, rede credenciada, hospitais ou coberturas.
-        - Mensagem de WhatsApp nao deve prometer preco, aprovacao, cobertura ou carencia.
-        - Beneficios nao devem conter promessa garantida.
-        - FAQ deve esclarecer variacao de preco, rede, cobertura, carencia e disponibilidade quando pertinente.
+        - Nao invente fatos sobre o negocio, produto, servico, disponibilidade, preco, condicoes, certificacoes ou resultados.
+        - Nao faca promessas enganosas ou garantias absolutas.
+        - Respeite as restricoes presentes no contexto.
         - Palavras-chave devem ter intencao comercial e evitar termos excessivamente amplos.
-        - Palavras negativas devem evitar intencao baixa como emprego, salario, concurso, segunda via, login e boleto.
         - Titulos de anuncios: entre 8 e 12, maximo 30 caracteres cada, sem duplicatas exatas.
         - Descricoes: entre 3 e 4, maximo 90 caracteres cada, sem duplicatas exatas.
         - Beneficios: entre 3 e 6.

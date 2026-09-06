@@ -53,5 +53,6 @@ public class Lead
     public int? UltimoStatusHttpIntegracao { get; set; }
     public OrigemLead Origem { get; set; } = null!;
     public ICollection<LogIntegracaoLead> LogsIntegracao { get; set; } = new List<LogIntegracaoLead>();
+    public ICollection<LeadAnswer> Answers { get; set; } = [];
     public Campanha? Campanha { get; set; }
 }

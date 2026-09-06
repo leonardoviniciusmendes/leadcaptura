@@ -127,7 +127,14 @@ public sealed class AuthIntegrationTests
                 "Rio de Janeiro",
                 "RJ",
                 TipoPublicoCampanha.Familia,
-                "Gostaria de receber uma cotacao."));
+                "Gostaria de receber uma cotacao.",
+                new CampaignSegmentSummary(Guid.NewGuid(), "Planos de Saude", "planos-saude", "high_ticket_quote"),
+                new CampaignBriefingResponse(null, null, null, null, null, new CampaignLocationDto("Rio de Janeiro", "RJ", "Zona Sul"), null, []),
+                true,
+                new LeadFormResponse("Receber cotacao", [
+                    new LeadFormFieldResponse("name", "Nome", "text", true, null, [], null),
+                    new LeadFormFieldResponse("phone", "WhatsApp", "phone", true, null, [], null)
+                ])));
         }
 
         public Task<CapturarLeadPublicoResponse> CapturarLeadPublicoAsync(string slug, CapturarLeadPublicoRequest request, CancellationToken cancellationToken)

@@ -23,7 +23,7 @@ public sealed class OpenRouterCampaignGenerationService(
 {
     private const string ClientName = "openrouter";
 
-    public async Task<CampaignGenerationResult> GenerateAsync(GerarCampanhaRequest briefing, CancellationToken cancellationToken)
+    public async Task<CampaignGenerationResult> GenerateAsync(CampaignGenerationContext context, CancellationToken cancellationToken)
     {
         var config = await EffectiveOptionsAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(config.ApiKey))
@@ -36,7 +36,7 @@ public sealed class OpenRouterCampaignGenerationService(
             throw new CampaignGenerationException("OpenRouter Model não configurado.");
         }
 
-        var prompt = promptBuilder.Build(briefing);
+        var prompt = promptBuilder.Build(context);
         var body = new
         {
             model = config.Model,
@@ -44,7 +44,7 @@ public sealed class OpenRouterCampaignGenerationService(
             response_format = new { type = "json_object" },
             messages = new[]
             {
-                new { role = "system", content = "Você gera campanhas de Google Ads para planos de saúde e responde somente JSON válido." },
+                new { role = "system", content = "Voce gera campanhas de aquisicao de leads e responde somente JSON valido." },
                 new { role = "user", content = prompt }
             }
         };

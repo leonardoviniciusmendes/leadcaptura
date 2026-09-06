@@ -23,12 +23,19 @@ public sealed class CampanhaRepository(LeadEngineDbContext context) : ICampanhaR
 
     public Task<Campanha?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken)
     {
-        return context.Campanhas.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        return context.Campanhas
+            .Include(x => x.Segment)
+            .Include(x => x.LeadForms)
+                .ThenInclude(x => x.Fields)
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
     public Task<Campanha?> ObterPublicadaPorSlugAsync(string slug, CancellationToken cancellationToken)
     {
         return context.Campanhas
+            .Include(x => x.Segment)
+            .Include(x => x.LeadForms)
+                .ThenInclude(x => x.Fields)
             .FirstOrDefaultAsync(x => x.Slug == slug && x.Publicada && x.Ativo, cancellationToken);
     }
 
@@ -43,6 +50,9 @@ public sealed class CampanhaRepository(LeadEngineDbContext context) : ICampanhaR
     public async Task<IReadOnlyList<Campanha>> ListarAsync(CancellationToken cancellationToken)
     {
         return await context.Campanhas
+            .Include(x => x.Segment)
+            .Include(x => x.LeadForms)
+                .ThenInclude(x => x.Fields)
             .OrderByDescending(x => x.DataCriacao)
             .ToArrayAsync(cancellationToken);
     }

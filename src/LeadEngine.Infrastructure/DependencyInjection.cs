@@ -23,6 +23,7 @@ public static class DependencyInjection
 
         services.AddScoped<ILeadRepository, LeadRepository>();
         services.AddScoped<ICampanhaRepository, CampanhaRepository>();
+        services.AddScoped<ISegmentRepository, SegmentRepository>();
         services.AddScoped<IConfiguracaoRepository, ConfiguracaoRepository>();
         services.AddScoped<IGoogleAdsContaRepository, GoogleAdsContaRepository>();
         services.AddScoped<IGoogleAdsOAuthStateRepository, GoogleAdsOAuthStateRepository>();

@@ -53,6 +53,36 @@ public sealed class LandingPublicaTests
         Assert.NotNull(result);
         Assert.Equal("Plano Familiar Amil - Barra", result.Nome);
         Assert.Equal("Amil", result.Operadora);
+        Assert.True(result.UsesLegacyBriefing);
+    }
+
+    [Fact]
+    public async Task ConsultaPublica_CampanhaGenerica_RetornaBriefingSemLegacy()
+    {
+        var campanhas = new CampanhaRepo();
+        campanhas.Campanhas.Add(CampanhaGenerica(publicada: true));
+
+        var result = await LeadService(campanhas).ObterCampanhaPublicaAsync("harmonizacao-facial-barra", CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.False(result.UsesLegacyBriefing);
+        Assert.Equal("Estetica", result.Segment?.Name);
+        Assert.Equal("Harmonizacao facial e tratamentos esteticos", result.Briefing.ProductOrService);
+        Assert.Equal("Mulheres da Barra e Recreio", result.Briefing.TargetAudience);
+        Assert.Equal("Recreio dos Bandeirantes e Barra da Tijuca", result.Briefing.Location?.Region);
+    }
+
+    [Fact]
+    public async Task ConsultaPublica_RetornaSchemaFormulario()
+    {
+        var campanhas = new CampanhaRepo();
+        campanhas.Campanhas.Add(CampanhaGenerica(publicada: true));
+
+        var result = await LeadService(campanhas).ObterCampanhaPublicaAsync("harmonizacao-facial-barra", CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal("Solicitar avaliacao", result.Form.SubmitButtonText);
+        Assert.Contains(result.Form.Fields, x => x.Key == "procedimento" && x.Type == "select");
     }
 
     [Fact]
@@ -93,6 +123,61 @@ public sealed class LandingPublicaTests
         Assert.NotEqual(Guid.Empty, result.LeadId);
         var lead = Assert.Single(leads.Leads);
         Assert.False(lead.ConsentimentoContato);
+    }
+
+    [Fact]
+    public async Task CapturaLeadGenerico_PersisteLeadAnswerENaoCriaQuantidadeVidasArtificial()
+    {
+        var campanhas = new CampanhaRepo();
+        var leads = new LeadRepo();
+        campanhas.Campanhas.Add(CampanhaGenerica(publicada: true));
+
+        await LeadService(campanhas, leads).CapturarLeadPublicoAsync("harmonizacao-facial-barra", RequestGenerico(), CancellationToken.None);
+
+        var lead = Assert.Single(leads.Leads);
+        Assert.Null(lead.QuantidadeVidas);
+        Assert.Null(lead.TipoContratacao);
+        Assert.Contains(lead.Answers, x => x.FieldKey == "procedimento" && x.LabelSnapshot == "Procedimento de interesse" && x.ValueJson.Contains("Botox"));
+        Assert.Contains(lead.Answers, x => x.FieldKey == "preferencias" && x.ValueJson.Contains("Manha"));
+        Assert.Contains(lead.Answers, x => x.FieldKey == "aceitaContato" && x.ValueJson == "true");
+    }
+
+    [Fact]
+    public async Task CapturaLeadGenerico_RequiredFalha()
+    {
+        var campanhas = new CampanhaRepo();
+        campanhas.Campanhas.Add(CampanhaGenerica(publicada: true));
+
+        var request = RequestGenerico() with { Answers = RequestGenerico().Answers!.Where(x => x.Key != "procedimento").ToDictionary(x => x.Key, x => x.Value) };
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => LeadService(campanhas).CapturarLeadPublicoAsync("harmonizacao-facial-barra", request, CancellationToken.None));
+        Assert.Contains("Procedimento de interesse obrigatorio.", ex.Message);
+    }
+
+    [Fact]
+    public async Task CapturaLeadGenerico_SelectInvalidoFalha()
+    {
+        var campanhas = new CampanhaRepo();
+        campanhas.Campanhas.Add(CampanhaGenerica(publicada: true));
+        var answers = RequestGenerico().Answers!.ToDictionary(x => x.Key, x => x.Value);
+        answers["procedimento"] = Json("Invalido");
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => LeadService(campanhas).CapturarLeadPublicoAsync("harmonizacao-facial-barra", RequestGenerico() with { Answers = answers }, CancellationToken.None));
+        Assert.Contains("Procedimento de interesse deve conter uma opcao valida.", ex.Message);
+    }
+
+    [Fact]
+    public async Task CapturaLeadLegacy_ContinuaPreenchendoColunasAntigas()
+    {
+        var campanhas = new CampanhaRepo();
+        var leads = new LeadRepo();
+        campanhas.Campanhas.Add(Campanha(StatusCampanha.Revisada, publicada: true));
+
+        await LeadService(campanhas, leads).CapturarLeadPublicoAsync("plano-familiar-amil-barra", RequestValido(), CancellationToken.None);
+
+        var lead = Assert.Single(leads.Leads);
+        Assert.Equal(3, lead.QuantidadeVidas);
+        Assert.Equal(TipoContratacaoLead.Familiar, lead.TipoContratacao);
     }
 
     [Fact]
@@ -253,8 +338,33 @@ public sealed class LandingPublicaTests
         };
     }
 
+    private static CapturarLeadPublicoRequest RequestGenerico()
+    {
+        return new CapturarLeadPublicoRequest
+        {
+            Name = "Maria Silva",
+            Phone = "(21) 99999-9999",
+            Email = "maria@email.com",
+            FormOpenedAt = DateTimeOffset.UtcNow.AddSeconds(-3).ToUnixTimeMilliseconds(),
+            Answers = new Dictionary<string, System.Text.Json.JsonElement>
+            {
+                ["name"] = Json("Maria Silva"),
+                ["phone"] = Json("(21) 99999-9999"),
+                ["procedimento"] = Json("Botox"),
+                ["bairro"] = Json("Recreio"),
+                ["preferencias"] = JsonArray("Manha", "Tarde"),
+                ["aceitaContato"] = Json(true)
+            }
+        };
+    }
+
+    private static System.Text.Json.JsonElement Json(string value) => System.Text.Json.JsonSerializer.SerializeToElement(value);
+    private static System.Text.Json.JsonElement Json(bool value) => System.Text.Json.JsonSerializer.SerializeToElement(value);
+    private static System.Text.Json.JsonElement JsonArray(params string[] values) => System.Text.Json.JsonSerializer.SerializeToElement(values);
+
     private static Campanha Campanha(StatusCampanha status, bool publicada = false)
     {
+        var segmentId = Guid.NewGuid();
         return new Campanha
         {
             Id = Guid.NewGuid(),
@@ -279,7 +389,81 @@ public sealed class LandingPublicaTests
             Publicada = publicada,
             Ativo = publicada,
             UrlPublica = publicada ? "/lp/plano-familiar-amil-barra" : null,
-            DataCriacao = DateTime.UtcNow
+            DataCriacao = DateTime.UtcNow,
+            SegmentId = segmentId,
+            Segment = new Segment
+            {
+                Id = segmentId,
+                Name = "Planos de Saude",
+                Slug = "planos-saude",
+                TemplateKey = "high_ticket_quote",
+                DefaultConfigJson = """{"legacyCompatibility":true}""",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            }
+        };
+    }
+
+    private static Campanha CampanhaGenerica(bool publicada)
+    {
+        var segmentId = Guid.NewGuid();
+        return new Campanha
+        {
+            Id = Guid.NewGuid(),
+            Nome = "Harmonizacao Facial Barra",
+            SegmentId = segmentId,
+            Segment = new Segment
+            {
+                Id = segmentId,
+                Name = "Estetica",
+                Slug = "estetica",
+                TemplateKey = "local_service_lead_generation",
+                DefaultConfigJson = """{"ui":{"legacyBriefing":false}}""",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            TipoPublico = TipoPublicoCampanha.Familia,
+            Cidade = "Rio de Janeiro",
+            Estado = "RJ",
+            Regiao = "Recreio dos Bandeirantes e Barra da Tijuca",
+            Operadora = "Nenhuma especifica",
+            OrcamentoDiario = 40,
+            Status = StatusCampanha.Revisada,
+            Slug = "harmonizacao-facial-barra",
+            TituloLandingPage = "Harmonizacao facial na Barra",
+            SubtituloLandingPage = "Agende uma avaliacao estetica personalizada.",
+            TextoBotao = "Solicitar avaliacao",
+            MensagemWhatsApp = "Ola, quero saber mais sobre harmonizacao facial.",
+            BeneficiosJson = """["Avaliacao personalizada","Atendimento local","Orientacao clara"]""",
+            PerguntasFrequentesJson = """[{"pergunta":"Como funciona a avaliacao?","resposta":"A equipe retorna com as proximas orientacoes."}]""",
+            PalavrasChaveJson = """["harmonizacao facial barra","clinica estetica recreio"]""",
+            PalavrasChaveNegativasJson = """[]""",
+            TitulosAnunciosJson = """["Harmonizacao Barra"]""",
+            DescricoesAnunciosJson = """["Solicite uma avaliacao estetica."]""",
+            CampaignConfigJson = """{"productOrService":"Harmonizacao facial e tratamentos esteticos","targetAudience":"Mulheres da Barra e Recreio","campaignGoal":"Agendar avaliacao","offer":"Avaliacao inicial","location":{"city":"Rio de Janeiro","state":"RJ","region":"Recreio dos Bandeirantes e Barra da Tijuca"},"brandTone":"Sofisticado e confiavel"}""",
+            Publicada = publicada,
+            Ativo = publicada,
+            UrlPublica = publicada ? "/lp/harmonizacao-facial-barra" : null,
+            DataCriacao = DateTime.UtcNow,
+            LeadForms =
+            [
+                new LeadForm
+                {
+                    Id = Guid.NewGuid(),
+                    Version = 1,
+                    SubmitButtonText = "Solicitar avaliacao",
+                    IsActive = true,
+                    Fields =
+                    [
+                        new LeadFormField { Id = Guid.NewGuid(), Key = "name", Label = "Nome", Type = "text", Required = true, Order = 1 },
+                        new LeadFormField { Id = Guid.NewGuid(), Key = "phone", Label = "WhatsApp", Type = "phone", Required = true, Order = 2 },
+                        new LeadFormField { Id = Guid.NewGuid(), Key = "procedimento", Label = "Procedimento de interesse", Type = "select", Required = true, OptionsJson = """["Botox","Preenchimento"]""", Order = 3 },
+                        new LeadFormField { Id = Guid.NewGuid(), Key = "bairro", Label = "Bairro", Type = "text", Required = false, Order = 4 },
+                        new LeadFormField { Id = Guid.NewGuid(), Key = "preferencias", Label = "Melhores horarios", Type = "multiselect", Required = false, OptionsJson = """["Manha","Tarde","Noite"]""", Order = 5 },
+                        new LeadFormField { Id = Guid.NewGuid(), Key = "aceitaContato", Label = "Aceita contato", Type = "checkbox", Required = false, Order = 6 }
+                    ]
+                }
+            ]
         };
     }
 

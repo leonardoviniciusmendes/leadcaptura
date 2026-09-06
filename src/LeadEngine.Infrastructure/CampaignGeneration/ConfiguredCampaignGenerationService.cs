@@ -15,7 +15,7 @@ public sealed class ConfiguredCampaignGenerationService(
     ILogger<ConfiguredCampaignGenerationService> logger,
     IConfigurationResolver? resolver = null) : ICampaignGenerationService
 {
-    public async Task<CampaignGenerationResult> GenerateAsync(GerarCampanhaRequest briefing, CancellationToken cancellationToken)
+    public async Task<CampaignGenerationResult> GenerateAsync(CampaignGenerationContext context, CancellationToken cancellationToken)
     {
         var provider = (resolver is null ? null : (await resolver.ResolveAsync(CategoriaConfiguracao.CampaignGeneration, "Provider", cancellationToken)).Value)
             ?? options.Value.Provider;
@@ -23,7 +23,7 @@ public sealed class ConfiguredCampaignGenerationService(
 
         if (string.Equals(provider, "Fake", StringComparison.OrdinalIgnoreCase))
         {
-            return await fake.GenerateAsync(briefing, cancellationToken);
+            return await fake.GenerateAsync(context, cancellationToken);
         }
 
         if (!string.Equals(provider, "OpenRouter", StringComparison.OrdinalIgnoreCase))
@@ -34,12 +34,12 @@ public sealed class ConfiguredCampaignGenerationService(
         var fallbackToFake = await FallbackToFakeAsync(cancellationToken);
         try
         {
-            return await openRouter.GenerateAsync(briefing, cancellationToken);
+            return await openRouter.GenerateAsync(context, cancellationToken);
         }
         catch (Exception ex) when (fallbackToFake)
         {
             logger.LogWarning(ex, "OpenRouter falhou. Fallback Fake ativado explicitamente.");
-            return await fake.GenerateAsync(briefing, cancellationToken);
+            return await fake.GenerateAsync(context, cancellationToken);
         }
     }
 

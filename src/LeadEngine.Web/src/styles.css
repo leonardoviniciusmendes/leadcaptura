@@ -1069,6 +1069,72 @@ dd {
   gap: 12px;
 }
 
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.admin-table th {
+  color: #6b7280;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.admin-table code {
+  color: #374151;
+  font-size: 0.85rem;
+}
+
+.segment-form-panel {
+  align-self: start;
+}
+
+.checkbox-line {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.checkbox-line input {
+  width: 18px;
+  min-height: 18px;
+}
+
+.dynamic-options {
+  display: grid;
+  gap: 8px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.dynamic-options legend {
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 760;
+  margin-bottom: 2px;
+}
+
+.option-line {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 8px;
+  font-weight: 650;
+}
+
+.option-line input {
+  width: 18px;
+  min-height: 18px;
+}
+
 .setting-row {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);

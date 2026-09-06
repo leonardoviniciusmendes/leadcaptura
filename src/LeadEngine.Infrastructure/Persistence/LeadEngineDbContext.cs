@@ -6,6 +6,9 @@ namespace LeadEngine.Infrastructure.Persistence;
 
 public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> options) : DbContext(options)
 {
+    internal static readonly Guid PlanosSaudeSegmentId = Guid.Parse("3f1ce0a4-7ec5-4c8f-b6d9-df4f3e7f0c35");
+
+    public DbSet<Segment> Segments => Set<Segment>();
     public DbSet<Campanha> Campanhas => Set<Campanha>();
     public DbSet<CampanhaRevisao> CampanhasRevisoes => Set<CampanhaRevisao>();
     public DbSet<ConfiguracaoSistema> ConfiguracoesSistema => Set<ConfiguracaoSistema>();
@@ -27,17 +30,45 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
     public DbSet<MetaAdsPreparacaoPublicacao> MetaAdsPreparacoesPublicacao => Set<MetaAdsPreparacaoPublicacao>();
     public DbSet<MetaAdsPublicacao> MetaAdsPublicacoes => Set<MetaAdsPublicacao>();
     public DbSet<Lead> Leads => Set<Lead>();
+    public DbSet<LeadForm> LeadForms => Set<LeadForm>();
+    public DbSet<LeadFormField> LeadFormFields => Set<LeadFormField>();
+    public DbSet<LeadAnswer> LeadAnswers => Set<LeadAnswer>();
     public DbSet<OrigemLead> OrigensLead => Set<OrigemLead>();
     public DbSet<TentativaCapturaLead> TentativasCapturaLead => Set<TentativaCapturaLead>();
     public DbSet<LogIntegracaoLead> LogsIntegracaoLead => Set<LogIntegracaoLead>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Segment>(entity =>
+        {
+            entity.ToTable("Segments");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Slug).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(500);
+            entity.Property(x => x.TemplateKey).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.DefaultConfigJson).HasColumnType("json");
+            entity.HasIndex(x => x.Slug).IsUnique();
+            entity.HasIndex(x => x.IsActive);
+            entity.HasData(new Segment
+            {
+                Id = PlanosSaudeSegmentId,
+                Name = "Planos de Saúde",
+                Slug = "planos-saude",
+                Description = "Captação de leads para cotação consultiva de planos de saúde.",
+                TemplateKey = "high_ticket_quote",
+                DefaultConfigJson = """{"businessCategory":"health_insurance_quote","defaultGoal":"lead_generation_whatsapp","legacyCompatibility":true,"contextDefaults":{"offerType":"quote","primaryChannel":"whatsapp","commercialApproach":"consultative"},"restrictions":["nao_garantir_preco","nao_garantir_cobertura","nao_garantir_aprovacao","nao_promover_carencia_zero"],"leadForm":{"submitButtonText":"Receber cotacao","fields":[{"key":"name","label":"Nome","type":"text","required":true,"order":1},{"key":"phone","label":"WhatsApp","type":"phone","required":true,"placeholder":"(00) 00000-0000","order":2},{"key":"quantidadeVidas","label":"Quantidade de vidas","type":"number","required":true,"validation":{"min":1,"max":999},"order":3}]}}""",
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 9, 6, 0, 0, 0, DateTimeKind.Utc)
+            });
+        });
+
         modelBuilder.Entity<Campanha>(entity =>
         {
             entity.ToTable("Campanhas");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Nome).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.CampaignConfigJson).HasColumnType("json");
             entity.Property(x => x.TipoPublico).HasConversion<int>();
             entity.Property(x => x.Cidade).HasMaxLength(120).IsRequired();
             entity.Property(x => x.Estado).HasMaxLength(2).IsRequired();
@@ -64,7 +95,12 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
             entity.HasIndex(x => x.Slug).IsUnique();
             entity.HasIndex(x => x.DataCriacao);
             entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => x.SegmentId);
             entity.HasIndex(x => new { x.Publicada, x.Ativo });
+            entity.HasOne(x => x.Segment)
+                .WithMany(x => x.Campanhas)
+                .HasForeignKey(x => x.SegmentId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<CampanhaRevisao>(entity =>
@@ -468,6 +504,56 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
                 .WithMany(x => x.Leads)
                 .HasForeignKey(x => x.CampanhaId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<LeadForm>(entity =>
+        {
+            entity.ToTable("LeadForms");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.SubmitButtonText).HasMaxLength(80).IsRequired();
+            entity.HasIndex(x => x.CampaignId);
+            entity.HasIndex(x => new { x.CampaignId, x.Version }).IsUnique();
+            entity.HasIndex(x => new { x.CampaignId, x.IsActive });
+            entity.HasOne(x => x.Campaign)
+                .WithMany(x => x.LeadForms)
+                .HasForeignKey(x => x.CampaignId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<LeadFormField>(entity =>
+        {
+            entity.ToTable("LeadFormFields");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Key).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Label).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Type).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.Placeholder).HasMaxLength(180);
+            entity.Property(x => x.OptionsJson).HasColumnType("json");
+            entity.Property(x => x.ValidationJson).HasColumnType("json");
+            entity.Property(x => x.DefaultValue).HasMaxLength(300);
+            entity.HasIndex(x => x.LeadFormId);
+            entity.HasIndex(x => new { x.LeadFormId, x.Key }).IsUnique();
+            entity.HasIndex(x => new { x.LeadFormId, x.Order });
+            entity.HasOne(x => x.LeadForm)
+                .WithMany(x => x.Fields)
+                .HasForeignKey(x => x.LeadFormId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<LeadAnswer>(entity =>
+        {
+            entity.ToTable("LeadAnswers");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.FieldKey).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.LabelSnapshot).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Type).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.ValueJson).HasColumnType("json").IsRequired();
+            entity.HasIndex(x => x.LeadId);
+            entity.HasIndex(x => new { x.LeadId, x.FieldKey });
+            entity.HasOne(x => x.Lead)
+                .WithMany(x => x.Answers)
+                .HasForeignKey(x => x.LeadId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<OrigemLead>(entity =>

@@ -1,9 +1,12 @@
+using System.Text.Json;
 using LeadEngine.Domain.Enums;
 
 namespace LeadEngine.Application.DTOs;
 
 public sealed record CapturarLeadPublicoRequest
 {
+    public string? Name { get; init; }
+    public string? Phone { get; init; }
     public string Nome { get; init; } = string.Empty;
     public string Telefone { get; init; } = string.Empty;
     public string? Email { get; init; }
@@ -22,6 +25,7 @@ public sealed record CapturarLeadPublicoRequest
     public string? UtmContent { get; init; }
     public string? Gclid { get; init; }
     public string? Fbclid { get; init; }
+    public IReadOnlyDictionary<string, JsonElement>? Answers { get; init; }
 }
 
 public sealed record CapturarLeadPublicoResponse(

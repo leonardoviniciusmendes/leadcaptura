@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using LeadEngine.Application.Common;
+using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
 using LeadEngine.Infrastructure.CampaignGeneration;
@@ -16,7 +17,7 @@ public sealed class CampaignGenerationProviderTests
     {
         var service = Configured("Fake", OpenRouter("{}"));
 
-        var result = await service.GenerateAsync(CampanhaServiceTests.BriefingPadrao(), CancellationToken.None);
+        var result = await service.GenerateAsync(Contexto(), CancellationToken.None);
 
         Assert.Equal("Fake", result.Provider);
     }
@@ -26,7 +27,7 @@ public sealed class CampaignGenerationProviderTests
     {
         var service = Configured("OpenRouter", OpenRouter(OpenRouterResponse(CampaignGenerationParserTests.JsonValido())));
 
-        var result = await service.GenerateAsync(CampanhaServiceTests.BriefingPadrao(), CancellationToken.None);
+        var result = await service.GenerateAsync(Contexto(), CancellationToken.None);
 
         Assert.Equal("OpenRouter", result.Provider);
     }
@@ -36,7 +37,7 @@ public sealed class CampaignGenerationProviderTests
     {
         var service = OpenRouter(OpenRouterResponse(CampaignGenerationParserTests.JsonValido()), apiKey: "");
 
-        await Assert.ThrowsAsync<CampaignGenerationException>(() => service.GenerateAsync(CampanhaServiceTests.BriefingPadrao(), CancellationToken.None));
+        await Assert.ThrowsAsync<CampaignGenerationException>(() => service.GenerateAsync(Contexto(), CancellationToken.None));
     }
 
     [Fact]
@@ -44,7 +45,7 @@ public sealed class CampaignGenerationProviderTests
     {
         var service = Configured("OpenRouter", OpenRouter("erro", HttpStatusCode.InternalServerError), fallbackToFake: false);
 
-        await Assert.ThrowsAsync<CampaignGenerationException>(() => service.GenerateAsync(CampanhaServiceTests.BriefingPadrao(), CancellationToken.None));
+        await Assert.ThrowsAsync<CampaignGenerationException>(() => service.GenerateAsync(Contexto(), CancellationToken.None));
     }
 
     [Fact]
@@ -52,7 +53,7 @@ public sealed class CampaignGenerationProviderTests
     {
         var service = Configured("OpenRouter", OpenRouter("erro", HttpStatusCode.InternalServerError), fallbackToFake: true);
 
-        var result = await service.GenerateAsync(CampanhaServiceTests.BriefingPadrao(), CancellationToken.None);
+        var result = await service.GenerateAsync(Contexto(), CancellationToken.None);
 
         Assert.Equal("Fake", result.Provider);
     }
@@ -64,6 +65,22 @@ public sealed class CampaignGenerationProviderTests
             new FakeCampaignGenerationService(),
             openRouter,
             NullLogger<ConfiguredCampaignGenerationService>.Instance);
+    }
+
+    private static CampaignGenerationContext Contexto()
+    {
+        return CampaignGenerationContextFactory.FromRequest(
+            CampanhaServiceTests.BriefingPadrao(),
+            new LeadEngine.Domain.Entities.Segment
+            {
+                Id = Guid.Parse("3f1ce0a4-7ec5-4c8f-b6d9-df4f3e7f0c35"),
+                Name = "Planos de Saude",
+                Slug = "planos-saude",
+                TemplateKey = "high_ticket_quote",
+                IsActive = true,
+                DefaultConfigJson = """{"restrictions":["nao garantir preco"]}"""
+            },
+            null);
     }
 
     private static OpenRouterCampaignGenerationService OpenRouter(string response, HttpStatusCode statusCode = HttpStatusCode.OK, string apiKey = "key")

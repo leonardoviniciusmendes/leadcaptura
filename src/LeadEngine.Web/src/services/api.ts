@@ -46,6 +46,41 @@ export async function logout(): Promise<void> {
   await api.post('/api/auth/logout');
 }
 
+export async function listarSegments(): Promise<Segment[]> {
+  const { data } = await api.get<Segment[]>('/api/segments');
+  return data;
+}
+
+export async function obterSegment(slug: string): Promise<Segment> {
+  const { data } = await api.get<Segment>(`/api/segments/${encodeURIComponent(slug)}`);
+  return data;
+}
+
+export async function listarAdminSegments(): Promise<AdminSegment[]> {
+  const { data } = await api.get<AdminSegment[]>('/api/admin/segments');
+  return data;
+}
+
+export async function obterAdminSegment(id: string): Promise<AdminSegment> {
+  const { data } = await api.get<AdminSegment>(`/api/admin/segments/${id}`);
+  return data;
+}
+
+export async function criarAdminSegment(payload: UpsertSegmentRequest): Promise<AdminSegment> {
+  const { data } = await api.post<AdminSegment>('/api/admin/segments', payload);
+  return data;
+}
+
+export async function atualizarAdminSegment(id: string, payload: UpsertSegmentRequest): Promise<AdminSegment> {
+  const { data } = await api.put<AdminSegment>(`/api/admin/segments/${id}`, payload);
+  return data;
+}
+
+export async function atualizarAdminSegmentStatus(id: string, isActive: boolean): Promise<AdminSegment> {
+  const { data } = await api.patch<AdminSegment>(`/api/admin/segments/${id}/status`, { isActive });
+  return data;
+}
+
 export type TipoPublicoCampanha = 'Individual' | 'Casal' | 'Familia' | 'Mei' | 'Empresa';
 export type StatusCampanha = 'Rascunho' | 'Gerando' | 'Gerada' | 'Revisada' | 'Publicada' | 'Pausada' | 'Erro';
 export type CampanhaSecao =
@@ -60,6 +95,77 @@ export type CampanhaSecao =
   | 'DescricoesAnuncios';
 export type OrigemRevisaoCampanha = 'Manual' | 'InteligenciaArtificial';
 
+export interface Segment {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  templateKey: string;
+  usesLegacyBriefing: boolean;
+  defaultCampaignGoal?: string;
+}
+
+export interface AdminSegment {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  templateKey: string;
+  defaultConfigJson?: string;
+  isActive: boolean;
+  campaignsCount: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface UpsertSegmentRequest {
+  name: string;
+  slug: string;
+  description?: string;
+  templateKey: string;
+  defaultConfigJson?: string;
+  isActive: boolean;
+}
+
+export interface CampaignLocation {
+  city?: string;
+  state?: string;
+  region?: string;
+}
+
+export interface CampaignSegmentSummary {
+  id?: string;
+  name?: string;
+  slug?: string;
+  templateKey?: string;
+}
+
+export interface CampaignBriefing {
+  businessDescription?: string;
+  productOrService?: string;
+  targetAudience?: string;
+  campaignGoal?: string;
+  offer?: string;
+  location?: CampaignLocation;
+  brandTone?: string;
+  restrictions: string[];
+}
+
+export interface LeadFormField {
+  key: string;
+  label: string;
+  type: 'text' | 'phone' | 'email' | 'number' | 'select' | 'multiselect' | 'radio' | 'checkbox' | 'textarea' | 'date';
+  required: boolean;
+  placeholder?: string;
+  options: string[];
+  defaultValue?: string;
+}
+
+export interface LeadFormSchema {
+  submitButtonText: string;
+  fields: LeadFormField[];
+}
+
 export interface GerarCampanhaRequest {
   tipoPublico: TipoPublicoCampanha;
   cidade: string;
@@ -69,6 +175,15 @@ export interface GerarCampanhaRequest {
   operadoraOutra?: string;
   orcamentoDiario: number;
   objetivo?: string;
+  segmentSlug?: string;
+  businessDescription?: string;
+  productOrService?: string;
+  targetAudience?: string;
+  campaignGoal?: string;
+  offer?: string;
+  location?: CampaignLocation;
+  brandTone?: string;
+  restrictions?: string[];
 }
 
 export interface RevisarCampanhaRequest {
@@ -83,11 +198,14 @@ export interface RevisarCampanhaRequest {
   palavrasChaveNegativas: string[];
   titulosAnuncios: string[];
   descricoesAnuncios: string[];
+  form?: LeadFormSchema;
 }
 
 export interface Campanha {
   id: string;
   nome: string;
+  segmentId?: string;
+  segmentSlug?: string;
   tipoPublico: TipoPublicoCampanha;
   cidade: string;
   estado: string;
@@ -119,6 +237,11 @@ export interface Campanha {
   dataPublicacao?: string;
   dataDespublicacao?: string;
   urlPublica?: string;
+  campaignConfigJson?: string;
+  segment?: CampaignSegmentSummary;
+  briefing: CampaignBriefing;
+  usesLegacyBriefing: boolean;
+  form: LeadFormSchema;
 }
 
 export interface CampanhaPublicacao {
@@ -144,18 +267,24 @@ export interface CampanhaPublica {
   estado: string;
   tipoPublico: TipoPublicoCampanha;
   mensagemBaseWhatsApp: string;
+  segment?: CampaignSegmentSummary;
+  briefing: CampaignBriefing;
+  usesLegacyBriefing: boolean;
+  form: LeadFormSchema;
 }
 
 export type TipoContratacaoLead = 'Individual' | 'Familiar' | 'Empresarial' | 'Mei' | 'AindaNaoSei';
 
 export interface CapturarLeadPublicoRequest {
-  nome: string;
-  telefone: string;
+  name?: string;
+  phone?: string;
+  nome?: string;
+  telefone?: string;
   email?: string;
-  cidade: string;
-  estado: string;
-  quantidadeVidas: number;
-  tipoContratacao: TipoContratacaoLead;
+  cidade?: string;
+  estado?: string;
+  quantidadeVidas?: number;
+  tipoContratacao?: TipoContratacaoLead;
   observacao?: string;
   consentimento?: boolean;
   website?: string;
@@ -167,6 +296,7 @@ export interface CapturarLeadPublicoRequest {
   utmContent?: string;
   gclid?: string;
   fbclid?: string;
+  answers?: Record<string, unknown>;
 }
 
 export interface CapturarLeadPublicoResponse {

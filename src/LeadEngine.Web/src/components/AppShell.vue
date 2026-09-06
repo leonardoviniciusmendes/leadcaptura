@@ -16,6 +16,7 @@
         <RouterLink to="/leads">Leads</RouterLink>
         <RouterLink to="/googleads/dashboard">Google Ads</RouterLink>
         <RouterLink to="/configuracoes">Configuracoes</RouterLink>
+        <RouterLink to="/configuracoes/segmentos">Segmentos</RouterLink>
       </nav>
     </aside>
 

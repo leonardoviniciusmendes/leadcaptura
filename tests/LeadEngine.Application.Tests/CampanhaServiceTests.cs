@@ -12,15 +12,41 @@ public sealed class CampanhaServiceTests
     [Fact]
     public async Task FakeGeneration_GeraNomeDaCampanha()
     {
-        var result = await new FakeCampaignGenerationService().GenerateAsync(BriefingPadrao(), CancellationToken.None);
+        var result = await new FakeCampaignGenerationService().GenerateAsync(ContextoSaude(), CancellationToken.None);
         Assert.Equal("Plano Familiar Amil - Barra da Tijuca", result.Nome);
     }
 
     [Fact]
     public async Task FakeGeneration_GeraSlugDaCampanha()
     {
-        var result = await new FakeCampaignGenerationService().GenerateAsync(BriefingPadrao(), CancellationToken.None);
-        Assert.Equal("plano-familiar-amil-barra-da-tijuca", result.Slug);
+        var result = await new FakeCampaignGenerationService().GenerateAsync(ContextoSaude(), CancellationToken.None);
+        Assert.Contains("barra-da-tijuca", result.Slug);
+    }
+
+    [Fact]
+    public async Task FakeGeneration_RespeitaContextoGenerico()
+    {
+        var request = BriefingPadrao() with
+        {
+            BusinessDescription = "Oficina local",
+            ProductOrService = "Revisao automotiva",
+            TargetAudience = "Motoristas",
+            CampaignGoal = "Agendar avaliacao",
+            Offer = "Checklist inicial",
+            Operadora = string.Empty,
+            Location = new CampaignLocationDto("Campinas", "SP", "Cambuí")
+        };
+        var context = CampaignGenerationContextFactory.FromRequest(
+            request,
+            new Segment { Name = "Oficina mecanica", Slug = "oficina", TemplateKey = "appointment_booking", IsActive = true },
+            null);
+
+        var result = await new FakeCampaignGenerationService().GenerateAsync(context, CancellationToken.None);
+
+        Assert.Contains("Revisao automotiva", result.Nome);
+        Assert.Contains("Solicitar agendamento", result.TextoBotao);
+        Assert.DoesNotContain("plano", result.Nome, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("saude", result.TituloLandingPage, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -38,13 +64,133 @@ public sealed class CampanhaServiceTests
     public async Task GerarCampanha_CriaCampanha()
     {
         var repository = new InMemoryCampanhaRepository();
+        var segments = SegmentosPadrao();
         var service = Service(repository);
 
         var campanha = await service.GerarCampanhaAsync(BriefingPadrao(), CancellationToken.None);
 
         Assert.NotEqual(Guid.Empty, campanha.Id);
+        Assert.Equal(segments.PlanosSaude.Id, campanha.SegmentId);
+        Assert.Equal("planos-saude", campanha.SegmentSlug);
         Assert.Equal(StatusCampanha.Gerada, campanha.Status);
         Assert.Single(repository.Campanhas);
+    }
+
+    [Fact]
+    public async Task GerarCampanha_RequestSemSegmentSlugUsaPlanosSaude()
+    {
+        var repository = new InMemoryCampanhaRepository();
+        var segments = SegmentosPadrao();
+        var service = Service(repository, segments);
+
+        var campanha = await service.GerarCampanhaAsync(BriefingPadrao() with { SegmentSlug = null }, CancellationToken.None);
+
+        Assert.Equal(segments.PlanosSaude.Id, campanha.SegmentId);
+        Assert.Equal("planos-saude", campanha.SegmentSlug);
+        Assert.Equal("Amil", campanha.Operadora);
+        Assert.Null(campanha.CampaignConfigJson);
+    }
+
+    [Fact]
+    public async Task GerarCampanha_RequestComSlugValidoPersisteSegmentIdCorreto()
+    {
+        var repository = new InMemoryCampanhaRepository();
+        var segments = SegmentosPadrao();
+        var service = Service(repository, segments);
+
+        var campanha = await service.GerarCampanhaAsync(BriefingPadrao() with { SegmentSlug = "servicos-locais" }, CancellationToken.None);
+
+        Assert.Equal(segments.ServicosLocais.Id, campanha.SegmentId);
+        Assert.Equal("servicos-locais", campanha.SegmentSlug);
+        Assert.Equal(segments.ServicosLocais.Id, repository.Campanhas[0].SegmentId);
+    }
+
+    [Fact]
+    public async Task GerarCampanha_SlugInexistenteRetornaErroControlado()
+    {
+        var service = Service(segments: SegmentosPadrao());
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.GerarCampanhaAsync(BriefingPadrao() with { SegmentSlug = "segmento-inexistente" }, CancellationToken.None));
+
+        Assert.Contains("Segmento 'segmento-inexistente' nao encontrado ou inativo.", exception.Message);
+    }
+
+    [Fact]
+    public async Task GerarCampanha_CampaignConfigJsonPersisteContextoGenericoSemQuebrarCamposAntigos()
+    {
+        var repository = new InMemoryCampanhaRepository();
+        var service = Service(repository, SegmentosPadrao());
+        var request = BriefingPadrao() with
+        {
+            SegmentSlug = "servicos-locais",
+            BusinessDescription = "Clinica local",
+            ProductOrService = "Avaliacao estetica",
+            TargetAudience = "Mulheres de 25 a 55 anos",
+            CampaignGoal = "Agendar avaliacao",
+            Offer = "Primeiro atendimento consultivo",
+            BrandTone = "Profissional",
+            Location = new CampaignLocationDto("Rio de Janeiro", "rj", "Barra"),
+            Restrictions = ["nao prometer resultado", "nao prometer resultado"]
+        };
+
+        var campanha = await service.GerarCampanhaAsync(request, CancellationToken.None);
+
+        Assert.Equal("Amil", campanha.Operadora);
+        Assert.Equal(TipoPublicoCampanha.Familia, campanha.TipoPublico);
+        Assert.NotNull(campanha.CampaignConfigJson);
+        Assert.Contains("\"productOrService\":\"Avaliacao estetica\"", campanha.CampaignConfigJson);
+        Assert.Contains("\"state\":\"RJ\"", campanha.CampaignConfigJson);
+        Assert.Single(System.Text.Json.JsonDocument.Parse(campanha.CampaignConfigJson!).RootElement.GetProperty("restrictions").EnumerateArray());
+        Assert.False(campanha.UsesLegacyBriefing);
+        Assert.Equal("Avaliacao estetica", campanha.Briefing.ProductOrService);
+        Assert.Equal("Mulheres de 25 a 55 anos", campanha.Briefing.TargetAudience);
+    }
+
+    [Fact]
+    public async Task GerarCampanha_GenericaFuncionaSemOperadora()
+    {
+        var repository = new InMemoryCampanhaRepository();
+        var service = Service(repository, SegmentosPadrao());
+        var request = BriefingPadrao() with
+        {
+            SegmentSlug = "servicos-locais",
+            Operadora = string.Empty,
+            ProductOrService = "Revisao automotiva",
+            TargetAudience = "Motoristas da regiao",
+            CampaignGoal = "Agendar avaliacao",
+            Location = new CampaignLocationDto("Niteroi", "RJ", null)
+        };
+
+        var campanha = await service.GerarCampanhaAsync(request, CancellationToken.None);
+
+        Assert.Equal("Nao se aplica", campanha.Operadora);
+        Assert.Equal("servicos-locais", campanha.SegmentSlug);
+        Assert.Equal("Niteroi", campanha.Cidade);
+        Assert.Equal("RJ", campanha.Estado);
+    }
+
+    [Fact]
+    public async Task GerarCampanha_LegacyContinuaFuncionando()
+    {
+        var campanha = await Service(segments: SegmentosPadrao()).GerarCampanhaAsync(BriefingPadrao(), CancellationToken.None);
+
+        Assert.Equal("Plano Familiar Amil - Barra da Tijuca", campanha.Nome);
+        Assert.Equal("Amil", campanha.Operadora);
+        Assert.Equal("planos-saude", campanha.SegmentSlug);
+        Assert.True(campanha.UsesLegacyBriefing);
+    }
+
+    [Fact]
+    public async Task SegmentRepository_ListActiveRetornaSomenteAtivos()
+    {
+        var segments = SegmentosPadrao();
+
+        var result = await segments.ListActiveAsync(CancellationToken.None);
+
+        Assert.Contains(result, x => x.Slug == "planos-saude");
+        Assert.Contains(result, x => x.Slug == "servicos-locais");
+        Assert.DoesNotContain(result, x => x.Slug == "inativo");
     }
 
     [Fact]
@@ -264,9 +410,18 @@ public sealed class CampanhaServiceTests
             null);
     }
 
-    private static CampanhaService Service(InMemoryCampanhaRepository? repository = null)
+    private static CampanhaService Service(InMemoryCampanhaRepository? repository = null, InMemorySegmentRepository? segments = null)
     {
-        return new CampanhaService(repository ?? new InMemoryCampanhaRepository(), new FakeCampaignGenerationService());
+        return new CampanhaService(repository ?? new InMemoryCampanhaRepository(), new FakeCampaignGenerationService(), segments ?? SegmentosPadrao());
+    }
+
+    private static InMemorySegmentRepository SegmentosPadrao()
+    {
+        return new InMemorySegmentRepository([
+            new Segment { Id = Guid.Parse("3f1ce0a4-7ec5-4c8f-b6d9-df4f3e7f0c35"), Name = "Planos de Saude", Slug = "planos-saude", TemplateKey = "high_ticket_quote", DefaultConfigJson = """{"legacyCompatibility":true}""", IsActive = true },
+            new Segment { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), Name = "Servicos Locais", Slug = "servicos-locais", TemplateKey = "local_service_lead_generation", IsActive = true },
+            new Segment { Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), Name = "Inativo", Slug = "inativo", TemplateKey = "local_service_lead_generation", IsActive = false }
+        ]);
     }
 
     private static CampaignReviewService ReviewService(InMemoryCampanhaRepository repository, ICampaignSectionGenerationService? generation = null)
@@ -297,10 +452,17 @@ public sealed class CampanhaServiceTests
 
     private sealed class FailingGenerationService : ICampaignGenerationService
     {
-        public Task<CampaignGenerationResult> GenerateAsync(GerarCampanhaRequest briefing, CancellationToken cancellationToken)
+        public Task<CampaignGenerationResult> GenerateAsync(CampaignGenerationContext context, CancellationToken cancellationToken)
         {
             throw new CampaignGenerationException("Falha simulada.");
         }
+    }
+
+    private static CampaignGenerationContext ContextoSaude()
+    {
+        var briefing = BriefingPadrao();
+        var segment = SegmentosPadrao().PlanosSaude;
+        return CampaignGenerationContextFactory.FromRequest(briefing, segment, null);
     }
 
     private sealed class FailingSectionGenerationService : ICampaignSectionGenerationService
@@ -362,6 +524,52 @@ public sealed class CampanhaServiceTests
         }
 
         public Task SalvarAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class InMemorySegmentRepository(IReadOnlyList<Segment> segments) : ISegmentRepository
+    {
+        public Segment PlanosSaude => segments.Single(x => x.Slug == "planos-saude");
+        public Segment ServicosLocais => segments.Single(x => x.Slug == "servicos-locais");
+
+        public Task<Segment?> GetBySlugAsync(string slug, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(segments.FirstOrDefault(x => x.Slug == slug));
+        }
+
+        public Task<Segment?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(segments.FirstOrDefault(x => x.Id == id));
+        }
+
+        public Task<IReadOnlyList<Segment>> ListActiveAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<Segment>>(segments.Where(x => x.IsActive).OrderBy(x => x.Name).ToArray());
+        }
+
+        public Task<IReadOnlyList<Segment>> ListAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(segments);
+        }
+
+        public Task<bool> SlugExistsAsync(string slug, Guid? excludingId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(segments.Any(x => x.Slug == slug && (!excludingId.HasValue || x.Id != excludingId.Value)));
+        }
+
+        public Task<int> CountCampaignsAsync(Guid segmentId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(0);
+        }
+
+        public Task AddAsync(Segment segment, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SaveChangesAsync(CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
         }

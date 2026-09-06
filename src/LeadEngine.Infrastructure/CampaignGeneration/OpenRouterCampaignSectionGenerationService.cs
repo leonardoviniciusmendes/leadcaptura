@@ -48,7 +48,7 @@ public sealed class OpenRouterCampaignSectionGenerationService(
             response_format = new { type = "json_object" },
             messages = new[]
             {
-                new { role = "system", content = "Voce revisa secoes de campanhas de Google Ads para planos de saude e responde somente JSON valido." },
+                new { role = "system", content = "Voce revisa secoes de campanhas digitais de aquisicao de leads e responde somente JSON valido." },
                 new { role = "user", content = prompt }
             }
         };

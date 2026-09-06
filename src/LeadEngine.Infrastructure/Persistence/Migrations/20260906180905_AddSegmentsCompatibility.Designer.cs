@@ -4,6 +4,7 @@ using LeadEngine.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LeadEngine.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(LeadEngineDbContext))]
-    partial class LeadEngineDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260906180905_AddSegmentsCompatibility")]
+    partial class AddSegmentsCompatibility
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1188,131 +1191,6 @@ namespace LeadEngine.Infrastructure.Persistence.Migrations
                     b.ToTable("Leads", (string)null);
                 });
 
-            modelBuilder.Entity("LeadEngine.Domain.Entities.LeadAnswer", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("FieldKey")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<string>("LabelSnapshot")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("varchar(120)");
-
-                    b.Property<Guid>("LeadId")
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("varchar(30)");
-
-                    b.Property<string>("ValueJson")
-                        .IsRequired()
-                        .HasColumnType("json");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LeadId");
-
-                    b.HasIndex("LeadId", "FieldKey");
-
-                    b.ToTable("LeadAnswers", (string)null);
-                });
-
-            modelBuilder.Entity("LeadEngine.Domain.Entities.LeadForm", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("char(36)");
-
-                    b.Property<Guid>("CampaignId")
-                        .HasColumnType("char(36)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<string>("SubmitButtonText")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CampaignId");
-
-                    b.HasIndex("CampaignId", "IsActive");
-
-                    b.HasIndex("CampaignId", "Version")
-                        .IsUnique();
-
-                    b.ToTable("LeadForms", (string)null);
-                });
-
-            modelBuilder.Entity("LeadEngine.Domain.Entities.LeadFormField", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("DefaultValue")
-                        .HasMaxLength(300)
-                        .HasColumnType("varchar(300)");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<string>("Label")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("varchar(120)");
-
-                    b.Property<Guid>("LeadFormId")
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("OptionsJson")
-                        .HasColumnType("json");
-
-                    b.Property<int>("Order")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Placeholder")
-                        .HasMaxLength(180)
-                        .HasColumnType("varchar(180)");
-
-                    b.Property<bool>("Required")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("varchar(30)");
-
-                    b.Property<string>("ValidationJson")
-                        .HasColumnType("json");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LeadFormId");
-
-                    b.HasIndex("LeadFormId", "Key")
-                        .IsUnique();
-
-                    b.HasIndex("LeadFormId", "Order");
-
-                    b.ToTable("LeadFormFields", (string)null);
-                });
-
             modelBuilder.Entity("LeadEngine.Domain.Entities.LogIntegracaoLead", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1859,7 +1737,7 @@ namespace LeadEngine.Infrastructure.Persistence.Migrations
                         {
                             Id = new Guid("3f1ce0a4-7ec5-4c8f-b6d9-df4f3e7f0c35"),
                             CreatedAt = new DateTime(2026, 9, 6, 0, 0, 0, 0, DateTimeKind.Utc),
-                            DefaultConfigJson = "{\"businessCategory\":\"health_insurance_quote\",\"defaultGoal\":\"lead_generation_whatsapp\",\"legacyCompatibility\":true,\"contextDefaults\":{\"offerType\":\"quote\",\"primaryChannel\":\"whatsapp\",\"commercialApproach\":\"consultative\"},\"restrictions\":[\"nao_garantir_preco\",\"nao_garantir_cobertura\",\"nao_garantir_aprovacao\",\"nao_promover_carencia_zero\"],\"leadForm\":{\"submitButtonText\":\"Receber cotacao\",\"fields\":[{\"key\":\"name\",\"label\":\"Nome\",\"type\":\"text\",\"required\":true,\"order\":1},{\"key\":\"phone\",\"label\":\"WhatsApp\",\"type\":\"phone\",\"required\":true,\"placeholder\":\"(00) 00000-0000\",\"order\":2},{\"key\":\"quantidadeVidas\",\"label\":\"Quantidade de vidas\",\"type\":\"number\",\"required\":true,\"validation\":{\"min\":1,\"max\":999},\"order\":3}]}}",
+                            DefaultConfigJson = "{\"businessCategory\":\"health_insurance_quote\",\"defaultGoal\":\"lead_generation_whatsapp\",\"legacyCompatibility\":true,\"contextDefaults\":{\"offerType\":\"quote\",\"primaryChannel\":\"whatsapp\",\"commercialApproach\":\"consultative\"},\"restrictions\":[\"nao_garantir_preco\",\"nao_garantir_cobertura\",\"nao_garantir_aprovacao\",\"nao_promover_carencia_zero\"]}",
                             Description = "Captação de leads para cotação consultiva de planos de saúde.",
                             IsActive = true,
                             Name = "Planos de Saúde",
@@ -2080,39 +1958,6 @@ namespace LeadEngine.Infrastructure.Persistence.Migrations
                     b.Navigation("Campanha");
                 });
 
-            modelBuilder.Entity("LeadEngine.Domain.Entities.LeadAnswer", b =>
-                {
-                    b.HasOne("LeadEngine.Domain.Entities.Lead", "Lead")
-                        .WithMany("Answers")
-                        .HasForeignKey("LeadId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Lead");
-                });
-
-            modelBuilder.Entity("LeadEngine.Domain.Entities.LeadForm", b =>
-                {
-                    b.HasOne("LeadEngine.Domain.Entities.Campanha", "Campaign")
-                        .WithMany("LeadForms")
-                        .HasForeignKey("CampaignId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Campaign");
-                });
-
-            modelBuilder.Entity("LeadEngine.Domain.Entities.LeadFormField", b =>
-                {
-                    b.HasOne("LeadEngine.Domain.Entities.LeadForm", "LeadForm")
-                        .WithMany("Fields")
-                        .HasForeignKey("LeadFormId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("LeadForm");
-                });
-
             modelBuilder.Entity("LeadEngine.Domain.Entities.LogIntegracaoLead", b =>
                 {
                     b.HasOne("LeadEngine.Domain.Entities.Lead", "Lead")
@@ -2215,8 +2060,6 @@ namespace LeadEngine.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("LeadEngine.Domain.Entities.Campanha", b =>
                 {
-                    b.Navigation("LeadForms");
-
                     b.Navigation("Leads");
 
                     b.Navigation("Revisoes");
@@ -2238,17 +2081,10 @@ namespace LeadEngine.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("LeadEngine.Domain.Entities.Lead", b =>
                 {
-                    b.Navigation("Answers");
-
                     b.Navigation("LogsIntegracao");
 
                     b.Navigation("Origem")
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("LeadEngine.Domain.Entities.LeadForm", b =>
-                {
-                    b.Navigation("Fields");
                 });
 
             modelBuilder.Entity("LeadEngine.Domain.Entities.MetaAdsConta", b =>

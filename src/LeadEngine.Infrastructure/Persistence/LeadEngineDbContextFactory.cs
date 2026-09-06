@@ -9,7 +9,7 @@ public sealed class LeadEngineDbContextFactory : IDesignTimeDbContextFactory<Lea
     {
         var optionsBuilder = new DbContextOptionsBuilder<LeadEngineDbContext>();
         optionsBuilder.UseMySql(
-            "Server=localhost;Port=3306;Database=leadengine;User=leadengine;Password=leadengine;",
+    "Server=localhost;Port=3306;Database=leadengine;User=root;Password=ligado01;SslMode=None;AllowPublicKeyRetrieval=True;Allow User Variables=true",
             new MySqlServerVersion(new Version(8, 0, 36)));
 
         return new LeadEngineDbContext(optionsBuilder.Options);

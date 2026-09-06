@@ -7,56 +7,121 @@ namespace LeadEngine.Application.Services;
 
 public sealed class FakeCampaignGenerationService : ICampaignGenerationService
 {
-    public Task<CampaignGenerationResult> GenerateAsync(GerarCampanhaRequest briefing, CancellationToken cancellationToken)
+    public Task<CampaignGenerationResult> GenerateAsync(CampaignGenerationContext context, CancellationToken cancellationToken)
     {
-        var operadora = CampanhaValidator.OperadoraEfetiva(briefing);
-        var publico = PublicoLabel(briefing.TipoPublico);
-        var local = string.IsNullOrWhiteSpace(briefing.Regiao)
-            ? briefing.Cidade.Trim()
-            : briefing.Regiao.Trim();
+        var result = Generate(context);
+        return Task.FromResult(result);
+    }
 
-        var usaOperadora = !string.Equals(operadora, "Nenhuma específica", StringComparison.OrdinalIgnoreCase);
-        var nome = usaOperadora
-            ? $"Plano {publico} {operadora} - {local}"
-            : $"Plano {publico} - {local}";
+    private static CampaignGenerationResult Generate(CampaignGenerationContext context)
+    {
+        var local = Local(context);
+        var productOrService = ProductOrService(context);
+        var audience = TargetAudience(context);
+        var goal = string.IsNullOrWhiteSpace(context.CampaignGoal) ? "captar leads qualificados" : context.CampaignGoal.Trim();
+        var offer = string.IsNullOrWhiteSpace(context.Offer) ? "atendimento personalizado" : context.Offer.Trim();
 
-        var titulo = $"Plano de Saúde {publico} em {local}";
-        var subtitulo = briefing.TipoPublico is TipoPublicoCampanha.Empresa or TipoPublicoCampanha.Mei
-            ? "Compare opções para sua empresa com atendimento personalizado."
-            : "Compare opções para seu perfil com atendimento personalizado.";
+        var nome = $"{productOrService} - {local}";
+        var titulo = $"{productOrService} em {local}";
+        var subtitulo = $"Receba {offer} para avaliar as opcoes disponiveis para {audience}.";
+        var mensagem = $"Ola, gostaria de saber mais sobre {productOrService} em {local}.";
+        var slug = CampanhaText.Slugify($"{productOrService}-{local}");
+        var keywordBase = CampanhaText.Slugify(productOrService).Replace('-', ' ');
 
-        var mensagem = $"Olá, gostaria de uma cotação de plano de saúde {publico.ToLowerInvariant()} em {local}.";
-        if (usaOperadora)
-        {
-            mensagem += $" Tenho interesse em {operadora}.";
-        }
-
-        var slugParts = usaOperadora
-            ? $"plano-{publico}-{operadora}-{local}"
-            : $"plano-{publico}-{local}";
-
-        var result = new CampaignGenerationResult(
+        return new CampaignGenerationResult(
             nome,
             titulo,
             subtitulo,
-            "Solicitar cotação pelo WhatsApp",
+            CallToAction(context),
             mensagem,
-            CampanhaText.Slugify(slugParts),
-            ["Atendimento consultivo", "Cotação conforme perfil", "Comparação por região"],
+            slug,
+            ["Atendimento personalizado", "Orientacao conforme perfil", "Retorno pelo WhatsApp"],
             [
-                new FaqItem("O valor é fixo?", "Não. Os preços variam por idade, região e tipo de contratação."),
-                new FaqItem("A rede é garantida?", "Não. Rede e cobertura dependem do plano escolhido."),
-                new FaqItem("Existe carência?", "A carência depende das condições da operadora e do contrato.")
+                new FaqItem("Como funciona o atendimento?", $"Voce informa seus dados e recebe contato para {goal}."),
+                new FaqItem("As condicoes sao garantidas?", "Nao. Condicoes e disponibilidade dependem da avaliacao do fornecedor."),
+                new FaqItem("Como recebo retorno?", "O contato e feito pelo WhatsApp com base nas informacoes enviadas.")
             ],
-            [$"plano de saúde {local}", $"cotação plano {publico.ToLowerInvariant()}", $"plano {operadora}"],
-            ["emprego", "salário", "concurso", "segunda via", "boleto", "login"],
-            ["Plano de saúde", $"Cotação em {local}", "Atendimento rápido", "Compare opções", "Fale no WhatsApp", "Plano por perfil", "Consultoria local", "Solicite cotação"],
-            ["Receba atendimento para comparar opções conforme seu perfil.", "Informe seus dados e fale com uma consultoria especializada.", "Cotação orientada para planos de saúde na sua região."],
+            [$"{keywordBase} {local}", $"{keywordBase} atendimento", $"{keywordBase} whatsapp"],
+            ["emprego", "salario", "curso gratis", "segunda via", "boleto", "login"],
+            [ShortTitle(productOrService), $"Atendimento {local}", "Fale no WhatsApp", "Solicite Contato", "Compare Opcoes", "Atendimento Local", "Receba Orientacao", "Avalie Alternativas"],
+            ["Receba atendimento para avaliar opcoes conforme seu perfil.", "Informe seus dados e fale com um especialista.", $"Solicite contato sobre {productOrService}."],
             "Fake",
             "fake-deterministic",
             0);
+    }
 
-        return Task.FromResult(result);
+    private static string ProductOrService(CampaignGenerationContext context)
+    {
+        if (!string.IsNullOrWhiteSpace(context.ProductOrService))
+        {
+            return context.ProductOrService.Trim();
+        }
+
+        var segment = LegacySingularLabel(context.SegmentName);
+        var publico = PublicoLabel(context.LegacyContext.TipoPublico);
+        var fornecedor = EffectiveSupplier(context);
+        return string.IsNullOrWhiteSpace(fornecedor)
+            ? $"{segment} {publico}".Trim()
+            : $"{segment} {publico} {fornecedor}".Trim();
+    }
+
+    private static string LegacySingularLabel(string? segmentName)
+    {
+        if (string.IsNullOrWhiteSpace(segmentName))
+        {
+            return "Servico";
+        }
+
+        var firstWord = segmentName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "Servico";
+        return firstWord.EndsWith('s') && firstWord.Length > 1 ? firstWord[..^1] : firstWord;
+    }
+
+    private static string TargetAudience(CampaignGenerationContext context)
+    {
+        return string.IsNullOrWhiteSpace(context.TargetAudience)
+            ? PublicoLabel(context.LegacyContext.TipoPublico).ToLowerInvariant()
+            : context.TargetAudience.Trim();
+    }
+
+    private static string Local(CampaignGenerationContext context)
+    {
+        return !string.IsNullOrWhiteSpace(context.Location?.Region)
+            ? context.Location.Region.Trim()
+            : !string.IsNullOrWhiteSpace(context.Location?.City)
+                ? context.Location.City.Trim()
+                : "sua regiao";
+    }
+
+    private static string CallToAction(CampaignGenerationContext context)
+    {
+        if (!string.IsNullOrWhiteSpace(context.CampaignGoal) && context.CampaignGoal.Contains("agend", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Solicitar agendamento";
+        }
+
+        if (!string.IsNullOrWhiteSpace(context.TemplateKey) && context.TemplateKey.Contains("quote", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Solicitar cotacao";
+        }
+
+        return "Solicitar contato";
+    }
+
+    private static string EffectiveSupplier(CampaignGenerationContext context)
+    {
+        var value = string.Equals(context.LegacyContext.Operadora, "Outra", StringComparison.OrdinalIgnoreCase)
+            ? context.LegacyContext.OperadoraOutra
+            : context.LegacyContext.Operadora;
+
+        return string.Equals(value, "Nenhuma especifica", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "Nenhuma específica", StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : value?.Trim() ?? string.Empty;
+    }
+
+    private static string ShortTitle(string value)
+    {
+        return value.Length <= 30 ? value : value[..30].Trim();
     }
 
     private static string PublicoLabel(TipoPublicoCampanha tipo)
@@ -68,7 +133,7 @@ public sealed class FakeCampaignGenerationService : ICampaignGenerationService
             TipoPublicoCampanha.Familia => "Familiar",
             TipoPublicoCampanha.Mei => "MEI",
             TipoPublicoCampanha.Empresa => "Empresarial",
-            _ => "Plano"
+            _ => "Publico"
         };
     }
 }

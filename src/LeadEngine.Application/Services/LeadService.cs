@@ -1,4 +1,6 @@
 using System.Net.Mail;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using LeadEngine.Application.Common;
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
@@ -33,9 +35,10 @@ public sealed class LeadService(
         }
 
         ValidateAntiSpam(request);
-        Validate(request);
 
-        var telefone = LeadSanitizer.Digitos(request.Telefone);
+        var form = LeadFormSchema.GetEffectiveForm(campanha);
+        var normalized = NormalizeAndValidateForm(campanha, form, request);
+        var telefone = LeadSanitizer.Digitos(normalized.Phone);
         var leadOptions = await EffectiveOptionsAsync(cancellationToken);
         var janela = DateTime.UtcNow.AddHours(-Math.Max(1, leadOptions.DuplicateWindowHours));
         var duplicado = await leadRepository.ObterDuplicadoRecenteAsync(campanha.Id, telefone, janela, cancellationToken);
@@ -44,34 +47,35 @@ public sealed class LeadService(
             return new CapturarLeadPublicoResponse(duplicado.Id, "Lead registrado com sucesso.", whatsAppUrlBuilder.Build(duplicado, campanha), false);
         }
 
-        var lead = CriarLead(campanha, request, telefone);
+        var lead = CriarLead(campanha, request, normalized, telefone);
         await leadRepository.AdicionarAsync(lead, cancellationToken);
         await leadRepository.SalvarAsync(cancellationToken);
 
         return new CapturarLeadPublicoResponse(lead.Id, "Lead registrado com sucesso.", whatsAppUrlBuilder.Build(lead, campanha), true);
     }
 
-    private Lead CriarLead(Campanha campanha, CapturarLeadPublicoRequest request, string telefone)
+    private Lead CriarLead(Campanha campanha, CapturarLeadPublicoRequest request, NormalizedLeadForm normalized, string telefone)
     {
         var now = DateTime.UtcNow;
-        var email = LeadSanitizer.Email(request.Email);
-        var estado = LeadSanitizer.Texto(request.Estado, 2)!.ToUpperInvariant();
+        var email = LeadSanitizer.Email(normalized.Email);
+        var estado = LeadSanitizer.Texto(normalized.State, 2)?.ToUpperInvariant();
         var origemLanding = $"/lp/{campanha.Slug}";
+        var usesLegacy = SegmentMapping.UsesLegacyBriefing(campanha.Segment);
 
-        return new Lead
+        var lead = new Lead
         {
             Id = Guid.NewGuid(),
             CampanhaId = campanha.Id,
-            Tipo = ToTipoLead(request.TipoContratacao),
-            TipoContratacao = request.TipoContratacao,
-            Nome = LeadSanitizer.Texto(request.Nome, 120)!,
+            Tipo = usesLegacy ? ToTipoLead(request.TipoContratacao) : TipoLead.PessoaFisica,
+            TipoContratacao = usesLegacy ? request.TipoContratacao : null,
+            Nome = LeadSanitizer.Texto(normalized.Name, 120)!,
             WhatsApp = telefone,
             WhatsAppNormalizado = telefone,
             Email = email,
             EmailNormalizado = email,
-            Cidade = LeadSanitizer.Texto(request.Cidade, 100),
+            Cidade = LeadSanitizer.Texto(normalized.City, 100),
             Uf = estado,
-            QuantidadeVidas = request.QuantidadeVidas,
+            QuantidadeVidas = usesLegacy ? request.QuantidadeVidas : ReadIntAnswer(normalized.Answers, "quantidadeVidas"),
             Observacao = LeadSanitizer.Texto(request.Observacao, 1000),
             Status = StatusLead.Recebido,
             ConsentimentoContato = request.Consentimento,
@@ -104,6 +108,22 @@ public sealed class LeadService(
                 IpHash = requestContext.IpHash
             }
         };
+
+        foreach (var answer in normalized.Answers)
+        {
+            lead.Answers.Add(new LeadAnswer
+            {
+                Id = Guid.NewGuid(),
+                LeadId = lead.Id,
+                Lead = lead,
+                FieldKey = answer.Field.Key,
+                LabelSnapshot = answer.Field.Label,
+                Type = answer.Field.Type,
+                ValueJson = answer.ValueJson
+            });
+        }
+
+        return lead;
     }
 
     private static CampanhaPublicaResponse ToPublicResponse(Campanha campanha)
@@ -120,7 +140,11 @@ public sealed class LeadService(
             campanha.Cidade,
             campanha.Estado,
             campanha.TipoPublico,
-            snapshot.MensagemWhatsApp);
+            snapshot.MensagemWhatsApp,
+            CampanhaMapping.ToSegmentSummary(campanha),
+            CampanhaMapping.ToBriefing(campanha),
+            SegmentMapping.UsesLegacyBriefing(campanha.Segment),
+            CampanhaMapping.ToLeadForm(campanha));
     }
 
     private void ValidateAntiSpam(CapturarLeadPublicoRequest request)
@@ -214,6 +238,278 @@ public sealed class LeadService(
         }
     }
 
+    private static NormalizedLeadForm NormalizeAndValidateForm(Campanha campanha, LeadForm form, CapturarLeadPublicoRequest request)
+    {
+        var answers = request.Answers ?? new Dictionary<string, JsonElement>();
+        var errors = new List<string>();
+        var normalizedAnswers = new List<NormalizedLeadAnswer>();
+
+        foreach (var field in form.Fields.OrderBy(x => x.Order))
+        {
+            var value = ReadFieldValue(field, request, answers);
+            ValidateField(field, value, errors);
+            if (value.HasValue)
+            {
+                normalizedAnswers.Add(new NormalizedLeadAnswer(field, JsonSerializer.Serialize(value.Value)));
+            }
+        }
+
+        var name = ReadUniversalString("name", request.Name, request.Nome, answers);
+        var phone = ReadUniversalString("phone", request.Phone, request.Telefone, answers);
+        var email = ReadUniversalString("email", request.Email, request.Email, answers);
+        var city = ReadUniversalString("city", request.Cidade, request.Cidade, answers);
+        var state = ReadUniversalString("state", request.Estado, request.Estado, answers);
+
+        if (string.IsNullOrWhiteSpace(LeadSanitizer.Texto(name, 120)) || LeadSanitizer.Texto(name, 120)!.Length < 2)
+        {
+            errors.Add("Nome obrigatorio com pelo menos 2 caracteres.");
+        }
+
+        var telefone = LeadSanitizer.Digitos(phone);
+        if (telefone.Length is < 10 or > 13)
+        {
+            errors.Add("Telefone invalido.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            if (email.Length > 160)
+            {
+                errors.Add("Email deve ter no maximo 160 caracteres.");
+            }
+            else
+            {
+                try { _ = new MailAddress(email); }
+                catch { errors.Add("Email invalido."); }
+            }
+        }
+
+        if (SegmentMapping.UsesLegacyBriefing(campanha.Segment))
+        {
+            Validate(request);
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new ArgumentException(string.Join(" ", errors));
+        }
+
+        return new NormalizedLeadForm(name!, phone!, email, city, state, normalizedAnswers);
+    }
+
+    private static JsonElement? ReadFieldValue(LeadFormField field, CapturarLeadPublicoRequest request, IReadOnlyDictionary<string, JsonElement> answers)
+    {
+        if (answers.TryGetValue(field.Key, out var answer))
+        {
+            return answer;
+        }
+
+        return field.Key switch
+        {
+            "name" => ToElement(request.Name ?? request.Nome),
+            "phone" => ToElement(request.Phone ?? request.Telefone),
+            "email" => ToElement(request.Email),
+            "quantidadeVidas" => ToElement(request.QuantidadeVidas),
+            _ => null
+        };
+    }
+
+    private static string? ReadUniversalString(string key, string? primary, string? legacy, IReadOnlyDictionary<string, JsonElement> answers)
+    {
+        if (!string.IsNullOrWhiteSpace(primary))
+        {
+            return primary;
+        }
+
+        if (!string.IsNullOrWhiteSpace(legacy))
+        {
+            return legacy;
+        }
+
+        return answers.TryGetValue(key, out var answer) && answer.ValueKind == JsonValueKind.String ? answer.GetString() : null;
+    }
+
+    private static void ValidateField(LeadFormField field, JsonElement? value, ICollection<string> errors)
+    {
+        if (field.Required && IsEmpty(value))
+        {
+            errors.Add($"{field.Label} obrigatorio.");
+            return;
+        }
+
+        if (IsEmpty(value))
+        {
+            return;
+        }
+
+        if (!LeadFormSchema.SupportedTypes.Contains(field.Type))
+        {
+            errors.Add($"{field.Label} possui tipo invalido.");
+            return;
+        }
+
+        var actualValue = value.GetValueOrDefault();
+        switch (field.Type.ToLowerInvariant())
+        {
+            case "text":
+            case "textarea":
+            case "date":
+                if (actualValue.ValueKind != JsonValueKind.String) errors.Add($"{field.Label} invalido.");
+                break;
+            case "phone":
+                if (actualValue.ValueKind != JsonValueKind.String || LeadSanitizer.Digitos(actualValue.GetString()).Length is < 10 or > 13) errors.Add($"{field.Label} invalido.");
+                break;
+            case "email":
+                if (actualValue.ValueKind != JsonValueKind.String)
+                {
+                    errors.Add($"{field.Label} invalido.");
+                }
+                else if (!string.IsNullOrWhiteSpace(actualValue.GetString()))
+                {
+                    try { _ = new MailAddress(actualValue.GetString()!); }
+                    catch { errors.Add($"{field.Label} invalido."); }
+                }
+                break;
+            case "number":
+                if (actualValue.ValueKind is not JsonValueKind.Number) errors.Add($"{field.Label} invalido.");
+                break;
+            case "checkbox":
+                if (actualValue.ValueKind is not JsonValueKind.True and not JsonValueKind.False) errors.Add($"{field.Label} invalido.");
+                break;
+            case "select":
+            case "radio":
+                ValidateSingleOption(field, actualValue, errors);
+                break;
+            case "multiselect":
+                ValidateMultipleOptions(field, actualValue, errors);
+                break;
+        }
+
+        ValidateConfiguredRules(field, actualValue, errors);
+    }
+
+    private static void ValidateSingleOption(LeadFormField field, JsonElement value, ICollection<string> errors)
+    {
+        if (value.ValueKind != JsonValueKind.String)
+        {
+            errors.Add($"{field.Label} invalido.");
+            return;
+        }
+
+        var options = Options(field);
+        if (options.Count > 0 && !options.Contains(value.GetString() ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+        {
+            errors.Add($"{field.Label} deve conter uma opcao valida.");
+        }
+    }
+
+    private static void ValidateMultipleOptions(LeadFormField field, JsonElement value, ICollection<string> errors)
+    {
+        if (value.ValueKind != JsonValueKind.Array)
+        {
+            errors.Add($"{field.Label} invalido.");
+            return;
+        }
+
+        var options = Options(field);
+        foreach (var item in value.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String || (options.Count > 0 && !options.Contains(item.GetString() ?? string.Empty, StringComparer.OrdinalIgnoreCase)))
+            {
+                errors.Add($"{field.Label} contem opcao invalida.");
+                return;
+            }
+        }
+    }
+
+    private static void ValidateConfiguredRules(LeadFormField field, JsonElement value, ICollection<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(field.ValidationJson))
+        {
+            return;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(field.ValidationJson);
+            var root = doc.RootElement;
+            if (value.ValueKind == JsonValueKind.String)
+            {
+                var text = value.GetString() ?? string.Empty;
+                if (root.TryGetProperty("maxLength", out var max) && max.TryGetInt32(out var maxLength) && text.Length > maxLength)
+                {
+                    errors.Add($"{field.Label} deve ter no maximo {maxLength} caracteres.");
+                }
+                if (root.TryGetProperty("pattern", out var pattern) && pattern.ValueKind == JsonValueKind.String)
+                {
+                    var regex = pattern.GetString();
+                    if (!string.IsNullOrWhiteSpace(regex) && regex.Length <= 200 && !Regex.IsMatch(text, regex, RegexOptions.None, TimeSpan.FromMilliseconds(100)))
+                    {
+                        errors.Add($"{field.Label} invalido.");
+                    }
+                }
+            }
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number))
+            {
+                if (root.TryGetProperty("min", out var min) && min.TryGetDecimal(out var minValue) && number < minValue) errors.Add($"{field.Label} invalido.");
+                if (root.TryGetProperty("max", out var max) && max.TryGetDecimal(out var maxValue) && number > maxValue) errors.Add($"{field.Label} invalido.");
+            }
+        }
+        catch (JsonException)
+        {
+            errors.Add($"{field.Label} possui validacao invalida.");
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            errors.Add($"{field.Label} invalido.");
+        }
+    }
+
+    private static bool IsEmpty(JsonElement? value)
+    {
+        if (!value.HasValue || value.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return true;
+        }
+        if (value.Value.ValueKind == JsonValueKind.String)
+        {
+            return string.IsNullOrWhiteSpace(value.Value.GetString());
+        }
+        if (value.Value.ValueKind == JsonValueKind.Array)
+        {
+            return !value.Value.EnumerateArray().Any();
+        }
+        return false;
+    }
+
+    private static IReadOnlyList<string> Options(LeadFormField field)
+    {
+        return string.IsNullOrWhiteSpace(field.OptionsJson)
+            ? []
+            : JsonSerializer.Deserialize<IReadOnlyList<string>>(field.OptionsJson) ?? [];
+    }
+
+    private static JsonElement? ToElement(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : JsonSerializer.SerializeToElement(value);
+    }
+
+    private static JsonElement? ToElement(int value)
+    {
+        return value == default ? null : JsonSerializer.SerializeToElement(value);
+    }
+
+    private static int? ReadIntAnswer(IEnumerable<NormalizedLeadAnswer> answers, string key)
+    {
+        var answer = answers.FirstOrDefault(x => x.Field.Key == key);
+        if (answer is null)
+        {
+            return null;
+        }
+        using var doc = JsonDocument.Parse(answer.ValueJson);
+        return doc.RootElement.ValueKind == JsonValueKind.Number && doc.RootElement.TryGetInt32(out var value) ? value : null;
+    }
+
     private static void ValidateMax(string? value, int max, string field, ICollection<string> erros)
     {
         if (value?.Length > max)
@@ -267,7 +563,7 @@ public sealed class LeadService(
         return new Lead
         {
             Id = Guid.Empty,
-            Nome = LeadSanitizer.Texto(request.Nome, 120) ?? "Interessado",
+            Nome = LeadSanitizer.Texto(request.Name ?? request.Nome, 120) ?? "Interessado",
             Cidade = LeadSanitizer.Texto(request.Cidade, 100),
             Uf = LeadSanitizer.Texto(request.Estado, 2)?.ToUpperInvariant(),
             QuantidadeVidas = request.QuantidadeVidas,
@@ -275,4 +571,14 @@ public sealed class LeadService(
             Observacao = LeadSanitizer.Texto(request.Observacao, 1000)
         };
     }
+
+    private sealed record NormalizedLeadForm(
+        string Name,
+        string Phone,
+        string? Email,
+        string? City,
+        string? State,
+        IReadOnlyList<NormalizedLeadAnswer> Answers);
+
+    private sealed record NormalizedLeadAnswer(LeadFormField Field, string ValueJson);
 }

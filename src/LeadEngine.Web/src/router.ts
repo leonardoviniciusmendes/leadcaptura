@@ -6,6 +6,7 @@ import NovaCampanhaView from './views/NovaCampanhaView.vue';
 import PublicLandingView from './views/PublicLandingView.vue';
 import DashboardView from './views/DashboardView.vue';
 import ConfiguracoesView from './views/ConfiguracoesView.vue';
+import SegmentosView from './views/SegmentosView.vue';
 import GoogleAdsPreviewView from './views/GoogleAdsPreviewView.vue';
 import GoogleAdsPublicacaoView from './views/GoogleAdsPublicacaoView.vue';
 import GoogleAdsDashboardView from './views/GoogleAdsDashboardView.vue';
@@ -29,6 +30,7 @@ export const router = createRouter({
     { path: '/googleads/dashboard', component: GoogleAdsDashboardView, meta: { title: 'Google Ads', subtitle: 'Metricas, sincronizacao e otimizacao' } },
     { path: '/leads', component: LeadsView, meta: { title: 'Leads', subtitle: 'Capturas da landing page' } },
     { path: '/configuracoes', component: ConfiguracoesView, meta: { title: 'Configuracoes', subtitle: 'Operacao e integracoes' } },
+    { path: '/configuracoes/segmentos', component: SegmentosView, meta: { title: 'Segmentos', subtitle: 'Nichos e templates de campanha' } },
     { path: '/login', component: LoginView, meta: { public: true } },
     { path: '/politica-de-privacidade', component: PrivacyPolicyView, meta: { public: true } },
     { path: '/termos-de-uso', component: TermsOfUseView, meta: { public: true } },

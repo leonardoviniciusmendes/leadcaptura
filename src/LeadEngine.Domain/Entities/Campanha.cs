@@ -6,6 +6,8 @@ public sealed class Campanha
 {
     public Guid Id { get; set; }
     public string Nome { get; set; } = string.Empty;
+    public Guid? SegmentId { get; set; }
+    public Segment? Segment { get; set; }
     public TipoPublicoCampanha TipoPublico { get; set; }
     public string Cidade { get; set; } = string.Empty;
     public string Estado { get; set; } = string.Empty;
@@ -25,6 +27,7 @@ public sealed class Campanha
     public string? PalavrasChaveNegativasJson { get; set; } = "[]";
     public string? TitulosAnunciosJson { get; set; } = "[]";
     public string? DescricoesAnunciosJson { get; set; } = "[]";
+    public string? CampaignConfigJson { get; set; }
     public string? ErroGeracao { get; set; }
     public string? ProviderIa { get; set; }
     public string? ModeloIa { get; set; }
@@ -39,4 +42,5 @@ public sealed class Campanha
     public string? UrlPublica { get; set; }
     public ICollection<CampanhaRevisao> Revisoes { get; set; } = [];
     public ICollection<Lead> Leads { get; set; } = [];
+    public ICollection<LeadForm> LeadForms { get; set; } = [];
 }

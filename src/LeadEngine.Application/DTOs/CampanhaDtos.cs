@@ -10,7 +10,37 @@ public sealed record GerarCampanhaRequest(
     string Operadora,
     string? OperadoraOutra,
     decimal OrcamentoDiario,
-    string? Objetivo);
+    string? Objetivo,
+    string? SegmentSlug = null,
+    string? BusinessDescription = null,
+    string? ProductOrService = null,
+    string? TargetAudience = null,
+    string? CampaignGoal = null,
+    string? Offer = null,
+    CampaignLocationDto? Location = null,
+    string? BrandTone = null,
+    IReadOnlyCollection<string>? Restrictions = null);
+
+public sealed record CampaignLocationDto(
+    string? City,
+    string? State,
+    string? Region);
+
+public sealed record CampaignSegmentSummary(
+    Guid? Id,
+    string? Name,
+    string? Slug,
+    string? TemplateKey);
+
+public sealed record CampaignBriefingResponse(
+    string? BusinessDescription,
+    string? ProductOrService,
+    string? TargetAudience,
+    string? CampaignGoal,
+    string? Offer,
+    CampaignLocationDto? Location,
+    string? BrandTone,
+    IReadOnlyCollection<string> Restrictions);
 
 public sealed record RevisarCampanhaRequest(
     string Nome,
@@ -23,7 +53,8 @@ public sealed record RevisarCampanhaRequest(
     IReadOnlyList<string> PalavrasChave,
     IReadOnlyList<string> PalavrasChaveNegativas,
     IReadOnlyList<string> TitulosAnuncios,
-    IReadOnlyList<string> DescricoesAnuncios);
+    IReadOnlyList<string> DescricoesAnuncios,
+    LeadFormResponse? Form = null);
 
 public sealed record RegenerarCampanhaSecaoRequest(
     CampanhaSecao Secao,
@@ -62,9 +93,29 @@ public sealed record CampanhaResponse(
     bool Ativo,
     DateTime? DataPublicacao,
     DateTime? DataDespublicacao,
-    string? UrlPublica);
+    string? UrlPublica,
+    Guid? SegmentId,
+    string? SegmentSlug,
+    string? CampaignConfigJson,
+    CampaignSegmentSummary? Segment,
+    CampaignBriefingResponse Briefing,
+    bool UsesLegacyBriefing,
+    LeadFormResponse Form);
 
 public sealed record FaqResponse(string Pergunta, string Resposta);
+
+public sealed record LeadFormResponse(
+    string SubmitButtonText,
+    IReadOnlyList<LeadFormFieldResponse> Fields);
+
+public sealed record LeadFormFieldResponse(
+    string Key,
+    string Label,
+    string Type,
+    bool Required,
+    string? Placeholder,
+    IReadOnlyList<string> Options,
+    string? DefaultValue);
 
 public sealed record CampanhaRevisaoHistoricoResponse(
     DateTime Data,
@@ -95,4 +146,8 @@ public sealed record CampanhaPublicaResponse(
     string Cidade,
     string Estado,
     TipoPublicoCampanha TipoPublico,
-    string MensagemBaseWhatsApp);
+    string MensagemBaseWhatsApp,
+    CampaignSegmentSummary? Segment,
+    CampaignBriefingResponse Briefing,
+    bool UsesLegacyBriefing,
+    LeadFormResponse Form);

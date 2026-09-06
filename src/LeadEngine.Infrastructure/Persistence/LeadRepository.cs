@@ -31,6 +31,7 @@ public sealed class LeadRepository(LeadEngineDbContext context) : ILeadRepositor
     {
         return context.Leads
             .Include(x => x.Origem)
+            .Include(x => x.Answers)
             .Include(x => x.LogsIntegracao)
             .Include(x => x.Campanha)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -40,7 +41,7 @@ public sealed class LeadRepository(LeadEngineDbContext context) : ILeadRepositor
     {
         var pagina = Math.Max(query.Pagina, 1);
         var tamanhoPagina = Math.Clamp(query.TamanhoPagina, 1, 100);
-        var leads = context.Leads.Include(x => x.Origem).Include(x => x.Campanha).AsQueryable();
+        var leads = context.Leads.Include(x => x.Origem).Include(x => x.Answers).Include(x => x.Campanha).AsQueryable();
 
         if (query.CampanhaId is not null)
         {
