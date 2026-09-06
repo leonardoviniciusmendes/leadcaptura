@@ -60,6 +60,7 @@ secrets.json
 
 # Logs and temp
 logs/
+storage/
 *.log
 *.tmp
 *.temp

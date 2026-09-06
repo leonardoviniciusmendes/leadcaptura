@@ -378,6 +378,54 @@ export interface HistoricoRevisao {
   modelo?: string;
 }
 
+export interface CreativeAssetSuggestedCopy {
+  headline?: string;
+  primaryText?: string;
+  description?: string;
+  cta?: string;
+}
+
+export interface CreativeAssetAnalysis {
+  id: string;
+  creativeAssetId: string;
+  provider: string;
+  model: string;
+  summary: string;
+  detectedText: string;
+  visualQualityScore: number;
+  campaignFitScore: number;
+  brandFitScore: number;
+  textDensityScore: number;
+  messageConsistencyScore: number;
+  semanticMismatch: boolean;
+  placements: Record<string, string>;
+  risks: string[];
+  suggestedCopy: CreativeAssetSuggestedCopy;
+  rawResponseJson: string;
+  createdAt: string;
+  rankingScore: number;
+}
+
+export interface CreativeAsset {
+  id: string;
+  campaignId: string;
+  fileName: string;
+  storagePath: string;
+  mimeType: string;
+  width: number;
+  height: number;
+  fileSize: number;
+  isSelected: boolean;
+  createdAt: string;
+  latestAnalysis?: CreativeAssetAnalysis;
+  rankingScore?: number;
+}
+
+export interface CreativeAssetUploadResponse {
+  assets: CreativeAsset[];
+  mensagem: string;
+}
+
 export async function gerarCampanha(payload: GerarCampanhaRequest): Promise<Campanha> {
   const { data } = await api.post<Campanha>('/api/campanhas/gerar', payload);
   return data;
@@ -416,6 +464,36 @@ export async function aprovarCampanha(id: string): Promise<Campanha> {
 export async function listarHistoricoRevisoes(id: string): Promise<HistoricoRevisao[]> {
   const { data } = await api.get<HistoricoRevisao[]>(`/api/campanhas/${id}/historico-revisoes`);
   return data;
+}
+
+export async function listarCreativeAssets(campanhaId: string): Promise<CreativeAsset[]> {
+  const { data } = await api.get<CreativeAsset[]>(`/api/campanhas/${campanhaId}/creative-assets`);
+  return data;
+}
+
+export async function enviarCreativeAssets(campanhaId: string, files: File[]): Promise<CreativeAssetUploadResponse> {
+  const form = new FormData();
+  files.forEach((file) => form.append('files', file));
+  const { data } = await api.post<CreativeAssetUploadResponse>(`/api/campanhas/${campanhaId}/creative-assets`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000
+  });
+  return data;
+}
+
+export async function analisarCreativeAsset(campanhaId: string, assetId: string): Promise<CreativeAssetAnalysis> {
+  const { data } = await api.post<CreativeAssetAnalysis>(`/api/campanhas/${campanhaId}/creative-assets/${assetId}/analyze`);
+  return data;
+}
+
+export async function selecionarCreativeAsset(campanhaId: string, assetId: string): Promise<CreativeAsset> {
+  const { data } = await api.put<CreativeAsset>(`/api/campanhas/${campanhaId}/creative-assets/${assetId}/select`);
+  return data;
+}
+
+export function creativeAssetContentUrl(campanhaId: string, assetId: string): string {
+  const base = String(api.defaults.baseURL || '').replace(/\/+$/, '');
+  return `${base}/api/campanhas/${campanhaId}/creative-assets/${assetId}/content`;
 }
 
 export async function publicarCampanha(id: string): Promise<CampanhaPublicacao> {

@@ -37,6 +37,60 @@
         </dl>
       </ReviewBlock>
 
+      <section class="panel review-section creative-assets-section">
+        <header class="review-section-header">
+          <div>
+            <h2>Imagens da campanha</h2>
+            <span v-if="creativeAssets.length > 1" class="unsaved">ordenadas por score quando analisadas</span>
+          </div>
+          <div class="actions">
+            <input ref="creativeFileInput" class="hidden-file" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple @change="uploadCreativeAssets" />
+            <button class="button secondary" :disabled="busy || creativeBusy" @click="creativeFileInput?.click()">Enviar imagens</button>
+          </div>
+        </header>
+        <p v-if="creativeError" class="error">{{ creativeError }}</p>
+        <p v-if="creativeAssets.length === 0" class="muted">Campanha sem imagem.</p>
+        <div v-else class="creative-grid">
+          <article
+            v-for="asset in creativeAssets"
+            :key="asset.id"
+            class="creative-card"
+            :class="{ selected: asset.isSelected, comparing: comparingAssets.includes(asset.id) }"
+          >
+            <img :src="creativeAssetContentUrl(asset.campaignId, asset.id)" :alt="asset.fileName" />
+            <div class="creative-meta">
+              <strong>{{ asset.fileName }}</strong>
+              <span>{{ asset.width }}x{{ asset.height }} · {{ fileSize(asset.fileSize) }}</span>
+            </div>
+            <div class="score-row">
+              <span>Score</span>
+              <strong>{{ asset.rankingScore ?? '-' }}</strong>
+            </div>
+            <p v-if="asset.latestAnalysis?.semanticMismatch" class="semantic-alert">Esta imagem parece nao corresponder ao conteudo desta campanha.</p>
+            <dl v-if="asset.latestAnalysis" class="compact-list creative-scores">
+              <dt>Visual</dt><dd>{{ asset.latestAnalysis.visualQualityScore }}</dd>
+              <dt>Campanha</dt><dd>{{ asset.latestAnalysis.campaignFitScore }}</dd>
+              <dt>Marca</dt><dd>{{ asset.latestAnalysis.brandFitScore }}</dd>
+              <dt>Texto</dt><dd>{{ asset.latestAnalysis.textDensityScore }}</dd>
+              <dt>Mensagem</dt><dd>{{ asset.latestAnalysis.messageConsistencyScore }}</dd>
+            </dl>
+            <p v-if="asset.latestAnalysis" class="muted">{{ asset.latestAnalysis.summary }}</p>
+            <p v-if="asset.latestAnalysis?.detectedText" class="detected-text">Texto detectado: {{ asset.latestAnalysis.detectedText }}</p>
+            <div v-if="asset.latestAnalysis" class="placement-list">
+              <span v-for="(value, key) in asset.latestAnalysis.placements" :key="key">{{ key }}: {{ value }}</span>
+            </div>
+            <ul v-if="asset.latestAnalysis?.risks.length" class="risk-list">
+              <li v-for="risk in asset.latestAnalysis.risks" :key="risk">{{ risk }}</li>
+            </ul>
+            <div class="actions">
+              <button class="button secondary" :disabled="busy || creativeBusy" @click="analyzeAsset(asset.id)">Analisar IA</button>
+              <button class="button secondary" :disabled="busy || creativeBusy" @click="toggleCompare(asset.id)">{{ comparingAssets.includes(asset.id) ? 'Remover comparacao' : 'Comparar' }}</button>
+              <button class="button" :disabled="busy || creativeBusy || asset.isSelected" @click="selectAsset(asset.id)">{{ asset.isSelected ? 'Principal' : 'Selecionar principal' }}</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <ReviewBlock title="Landing page" secao="LandingPage" :dirty="dirty" :busy="busy" @save="save" @cancel="reset" @regenerate="startRegeneration('LandingPage')">
         <label>Titulo<input v-model="form.tituloLandingPage" maxlength="180" /></label>
         <label>Subtitulo<textarea v-model="form.subtituloLandingPage" maxlength="300" rows="3" /></label>
@@ -154,14 +208,20 @@ import { useRoute } from 'vue-router';
 import { confirmAction, showToast } from '../components/uiEvents';
 import {
   aprovarCampanha,
+  analisarCreativeAsset,
+  creativeAssetContentUrl,
   despublicarCampanha,
+  enviarCreativeAssets,
+  listarCreativeAssets,
   listarHistoricoRevisoes,
   obterRevisaoCampanha,
   publicarCampanha,
   regenerarCampanhaSecao,
   revisarCampanha,
+  selecionarCreativeAsset,
   type Campanha,
   type CampanhaSecao,
+  type CreativeAsset,
   type HistoricoRevisao,
   type RevisarCampanhaRequest
 } from '../services/api';
@@ -182,6 +242,11 @@ const regeneratingSection = ref<CampanhaSecao | null>(null);
 const instrucaoAdicional = ref('');
 const showHistorico = ref(false);
 const historico = ref<HistoricoRevisao[]>([]);
+const creativeAssets = ref<CreativeAsset[]>([]);
+const creativeBusy = ref(false);
+const creativeError = ref('');
+const creativeFileInput = ref<HTMLInputElement | null>(null);
+const comparingAssets = ref<string[]>([]);
 
 const form = reactive<RevisarCampanhaRequest>({
   nome: '',
@@ -266,11 +331,79 @@ async function load() {
   try {
     campanha.value = await obterRevisaoCampanha(String(route.params.id));
     hydrate(campanha.value);
+    await loadCreativeAssets();
   } catch {
     error.value = 'Nao foi possivel carregar a campanha.';
   } finally {
     loading.value = false;
   }
+}
+
+async function loadCreativeAssets() {
+  if (!campanha.value) return;
+  creativeError.value = '';
+  try {
+    creativeAssets.value = await listarCreativeAssets(campanha.value.id);
+  } catch (err: unknown) {
+    creativeError.value = message(err, 'Nao foi possivel carregar as imagens.');
+  }
+}
+
+async function uploadCreativeAssets(event: Event) {
+  if (!campanha.value) return;
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  input.value = '';
+  if (files.length === 0) return;
+  creativeBusy.value = true;
+  creativeError.value = '';
+  try {
+    const result = await enviarCreativeAssets(campanha.value.id, files);
+    showToast({ type: 'success', title: 'Imagens enviadas', message: result.mensagem });
+    await loadCreativeAssets();
+  } catch (err: unknown) {
+    creativeError.value = message(err, 'Nao foi possivel enviar as imagens.');
+    showToast({ type: 'error', title: 'Erro no upload', message: creativeError.value });
+  } finally {
+    creativeBusy.value = false;
+  }
+}
+
+async function analyzeAsset(assetId: string) {
+  if (!campanha.value) return;
+  creativeBusy.value = true;
+  creativeError.value = '';
+  try {
+    await analisarCreativeAsset(campanha.value.id, assetId);
+    await loadCreativeAssets();
+    showToast({ type: 'success', title: 'Analise concluida', message: 'Revise a recomendacao antes de publicar.' });
+  } catch (err: unknown) {
+    creativeError.value = message(err, 'Nao foi possivel analisar a imagem.');
+    showToast({ type: 'error', title: 'Erro na analise', message: creativeError.value });
+  } finally {
+    creativeBusy.value = false;
+  }
+}
+
+async function selectAsset(assetId: string) {
+  if (!campanha.value) return;
+  creativeBusy.value = true;
+  creativeError.value = '';
+  try {
+    await selecionarCreativeAsset(campanha.value.id, assetId);
+    await loadCreativeAssets();
+    showToast({ type: 'success', title: 'Imagem principal selecionada' });
+  } catch (err: unknown) {
+    creativeError.value = message(err, 'Nao foi possivel selecionar a imagem.');
+  } finally {
+    creativeBusy.value = false;
+  }
+}
+
+function toggleCompare(assetId: string) {
+  comparingAssets.value = comparingAssets.value.includes(assetId)
+    ? comparingAssets.value.filter((id) => id !== assetId)
+    : [...comparingAssets.value, assetId].slice(-3);
 }
 
 async function save() {
@@ -449,6 +582,11 @@ function money(value: number) {
 
 function dateTime(value: string) {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+}
+
+function fileSize(value: number) {
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function message(err: unknown, fallback: string) {

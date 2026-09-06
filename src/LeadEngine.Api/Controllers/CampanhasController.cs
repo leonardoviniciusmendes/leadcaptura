@@ -11,8 +11,11 @@ public sealed class CampanhasController(
     CampanhaService campanhaService,
     ICampaignReviewService reviewService,
     ICampaignPublicationService publicationService,
-    LeadConsultaService leadConsultaService) : ControllerBase
+    LeadConsultaService leadConsultaService,
+    CreativeAssetService creativeAssetService) : ControllerBase
 {
+    private const long MaxCreativeAssetsUploadBytes = 32 * 1024 * 1024;
+
     [HttpPost("gerar")]
     public async Task<ActionResult<CampanhaResponse>> Gerar(GerarCampanhaRequest request, CancellationToken cancellationToken)
     {
@@ -95,5 +98,103 @@ public sealed class CampanhasController(
         CancellationToken cancellationToken = default)
     {
         return Ok(await leadConsultaService.ListarAsync(new LeadQuery(id, dataInicial, dataFinal, null, null, null, null, telefone, tipoContratacao, origem, pagina, tamanhoPagina), cancellationToken));
+    }
+
+    [HttpGet("{id:guid}/creative-assets")]
+    public async Task<ActionResult<IReadOnlyList<CreativeAssetResponse>>> CreativeAssets(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Ok(await creativeAssetService.ListAsync(id, cancellationToken));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { sucesso = false, mensagem = ex.Message });
+        }
+    }
+
+    [HttpPost("{id:guid}/creative-assets")]
+    [RequestSizeLimit(MaxCreativeAssetsUploadBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxCreativeAssetsUploadBytes)]
+    public async Task<ActionResult<CreativeAssetUploadResponse>> UploadCreativeAssets(Guid id, [FromForm] List<IFormFile> files, CancellationToken cancellationToken)
+    {
+        if (files is null || files.Count == 0)
+        {
+            return BadRequest(new { sucesso = false, mensagem = "Envie pelo menos uma imagem." });
+        }
+
+        try
+        {
+            var items = new List<CreativeAssetUploadItem>();
+            foreach (var file in files)
+            {
+                await using var stream = file.OpenReadStream();
+                using var memory = new MemoryStream();
+                await stream.CopyToAsync(memory, cancellationToken);
+                items.Add(new CreativeAssetUploadItem(file.FileName, file.ContentType, memory.ToArray()));
+            }
+
+            return Ok(await creativeAssetService.UploadAsync(id, items, cancellationToken));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { sucesso = false, mensagem = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { sucesso = false, mensagem = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { sucesso = false, mensagem = ex.Message });
+        }
+    }
+
+    [HttpGet("{id:guid}/creative-assets/{assetId:guid}/content")]
+    public async Task<IActionResult> CreativeAssetContent(Guid id, Guid assetId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var content = await creativeAssetService.GetContentAsync(id, assetId, cancellationToken);
+            return File(content.Content, content.MimeType);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { sucesso = false, mensagem = ex.Message });
+        }
+    }
+
+    [HttpPost("{id:guid}/creative-assets/{assetId:guid}/analyze")]
+    public async Task<ActionResult<CreativeAssetAnalysisResponse>> AnalyzeCreativeAsset(Guid id, Guid assetId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Ok(await creativeAssetService.AnalyzeAsync(id, assetId, cancellationToken));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { sucesso = false, mensagem = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { sucesso = false, mensagem = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { sucesso = false, mensagem = ex.Message });
+        }
+    }
+
+    [HttpPut("{id:guid}/creative-assets/{assetId:guid}/select")]
+    public async Task<ActionResult<CreativeAssetResponse>> SelectCreativeAsset(Guid id, Guid assetId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Ok(await creativeAssetService.SelectAsync(id, assetId, cancellationToken));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { sucesso = false, mensagem = ex.Message });
+        }
     }
 }

@@ -11,6 +11,8 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
     public DbSet<Segment> Segments => Set<Segment>();
     public DbSet<Campanha> Campanhas => Set<Campanha>();
     public DbSet<CampanhaRevisao> CampanhasRevisoes => Set<CampanhaRevisao>();
+    public DbSet<CreativeAsset> CreativeAssets => Set<CreativeAsset>();
+    public DbSet<CreativeAssetAnalysis> CreativeAssetAnalyses => Set<CreativeAssetAnalysis>();
     public DbSet<ConfiguracaoSistema> ConfiguracoesSistema => Set<ConfiguracaoSistema>();
     public DbSet<ConfiguracaoSistemaHistorico> ConfiguracoesSistemaHistorico => Set<ConfiguracaoSistemaHistorico>();
     public DbSet<GoogleAdsConta> GoogleAdsContas => Set<GoogleAdsConta>();
@@ -120,6 +122,44 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
             entity.HasOne(x => x.Campanha)
                 .WithMany(x => x.Revisoes)
                 .HasForeignKey(x => x.CampanhaId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CreativeAsset>(entity =>
+        {
+            entity.ToTable("CreativeAssets");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.FileName).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.StoragePath).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.MimeType).HasMaxLength(80).IsRequired();
+            entity.HasIndex(x => x.CampaignId);
+            entity.HasIndex(x => new { x.CampaignId, x.IsSelected });
+            entity.HasIndex(x => x.CreatedAt);
+            entity.HasOne(x => x.Campaign)
+                .WithMany(x => x.CreativeAssets)
+                .HasForeignKey(x => x.CampaignId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CreativeAssetAnalysis>(entity =>
+        {
+            entity.ToTable("CreativeAssetAnalyses");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Provider).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.Model).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Summary).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.PlacementRecommendationsJson).HasColumnType("json").IsRequired();
+            entity.Property(x => x.RisksJson).HasColumnType("json").IsRequired();
+            entity.Property(x => x.SuggestedHeadline).HasMaxLength(120);
+            entity.Property(x => x.SuggestedPrimaryText).HasMaxLength(500);
+            entity.Property(x => x.SuggestedDescription).HasMaxLength(300);
+            entity.Property(x => x.SuggestedCta).HasMaxLength(40);
+            entity.Property(x => x.RawResponseJson).HasColumnType("json").IsRequired();
+            entity.HasIndex(x => x.CreativeAssetId);
+            entity.HasIndex(x => x.CreatedAt);
+            entity.HasOne(x => x.CreativeAsset)
+                .WithMany(x => x.Analyses)
+                .HasForeignKey(x => x.CreativeAssetId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

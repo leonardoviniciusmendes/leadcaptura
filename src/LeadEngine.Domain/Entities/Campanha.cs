@@ -43,4 +43,5 @@ public sealed class Campanha
     public ICollection<CampanhaRevisao> Revisoes { get; set; } = [];
     public ICollection<Lead> Leads { get; set; } = [];
     public ICollection<LeadForm> LeadForms { get; set; } = [];
+    public ICollection<CreativeAsset> CreativeAssets { get; set; } = [];
 }

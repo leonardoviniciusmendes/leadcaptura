@@ -25,13 +25,13 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 
 builder.Services.Configure<FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 64 * 1024;
+    options.MultipartBodyLengthLimit = 32 * 1024 * 1024;
     options.ValueLengthLimit = 8 * 1024;
 });
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Limits.MaxRequestBodySize = 64 * 1024;
+    options.Limits.MaxRequestBodySize = 32 * 1024 * 1024;
 });
 
 builder.Services

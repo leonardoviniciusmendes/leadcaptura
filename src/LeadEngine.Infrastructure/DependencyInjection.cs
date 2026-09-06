@@ -23,6 +23,7 @@ public static class DependencyInjection
 
         services.AddScoped<ILeadRepository, LeadRepository>();
         services.AddScoped<ICampanhaRepository, CampanhaRepository>();
+        services.AddScoped<ICreativeAssetRepository, CreativeAssetRepository>();
         services.AddScoped<ISegmentRepository, SegmentRepository>();
         services.AddScoped<IConfiguracaoRepository, ConfiguracaoRepository>();
         services.AddScoped<IGoogleAdsContaRepository, GoogleAdsContaRepository>();
@@ -54,6 +55,10 @@ public static class DependencyInjection
         services.AddScoped<IGoogleAdsSynchronizationRepository, GoogleAdsSynchronizationRepository>();
         services.AddScoped<IGoogleAdsAnalysisRepository, GoogleAdsAnalysisRepository>();
         services.AddScoped<CampaignPublicUrlBuilder>();
+        services.AddScoped<CreativeAssetService>();
+        services.AddScoped<FakeCreativeAssetAnalysisProvider>();
+        services.AddScoped<OpenRouterCreativeAssetAnalysisProvider>();
+        services.AddScoped<ICreativeAssetAnalysisProvider, ConfiguredCreativeAssetAnalysisProvider>();
         services.AddScoped<IGoogleAdsCampaignMappingService, GoogleAdsCampaignMappingService>();
         services.AddScoped<IGoogleAdsValidationService, GoogleAdsValidationService>();
         services.AddScoped<IGoogleAdsCopyAdjustmentService, OpenRouterGoogleAdsCopyAdjustmentService>();
@@ -106,6 +111,28 @@ public static class DependencyInjection
             if (!string.IsNullOrWhiteSpace(mensagem))
             {
                 options.MensagemPadrao = mensagem;
+            }
+        });
+        services.Configure<CreativeAssetOptions>(configuration.GetSection("CreativeAssets"));
+        services.Configure<CreativeAnalysisOptions>(options =>
+        {
+            configuration.GetSection("CreativeAnalysis").Bind(options);
+            var provider = Environment.GetEnvironmentVariable("CREATIVE_ANALYSIS_PROVIDER");
+            var model = Environment.GetEnvironmentVariable("CREATIVE_ANALYSIS_MODEL");
+            var fallback = Environment.GetEnvironmentVariable("CREATIVE_ANALYSIS_FALLBACK_TO_FAKE");
+            if (!string.IsNullOrWhiteSpace(provider))
+            {
+                options.Provider = provider;
+            }
+
+            if (!string.IsNullOrWhiteSpace(model))
+            {
+                options.Model = model;
+            }
+
+            if (bool.TryParse(fallback, out var fallbackToFake))
+            {
+                options.FallbackToFake = fallbackToFake;
             }
         });
         services.Configure<OpenRouterOptions>(options =>
