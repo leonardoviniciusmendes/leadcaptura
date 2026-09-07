@@ -132,6 +132,7 @@ public sealed class CreativeAnalysisProviderTests : IDisposable
     private static CreativeAssetAnalysisProviderRequest Request()
     {
         return new CreativeAssetAnalysisProviderRequest(
+            Guid.NewGuid(),
             "Estetica",
             "Clinica estetica",
             "Harmonizacao facial",
@@ -142,10 +143,13 @@ public sealed class CreativeAnalysisProviderTests : IDisposable
             "Profissional",
             ["nao prometer resultado"],
             "criativo.png",
+            "Image",
             "image/png",
             1200,
             628,
-            [137, 80, 78, 71]);
+            null,
+            [137, 80, 78, 71],
+            []);
     }
 
     private static HttpResponseMessage JsonResponse(string json)

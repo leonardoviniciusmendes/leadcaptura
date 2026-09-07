@@ -60,6 +60,25 @@ public sealed record RegenerarCampanhaSecaoRequest(
     CampanhaSecao Secao,
     string? InstrucaoAdicional);
 
+public sealed record AprovarCampanhaRequest(
+    bool OverrideCreativeQuality = false,
+    string? OverrideReason = null);
+
+public sealed record AprovarCampanhaResponse(
+    CampanhaResponse Campanha,
+    CreativeQualityGateResponse CreativeQualityGate);
+
+public sealed record CreativeQualityGateResponse(
+    string Status,
+    Guid? CreativeAssetId,
+    Guid? CreativeAssetAnalysisId,
+    string? FileName,
+    int? Score,
+    bool? SemanticMismatch,
+    bool CanApprove,
+    bool RequiresOverride,
+    IReadOnlyList<string> Reasons);
+
 public sealed record CampanhaResponse(
     Guid Id,
     string Nome,

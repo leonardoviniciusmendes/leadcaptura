@@ -4,4 +4,5 @@ public interface IRequestContext
 {
     string? IpHash { get; }
     string? UserAgent { get; }
+    string? User { get; }
 }

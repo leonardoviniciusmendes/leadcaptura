@@ -409,12 +409,16 @@ export interface CreativeAssetAnalysis {
 export interface CreativeAsset {
   id: string;
   campaignId: string;
+  mediaType: 'Image' | 'Video' | string;
   fileName: string;
   storagePath: string;
   mimeType: string;
   width: number;
   height: number;
+  durationSeconds?: number;
   fileSize: number;
+  contentUrl: string;
+  thumbnailUrl?: string;
   isSelected: boolean;
   createdAt: string;
   latestAnalysis?: CreativeAssetAnalysis;
@@ -456,8 +460,30 @@ export async function regenerarCampanhaSecao(id: string, secao: CampanhaSecao, i
   return data;
 }
 
-export async function aprovarCampanha(id: string): Promise<Campanha> {
-  const { data } = await api.post<Campanha>(`/api/campanhas/${id}/aprovar`);
+export interface CreativeQualityGate {
+  status: 'BLOCKED' | 'WARNING' | 'APPROVED' | 'NOT_ANALYZED' | 'NO_CREATIVE' | string;
+  creativeAssetId?: string;
+  creativeAssetAnalysisId?: string;
+  fileName?: string;
+  score?: number;
+  semanticMismatch?: boolean;
+  canApprove: boolean;
+  requiresOverride: boolean;
+  reasons: string[];
+}
+
+export interface AprovarCampanhaResponse {
+  campanha: Campanha;
+  creativeQualityGate: CreativeQualityGate;
+}
+
+export async function aprovarCampanha(id: string, payload: { overrideCreativeQuality?: boolean; overrideReason?: string } = {}): Promise<AprovarCampanhaResponse> {
+  const { data } = await api.post<AprovarCampanhaResponse>(`/api/campanhas/${id}/aprovar`, payload);
+  return data;
+}
+
+export async function obterCreativeQualityGate(id: string): Promise<CreativeQualityGate> {
+  const { data } = await api.get<CreativeQualityGate>(`/api/campanhas/${id}/creative-quality-gate`);
   return data;
 }
 
@@ -489,6 +515,10 @@ export async function analisarCreativeAsset(campanhaId: string, assetId: string)
 export async function selecionarCreativeAsset(campanhaId: string, assetId: string): Promise<CreativeAsset> {
   const { data } = await api.put<CreativeAsset>(`/api/campanhas/${campanhaId}/creative-assets/${assetId}/select`);
   return data;
+}
+
+export async function removerCreativeAsset(campanhaId: string, assetId: string): Promise<void> {
+  await api.delete(`/api/campanhas/${campanhaId}/creative-assets/${assetId}`);
 }
 
 export function creativeAssetContentUrl(campanhaId: string, assetId: string): string {
@@ -711,6 +741,16 @@ export interface MetaAdsPreview {
     mediaReference?: string;
     metaImageHash?: string;
     mediaUploaded: boolean;
+    mediaSource?: string;
+    mediaType?: string;
+    creativeAssetId?: string;
+    fileName?: string;
+    analysisScore?: number;
+    semanticMismatch?: boolean;
+    metaVideoId?: string;
+    videoUploadRequired?: boolean;
+    videoIdReused?: boolean;
+    qualityGateStatus?: string;
   };
   ad: { name: string; status: string };
   preflight: { readyToPublish: boolean; items: Array<{ code: string; status: 'OK' | 'WARNING' | 'ERROR' | string; message: string }> };

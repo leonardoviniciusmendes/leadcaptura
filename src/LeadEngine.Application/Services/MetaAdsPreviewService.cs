@@ -1,9 +1,11 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using LeadEngine.Application.Common;
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
 using LeadEngine.Domain.Entities;
 using LeadEngine.Domain.Enums;
+using Microsoft.Extensions.Options;
 
 namespace LeadEngine.Application.Services;
 
@@ -12,11 +14,15 @@ public sealed class MetaAdsPreviewService(
     IMetaAdsContaRepository contaRepository,
     IMetaAdsAtivoSelecionadoRepository selecaoRepository,
     IMetaAdsImagemRepository imagemRepository,
+    IMetaAdsVideoRepository videoRepository,
+    ICreativeAssetRepository creativeAssetRepository,
     IMetaAdsPreparacaoPublicacaoRepository preparacaoRepository,
     IMetaAdsGraphClient graphClient,
     IConfigurationResolver resolver,
     ISecretProtector protector,
-    CampaignPublicUrlBuilder publicUrlBuilder) : IMetaAdsPreviewService
+    CampaignPublicUrlBuilder publicUrlBuilder,
+    CreativeQualityGateService creativeQualityGateService,
+    IOptions<CreativeAssetOptions> creativeAssetOptions) : IMetaAdsPreviewService
 {
     private const string PlannedStatus = "PAUSED";
     private const string InitialObjective = "OUTCOME_TRAFFIC";
@@ -79,7 +85,7 @@ public sealed class MetaAdsPreviewService(
             Add(items, "CurrencyValid", "OK", $"Moeda validada pela Ad Account: {assets.Currency}.");
         }
 
-        var media = await MediaAsync(campanha.Id, conta, selecao, items, cancellationToken);
+        var media = await MediaAsync(campanha.Id, conta, token, config, selecao, items, cancellationToken);
         var copy = BuildCopy(campanha, landing.Url ?? campanha.UrlPublica ?? string.Empty, items, media) with
         {
             PageId = selecao?.PageId,
@@ -270,7 +276,7 @@ public sealed class MetaAdsPreviewService(
         return new MetaAdsTargetingPreview([country], location, campanha.Estado, campanha.Cidade, ageMin, ageMax);
     }
 
-    private static MetaAdsCreativePreview BuildCopy(Campanha campanha, string destinationUrl, List<MetaAdsPreflightItem> items, MetaAdsImagem? media)
+    private static MetaAdsCreativePreview BuildCopy(Campanha campanha, string destinationUrl, List<MetaAdsPreflightItem> items, SelectedMetaMedia? media)
     {
         var headlines = Deserialize<string>(campanha.TitulosAnunciosJson);
         var descriptions = Deserialize<string>(campanha.DescricoesAnunciosJson);
@@ -280,10 +286,31 @@ public sealed class MetaAdsPreviewService(
         var description = First(descriptions.FirstOrDefault(), campanha.Objetivo, campanha.SubtituloLandingPage);
         var copyValid = !string.IsNullOrWhiteSpace(primaryText) && !string.IsNullOrWhiteSpace(headline) && !string.IsNullOrWhiteSpace(description) && !string.IsNullOrWhiteSpace(destinationUrl);
         Add(items, "CreativeContentValid", copyValid ? "OK" : "ERROR", copyValid ? "Texto minimo do creative Meta disponivel." : "Creative Meta incompleto: texto, headline, descricao e URL sao obrigatorios.");
-        return new MetaAdsCreativePreview(null, null, primaryText, headline, description, destinationUrl, "LEARN_MORE", null, media?.NomeArquivo, media?.MetaImageHash, !string.IsNullOrWhiteSpace(media?.MetaImageHash));
+        return new MetaAdsCreativePreview(
+            null,
+            null,
+            primaryText,
+            headline,
+            description,
+            destinationUrl,
+            "LEARN_MORE",
+            null,
+            media?.FileName,
+            media?.MetaImageHash,
+            !string.IsNullOrWhiteSpace(media?.MetaImageHash) || !string.IsNullOrWhiteSpace(media?.MetaVideoId),
+            media?.Source,
+            media?.MediaType,
+            media?.CreativeAssetId,
+            media?.FileName,
+            media?.AnalysisScore,
+            media?.SemanticMismatch,
+            media?.MetaVideoId,
+            media?.VideoUploadRequired ?? false,
+            media?.VideoIdReused ?? false,
+            media?.QualityGateStatus);
     }
 
-    private async Task<MetaAdsImagem?> MediaAsync(Guid campanhaId, MetaAdsConta? conta, MetaAdsAtivoSelecionado? selecao, List<MetaAdsPreflightItem> items, CancellationToken cancellationToken)
+    private async Task<SelectedMetaMedia?> MediaAsync(Guid campanhaId, MetaAdsConta? conta, string? token, MetaAdsConfiguration config, MetaAdsAtivoSelecionado? selecao, List<MetaAdsPreflightItem> items, CancellationToken cancellationToken)
     {
         if (conta is null || string.IsNullOrWhiteSpace(selecao?.AdAccountId))
         {
@@ -294,12 +321,240 @@ public sealed class MetaAdsPreviewService(
             return null;
         }
 
+        var creativeAsset = (await creativeAssetRepository.ListarPorCampanhaAsync(campanhaId, cancellationToken))
+            .FirstOrDefault(x => x.IsSelected);
+        if (creativeAsset is not null)
+        {
+            return await CreativeAssetMediaAsync(campanhaId, conta, token, config, selecao.AdAccountId, creativeAsset, items, cancellationToken);
+        }
+
         var imagem = await imagemRepository.ObterPorCampanhaAsync(campanhaId, selecao.AdAccountId, cancellationToken);
+        if (string.Equals(imagem?.OrigemImagem, "CreativeAsset", StringComparison.OrdinalIgnoreCase))
+        {
+            imagem = null;
+        }
         Add(items, "MediaSelected", imagem is null ? "ERROR" : "OK", imagem is null ? "Selecione uma imagem para publicar no Meta Ads." : $"Imagem selecionada: {imagem.NomeArquivo}.");
         Add(items, "MediaValid", imagem is null ? "ERROR" : "OK", imagem is null ? "Imagem Meta ausente." : "Imagem validada pelo backend antes do upload.");
         Add(items, "MediaUploaded", string.IsNullOrWhiteSpace(imagem?.MetaImageHash) ? "ERROR" : "OK", string.IsNullOrWhiteSpace(imagem?.MetaImageHash) ? "Imagem ainda nao enviada para a Ad Account." : "Imagem enviada para a Ad Account.");
         Add(items, "MetaImageHashAvailable", string.IsNullOrWhiteSpace(imagem?.MetaImageHash) ? "ERROR" : "OK", string.IsNullOrWhiteSpace(imagem?.MetaImageHash) ? "Meta image_hash ausente." : "Meta image_hash disponivel para o creative futuro.");
-        return imagem;
+        return imagem is null
+            ? null
+            : new SelectedMetaMedia("MetaAdsImagem", "Image", null, imagem.NomeArquivo, imagem.MetaImageHash, null, null, null, false, false, null);
+    }
+
+    private async Task<SelectedMetaMedia?> CreativeAssetMediaAsync(Guid campanhaId, MetaAdsConta conta, string? token, MetaAdsConfiguration config, string adAccountId, CreativeAsset asset, List<MetaAdsPreflightItem> items, CancellationToken cancellationToken)
+    {
+        var latestAnalysis = asset.Analyses.OrderByDescending(x => x.CreatedAt).FirstOrDefault();
+        var analysis = latestAnalysis is null ? null : AnalysisDetails.From(latestAnalysis);
+        Add(items, "MediaSelected", "OK", $"Creative Asset selecionado: {asset.FileName}.");
+        Add(items, "CreativeAssetSelected", "OK", $"CreativeAssetId={asset.Id}.");
+        AddAnalysisWarnings(items, analysis);
+
+        if (asset.MediaType == CreativeAssetMediaType.Video)
+        {
+            return await CreativeAssetVideoMediaAsync(campanhaId, conta, token, config, adAccountId, asset, analysis, items, cancellationToken);
+        }
+
+        var path = ResolveCreativeAssetPath(asset.StoragePath);
+        if (!File.Exists(path))
+        {
+            Add(items, "MediaValid", "ERROR", "Arquivo do Creative Asset selecionado nao foi encontrado no armazenamento local.");
+            Add(items, "MediaUploaded", "ERROR", "Imagem nao enviada para a Ad Account.");
+            Add(items, "MetaImageHashAvailable", "ERROR", "Meta image_hash ausente.");
+            return new SelectedMetaMedia("CreativeAsset", "Image", asset.Id, asset.FileName, null, analysis?.RankingScore, analysis?.SemanticMismatch, null, false, false, null);
+        }
+
+        var content = await File.ReadAllBytesAsync(path, cancellationToken);
+        var detected = ImageHeaderReader.Detect(content);
+        if (detected is null || !string.Equals(detected.MimeType, asset.MimeType, StringComparison.OrdinalIgnoreCase) || detected.Width != asset.Width || detected.Height != asset.Height)
+        {
+            Add(items, "MediaValid", "ERROR", "MIME ou dimensoes do Creative Asset selecionado nao correspondem ao arquivo armazenado.");
+            Add(items, "MediaUploaded", "ERROR", "Imagem nao enviada para a Ad Account.");
+            Add(items, "MetaImageHashAvailable", "ERROR", "Meta image_hash ausente.");
+            return new SelectedMetaMedia("CreativeAsset", "Image", asset.Id, asset.FileName, null, analysis?.RankingScore, analysis?.SemanticMismatch, null, false, false, null);
+        }
+
+        Add(items, "MediaValid", "OK", "Creative Asset validado pelo backend antes do upload Meta.");
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            Add(items, "MediaUploaded", "ERROR", "Token Meta ausente para enviar Creative Asset.");
+            Add(items, "MetaImageHashAvailable", "ERROR", "Meta image_hash ausente.");
+            return new SelectedMetaMedia("CreativeAsset", "Image", asset.Id, asset.FileName, null, analysis?.RankingScore, analysis?.SemanticMismatch, null, false, false, null);
+        }
+
+        var contentHash = Convert.ToHexString(SHA256.HashData(content));
+        var existing = await imagemRepository.ObterPorConteudoAsync(campanhaId, adAccountId, contentHash, cancellationToken);
+        if (existing is not null && !string.IsNullOrWhiteSpace(existing.MetaImageHash))
+        {
+            Add(items, "MediaUploaded", "OK", "Creative Asset ja enviado anteriormente para esta Ad Account.");
+            Add(items, "MetaImageHashAvailable", "OK", "Meta image_hash disponivel para o Creative Asset selecionado.");
+            return new SelectedMetaMedia("CreativeAsset", "Image", asset.Id, asset.FileName, existing.MetaImageHash, analysis?.RankingScore, analysis?.SemanticMismatch, null, false, false, null);
+        }
+
+        try
+        {
+            var imageHash = await graphClient.UploadAdImageAsync(config, token, adAccountId, asset.FileName, asset.MimeType, content, cancellationToken);
+            var now = DateTime.UtcNow;
+            var imagem = new MetaAdsImagem
+            {
+                Id = Guid.NewGuid(),
+                CampanhaId = campanhaId,
+                MetaAdsContaId = conta.Id,
+                AdAccountId = adAccountId,
+                OrigemImagem = "CreativeAsset",
+                NomeArquivo = asset.FileName,
+                ContentType = asset.MimeType,
+                TamanhoBytes = content.LongLength,
+                ContentHash = contentHash,
+                MetaImageHash = imageHash,
+                DataUpload = now,
+                DataAtualizacao = now
+            };
+            await imagemRepository.AdicionarAsync(imagem, cancellationToken);
+            await imagemRepository.SalvarAsync(cancellationToken);
+            Add(items, "MediaUploaded", "OK", "Creative Asset enviado para a Ad Account Meta.");
+            Add(items, "MetaImageHashAvailable", "OK", "Meta image_hash disponivel para o Creative Asset selecionado.");
+            return new SelectedMetaMedia("CreativeAsset", "Image", asset.Id, asset.FileName, imageHash, analysis?.RankingScore, analysis?.SemanticMismatch, null, false, false, null);
+        }
+        catch (MetaAdsGraphApiException ex) when (ex.PermissionRequired)
+        {
+            Add(items, "MediaUploaded", "ERROR", "Permissao Meta insuficiente para enviar Creative Asset para a Ad Account.");
+        }
+        catch (MetaAdsGraphApiException)
+        {
+            Add(items, "MediaUploaded", "ERROR", "Nao foi possivel enviar Creative Asset para a Ad Account Meta.");
+        }
+
+        Add(items, "MetaImageHashAvailable", "ERROR", "Meta image_hash ausente.");
+        return new SelectedMetaMedia("CreativeAsset", "Image", asset.Id, asset.FileName, null, analysis?.RankingScore, analysis?.SemanticMismatch, null, false, false, null);
+    }
+
+    private async Task<SelectedMetaMedia> CreativeAssetVideoMediaAsync(
+        Guid campanhaId,
+        MetaAdsConta conta,
+        string? token,
+        MetaAdsConfiguration config,
+        string adAccountId,
+        CreativeAsset asset,
+        AnalysisDetails? analysis,
+        List<MetaAdsPreflightItem> items,
+        CancellationToken cancellationToken)
+    {
+        var path = ResolveCreativeAssetPath(asset.StoragePath);
+        if (!File.Exists(path))
+        {
+            Add(items, "MediaValid", "ERROR", "Arquivo de video do Creative Asset selecionado nao foi encontrado no armazenamento local.");
+            Add(items, "MediaUploaded", "ERROR", "Video nao enviado para a Ad Account.");
+            Add(items, "MetaVideoIdAvailable", "ERROR", "Meta video_id ausente.");
+            return new SelectedMetaMedia("CreativeAsset", "Video", asset.Id, asset.FileName, null, analysis?.RankingScore, analysis?.SemanticMismatch, null, true, false, null);
+        }
+
+        if (analysis is null)
+        {
+            Add(items, "MediaValid", "ERROR", "Video principal precisa de analise IA antes da publicacao Meta.");
+            Add(items, "MediaUploaded", "ERROR", "Video nao enviado para a Ad Account.");
+            Add(items, "MetaVideoIdAvailable", "ERROR", "Meta video_id ausente.");
+            return new SelectedMetaMedia("CreativeAsset", "Video", asset.Id, asset.FileName, null, null, null, null, true, false, "NOT_ANALYZED");
+        }
+
+        var gate = await creativeQualityGateService.EvaluateAsync(campanhaId, cancellationToken);
+        Add(items, "CreativeQualityGate", gate.Status == "BLOCKED" ? "ERROR" : "OK", string.Join(" ", gate.Reasons));
+        if (gate.Status == "BLOCKED")
+        {
+            Add(items, "MediaValid", "ERROR", "Quality Gate bloqueou o video principal para publicacao Meta.");
+            Add(items, "MediaUploaded", "ERROR", "Video nao enviado para a Ad Account.");
+            Add(items, "MetaVideoIdAvailable", "ERROR", "Meta video_id ausente.");
+            return new SelectedMetaMedia("CreativeAsset", "Video", asset.Id, asset.FileName, null, analysis.RankingScore, analysis.SemanticMismatch, null, true, false, gate.Status);
+        }
+
+        Add(items, "MediaValid", "OK", "Creative Asset de video validado pelo backend antes do upload Meta.");
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            Add(items, "MediaUploaded", "ERROR", "Token Meta ausente para enviar video para a Ad Account.");
+            Add(items, "MetaVideoIdAvailable", "ERROR", "Meta video_id ausente.");
+            return new SelectedMetaMedia("CreativeAsset", "Video", asset.Id, asset.FileName, null, analysis.RankingScore, analysis.SemanticMismatch, null, true, false, gate.Status);
+        }
+
+        var content = await File.ReadAllBytesAsync(path, cancellationToken);
+        var contentHash = Convert.ToHexString(SHA256.HashData(content));
+        var existing = await videoRepository.ObterPorConteudoAsync(adAccountId, contentHash, cancellationToken);
+        if (existing is not null && !string.IsNullOrWhiteSpace(existing.MetaVideoId))
+        {
+            Add(items, "MediaUploaded", "OK", "Creative Asset de video ja enviado anteriormente para esta Ad Account.");
+            Add(items, "MetaVideoIdAvailable", "OK", "Meta video_id disponivel para o Creative Asset selecionado.");
+            return new SelectedMetaMedia("CreativeAsset", "Video", asset.Id, asset.FileName, null, analysis.RankingScore, analysis.SemanticMismatch, existing.MetaVideoId, false, true, gate.Status);
+        }
+
+        try
+        {
+            var videoId = await graphClient.UploadAdVideoAsync(config, token, adAccountId, asset.FileName, asset.MimeType, content, cancellationToken);
+            var now = DateTime.UtcNow;
+            var video = new MetaAdsVideo
+            {
+                Id = Guid.NewGuid(),
+                CampanhaId = campanhaId,
+                MetaAdsContaId = conta.Id,
+                CreativeAssetId = asset.Id,
+                AdAccountId = adAccountId,
+                NomeArquivo = asset.FileName,
+                ContentType = asset.MimeType,
+                TamanhoBytes = content.LongLength,
+                ContentHash = contentHash,
+                MetaVideoId = videoId,
+                DataUpload = now,
+                DataAtualizacao = now
+            };
+            await videoRepository.AdicionarAsync(video, cancellationToken);
+            await videoRepository.SalvarAsync(cancellationToken);
+            Add(items, "MediaUploaded", "OK", "Creative Asset de video enviado para a Ad Account Meta.");
+            Add(items, "MetaVideoIdAvailable", "OK", "Meta video_id disponivel para o Creative Asset selecionado.");
+            return new SelectedMetaMedia("CreativeAsset", "Video", asset.Id, asset.FileName, null, analysis.RankingScore, analysis.SemanticMismatch, videoId, false, false, gate.Status);
+        }
+        catch (MetaAdsGraphApiException ex) when (ex.PermissionRequired)
+        {
+            Add(items, "MediaUploaded", "ERROR", "Permissao Meta insuficiente para enviar video para a Ad Account.");
+        }
+        catch (MetaAdsGraphApiException)
+        {
+            Add(items, "MediaUploaded", "ERROR", "Nao foi possivel enviar video para a Ad Account Meta.");
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            Add(items, "MediaUploaded", "ERROR", "Timeout ao enviar video para a Meta. Retente somente apos verificar se o video nao foi criado remotamente.");
+        }
+
+        Add(items, "MetaVideoIdAvailable", "ERROR", "Meta video_id ausente.");
+        return new SelectedMetaMedia("CreativeAsset", "Video", asset.Id, asset.FileName, null, analysis.RankingScore, analysis.SemanticMismatch, null, true, false, gate.Status);
+    }
+
+    private static void AddAnalysisWarnings(List<MetaAdsPreflightItem> items, AnalysisDetails? analysis)
+    {
+        if (analysis is null)
+        {
+            return;
+        }
+
+        if (analysis.SemanticMismatch)
+        {
+            Add(items, "CreativeSemanticMismatch", "WARNING", "A midia selecionada parece nao corresponder ao conteudo da campanha.");
+        }
+
+        if (analysis.RankingScore <= 35)
+        {
+            Add(items, "CreativeLowAnalysisScore", "WARNING", $"Score IA baixo para a midia selecionada: {analysis.RankingScore}.");
+        }
+    }
+
+    private string ResolveCreativeAssetPath(string relativePath)
+    {
+        var root = Path.GetFullPath(creativeAssetOptions.Value.StorageRoot);
+        var fullPath = Path.GetFullPath(Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        if (!fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Caminho de Creative Asset invalido.");
+        }
+
+        return fullPath;
     }
 
     private async Task<MetaAdsConfiguration> Config(CancellationToken cancellationToken)
@@ -362,5 +617,40 @@ public sealed class MetaAdsPreviewService(
     private static bool IsUsableAdAccount(string? status)
     {
         return status is "1" or "ACTIVE";
+    }
+
+    private sealed record SelectedMetaMedia(
+        string Source,
+        string MediaType,
+        Guid? CreativeAssetId,
+        string FileName,
+        string? MetaImageHash,
+        int? AnalysisScore,
+        bool? SemanticMismatch,
+        string? MetaVideoId,
+        bool VideoUploadRequired,
+        bool VideoIdReused,
+        string? QualityGateStatus);
+
+    private sealed record AnalysisDetails(int RankingScore, bool SemanticMismatch)
+    {
+        public static AnalysisDetails From(CreativeAssetAnalysis analysis)
+        {
+            var scores = AnalysisScores(analysis);
+            return new AnalysisDetails(CreativeAnalysisScoreNormalizer.RankingScore(scores), scores.SemanticMismatch);
+        }
+    }
+
+    private static CreativeAnalysisScores AnalysisScores(CreativeAssetAnalysis analysis)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(analysis.RawResponseJson);
+            return CreativeAnalysisScoreNormalizer.FromJson(doc.RootElement, analysis.VisualQualityScore, analysis.BrandFitScore, analysis.BrandFitScore);
+        }
+        catch (JsonException)
+        {
+            return new CreativeAnalysisScores(analysis.VisualQualityScore, analysis.BrandFitScore, analysis.BrandFitScore, analysis.TextDensityScore, analysis.BrandFitScore, false, false, null, 100);
+        }
     }
 }

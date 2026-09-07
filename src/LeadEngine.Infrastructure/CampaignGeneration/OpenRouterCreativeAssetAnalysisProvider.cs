@@ -49,11 +49,7 @@ public sealed class OpenRouterCreativeAssetAnalysisProvider(
                 new
                 {
                     role = "user",
-                    content = new object[]
-                    {
-                        new { type = "text", text = Prompt(request) },
-                        new { type = "image_url", image_url = new { url = $"data:{request.MimeType};base64,{Convert.ToBase64String(request.Content)}" } }
-                    }
+                    content = MessageContent(request)
                 }
             }
         };
@@ -74,7 +70,8 @@ public sealed class OpenRouterCreativeAssetAnalysisProvider(
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning(
-                    "CreativeAnalysis OpenRouter failed. RequestedModel={RequestedModel} CostTier={CostTier} DurationMs={DurationMs} StatusCode={StatusCode}",
+                    "CreativeAnalysis OpenRouter failed. AssetId={AssetId} RequestedModel={RequestedModel} CostTier={CostTier} DurationMs={DurationMs} StatusCode={StatusCode}",
+                    request.AssetId,
                     config.Model,
                     costTier,
                     sw.ElapsedMilliseconds,
@@ -85,7 +82,12 @@ public sealed class OpenRouterCreativeAssetAnalysisProvider(
             var parsed = ExtractResult(text);
             var routedModel = string.IsNullOrWhiteSpace(parsed.RoutedModel) ? config.Model : parsed.RoutedModel;
             logger.LogInformation(
-                "CreativeAnalysis OpenRouter succeeded. RequestedModel={RequestedModel} RoutedModel={RoutedModel} CostTier={CostTier} DurationMs={DurationMs}",
+                "CreativeAnalysis OpenRouter succeeded. AssetId={AssetId} MediaType={MediaType} Duration={VideoDuration} FrameCount={FrameCount} FrameTimestamps={FrameTimestamps} RequestedModel={RequestedModel} RoutedModel={RoutedModel} CostTier={CostTier} DurationMs={DurationMs}",
+                request.AssetId,
+                request.MediaType,
+                request.DurationSeconds,
+                request.Frames.Count,
+                string.Join(",", request.Frames.Select(x => x.OffsetSeconds.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))),
                 config.Model,
                 routedModel,
                 costTier,
@@ -97,7 +99,8 @@ public sealed class OpenRouterCreativeAssetAnalysisProvider(
             sw.Stop();
             logger.LogWarning(
                 ex,
-                "CreativeAnalysis OpenRouter failed. RequestedModel={RequestedModel} CostTier={CostTier} DurationMs={DurationMs}",
+                "CreativeAnalysis OpenRouter failed. AssetId={AssetId} RequestedModel={RequestedModel} CostTier={CostTier} DurationMs={DurationMs}",
+                request.AssetId,
                 config.Model,
                 costTier,
                 sw.ElapsedMilliseconds);
@@ -140,7 +143,7 @@ public sealed class OpenRouterCreativeAssetAnalysisProvider(
     private static string Prompt(CreativeAssetAnalysisProviderRequest request)
     {
         return $$"""
-        Analise a imagem junto com o briefing desta campanha.
+        Analise a midia junto com o briefing desta campanha.
 
         Briefing:
         - Segment: {{request.Segment ?? "-"}}
@@ -153,10 +156,27 @@ public sealed class OpenRouterCreativeAssetAnalysisProvider(
         - BrandTone: {{request.BrandTone ?? "-"}}
         - Restrictions: {{string.Join("; ", request.Restrictions)}}
 
+        Midia:
+        - MediaType: {{request.MediaType}}
+        - FileName: {{request.FileName}}
+        - MimeType: {{request.MimeType}}
+        - Width: {{request.Width}}
+        - Height: {{request.Height}}
+        - DurationSeconds: {{request.DurationSeconds?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "-"}}
+        - AspectRatio: {{(request.Height > 0 ? ((double)request.Width / request.Height).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : "-")}}
+        - Frames: {{request.Frames.Count}}
+        - FrameTimestampsSeconds: {{string.Join("; ", request.Frames.Select(x => x.OffsetSeconds.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)))}}
+
         Avalie sem usar regras fixas por segmento.
-        campaignFitScore mede: esta imagem representa corretamente o produto/servico, publico e objetivo desta campanha?
+        Quando MediaType=Video, os frames enviados sao amostras sequenciais do mesmo video.
+        Todos os campos de score DEVEM ser numeros inteiros entre 0 e 100. Nao utilizar escala 0-5 ou 0-10.
+        Exemplos de escala: Excelente = 90-100; Bom = 70-89; Mediano = 40-69; Ruim = 0-39.
+        campaignFitScore mede: esta midia representa corretamente o produto/servico, publico e objetivo desta campanha?
         messageConsistencyScore mede: o texto e conteudo visual detectados combinam com o briefing desta campanha?
-        Se a imagem ou texto promoverem outro produto/servico, semanticMismatch deve ser true e os scores de aderencia devem ser baixos.
+        Se a midia ou texto promoverem outro produto/servico, semanticMismatch deve ser true e os scores de aderencia devem ser baixos.
+        semanticMismatch deve ser true quando a midia representa claramente produto, servico ou segmento diferente do briefing OU quando nao existe conteudo visual suficiente para sustentar relacao com a campanha.
+        Exemplos: campanha de harmonizacao facial com video de plano de saude => semanticMismatch=true; frames corrompidos/incompreensiveis => semanticMismatch=true; clinica ou procedimento facial coerente => semanticMismatch=false.
+        Para video, considere clareza dos frames, legibilidade, consistencia visual entre frames, excesso de texto e adequacao para Feed, Stories e Reels.
 
         Responda exatamente neste formato JSON:
         {
@@ -183,6 +203,22 @@ public sealed class OpenRouterCreativeAssetAnalysisProvider(
           }
         }
         """;
+    }
+
+    private static object[] MessageContent(CreativeAssetAnalysisProviderRequest request)
+    {
+        var content = new List<object> { new { type = "text", text = Prompt(request) } };
+        if (request.Content is not null)
+        {
+            content.Add(new { type = "image_url", image_url = new { url = $"data:{request.MimeType};base64,{Convert.ToBase64String(request.Content)}" } });
+        }
+        foreach (var frame in request.Frames.Take(5))
+        {
+            content.Add(new { type = "text", text = $"Frame {frame.Label} em {frame.OffsetSeconds:0.##}s" });
+            content.Add(new { type = "image_url", image_url = new { url = $"data:{frame.MimeType};base64,{Convert.ToBase64String(frame.Content)}" } });
+        }
+
+        return content.ToArray();
     }
 
     private static OpenRouterAnalysisResult ExtractResult(string responseText)

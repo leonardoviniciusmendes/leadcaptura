@@ -10,14 +10,14 @@ public sealed class CreativeAssetRepository(LeadEngineDbContext context) : ICrea
     {
         return context.CreativeAssets
             .Include(x => x.Analyses)
-            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
     }
 
     public async Task<IReadOnlyList<CreativeAsset>> ListarPorCampanhaAsync(Guid campaignId, CancellationToken cancellationToken)
     {
         return await context.CreativeAssets
             .Include(x => x.Analyses)
-            .Where(x => x.CampaignId == campaignId)
+            .Where(x => x.CampaignId == campaignId && !x.IsDeleted)
             .OrderByDescending(x => x.CreatedAt)
             .ToArrayAsync(cancellationToken);
     }
@@ -30,6 +30,13 @@ public sealed class CreativeAssetRepository(LeadEngineDbContext context) : ICrea
     public Task AdicionarAnaliseAsync(CreativeAssetAnalysis analysis, CancellationToken cancellationToken)
     {
         return context.CreativeAssetAnalyses.AddAsync(analysis, cancellationToken).AsTask();
+    }
+
+    public void Remover(CreativeAsset asset)
+    {
+        asset.IsSelected = false;
+        asset.IsDeleted = true;
+        asset.DeletedAt = DateTime.UtcNow;
     }
 
     public Task SalvarAsync(CancellationToken cancellationToken)

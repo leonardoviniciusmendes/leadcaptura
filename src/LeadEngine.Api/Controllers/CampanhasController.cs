@@ -1,3 +1,4 @@
+using LeadEngine.Application.Common;
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
 using LeadEngine.Application.Services;
@@ -14,7 +15,7 @@ public sealed class CampanhasController(
     LeadConsultaService leadConsultaService,
     CreativeAssetService creativeAssetService) : ControllerBase
 {
-    private const long MaxCreativeAssetsUploadBytes = 32 * 1024 * 1024;
+    private const long MaxCreativeAssetsUploadBytes = 128 * 1024 * 1024;
 
     [HttpPost("gerar")]
     public async Task<ActionResult<CampanhaResponse>> Gerar(GerarCampanhaRequest request, CancellationToken cancellationToken)
@@ -56,9 +57,29 @@ public sealed class CampanhasController(
     }
 
     [HttpPost("{id:guid}/aprovar")]
-    public async Task<ActionResult<CampanhaResponse>> Aprovar(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<AprovarCampanhaResponse>> Aprovar(Guid id, AprovarCampanhaRequest? request, CancellationToken cancellationToken)
     {
-        return Ok(await reviewService.AprovarCampanhaAsync(id, cancellationToken));
+        try
+        {
+            return Ok(await reviewService.AprovarCampanhaAsync(id, request ?? new AprovarCampanhaRequest(), cancellationToken));
+        }
+        catch (CreativeQualityGateException ex)
+        {
+            return BadRequest(new { sucesso = false, mensagem = "A imagem principal nao passou no quality gate criativo.", creativeQualityGate = ex.Gate });
+        }
+    }
+
+    [HttpGet("{id:guid}/creative-quality-gate")]
+    public async Task<ActionResult<CreativeQualityGateResponse>> CreativeQualityGate(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Ok(await reviewService.ObterCreativeQualityGateAsync(id, cancellationToken));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { sucesso = false, mensagem = ex.Message });
+        }
     }
 
     [HttpGet("{id:guid}/historico-revisoes")]
@@ -128,10 +149,7 @@ public sealed class CampanhasController(
             var items = new List<CreativeAssetUploadItem>();
             foreach (var file in files)
             {
-                await using var stream = file.OpenReadStream();
-                using var memory = new MemoryStream();
-                await stream.CopyToAsync(memory, cancellationToken);
-                items.Add(new CreativeAssetUploadItem(file.FileName, file.ContentType, memory.ToArray()));
+                items.Add(new CreativeAssetUploadItem(file.FileName, file.ContentType, file.OpenReadStream(), file.Length));
             }
 
             return Ok(await creativeAssetService.UploadAsync(id, items, cancellationToken));
@@ -156,6 +174,20 @@ public sealed class CampanhasController(
         try
         {
             var content = await creativeAssetService.GetContentAsync(id, assetId, cancellationToken);
+            return File(content.Content, content.MimeType);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { sucesso = false, mensagem = ex.Message });
+        }
+    }
+
+    [HttpGet("{id:guid}/creative-assets/{assetId:guid}/thumbnail")]
+    public async Task<IActionResult> CreativeAssetThumbnail(Guid id, Guid assetId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var content = await creativeAssetService.GetThumbnailAsync(id, assetId, cancellationToken);
             return File(content.Content, content.MimeType);
         }
         catch (KeyNotFoundException ex)
@@ -195,6 +227,28 @@ public sealed class CampanhasController(
         catch (KeyNotFoundException ex)
         {
             return NotFound(new { sucesso = false, mensagem = ex.Message });
+        }
+    }
+
+    [HttpDelete("{id:guid}/creative-assets/{assetId:guid}")]
+    public async Task<IActionResult> DeleteCreativeAsset(Guid id, Guid assetId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await creativeAssetService.RemoverAsync(id, assetId, cancellationToken);
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { sucesso = false, mensagem = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { sucesso = false, mensagem = ex.Message });
+        }
+        catch (IOException ex)
+        {
+            return BadRequest(new { sucesso = false, mensagem = $"Nao foi possivel remover o arquivo da imagem: {ex.Message}" });
         }
     }
 }

@@ -1,7 +1,10 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using LeadEngine.Application.DTOs;
 using LeadEngine.Application.Interfaces;
 using LeadEngine.Domain.Entities;
+using LeadEngine.Domain.Enums;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace LeadEngine.Application.Services;
@@ -10,6 +13,9 @@ public sealed class CreativeAssetService(
     ICampanhaRepository campanhaRepository,
     ICreativeAssetRepository assetRepository,
     ICreativeAssetAnalysisProvider analysisProvider,
+    IMetaAdsImagemRepository metaAdsImagemRepository,
+    IVideoProcessingService videoProcessingService,
+    ILogger<CreativeAssetService> logger,
     IOptions<CreativeAssetOptions> options)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -18,7 +24,9 @@ public sealed class CreativeAssetService(
         ["image/jpeg"] = [".jpg", ".jpeg"],
         ["image/png"] = [".png"],
         ["image/gif"] = [".gif"],
-        ["image/webp"] = [".webp"]
+        ["image/webp"] = [".webp"],
+        ["video/mp4"] = [".mp4"],
+        ["video/webm"] = [".webm"]
     };
 
     public async Task<CreativeAssetUploadResponse> UploadAsync(Guid campaignId, IReadOnlyList<CreativeAssetUploadItem> files, CancellationToken cancellationToken)
@@ -34,24 +42,61 @@ public sealed class CreativeAssetService(
         var uploaded = new List<CreativeAssetResponse>();
         foreach (var file in files)
         {
-            var validation = Validate(file);
+            var validation = await ValidateAsync(file, cancellationToken);
             var id = Guid.NewGuid();
             var safeName = Path.GetFileName(file.FileName);
             var relativePath = Path.Combine("creative-assets", campanha.Id.ToString("N"), $"{id:N}{validation.Extension}").Replace('\\', '/');
             var fullPath = ResolveStoragePath(relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-            await File.WriteAllBytesAsync(fullPath, file.Content, cancellationToken);
+            await using (var output = File.Create(fullPath))
+            {
+                file.Content.Position = 0;
+                await file.Content.CopyToAsync(output, cancellationToken);
+            }
+
+            var width = validation.Width;
+            var height = validation.Height;
+            var durationSeconds = validation.DurationSeconds;
+            string? thumbnailPath = null;
+            if (validation.MediaType == CreativeAssetMediaType.Video)
+            {
+                var metadata = await videoProcessingService.ProbeAsync(fullPath, cancellationToken);
+                if (metadata is not null)
+                {
+                    width = metadata.Width;
+                    height = metadata.Height;
+                    durationSeconds = metadata.DurationSeconds;
+                }
+
+                thumbnailPath = Path.Combine("creative-assets", campanha.Id.ToString("N"), $"{id:N}-poster.png").Replace('\\', '/');
+                try
+                {
+                    var posterFullPath = ResolveStoragePath(thumbnailPath);
+                    Directory.CreateDirectory(Path.GetDirectoryName(posterFullPath)!);
+                    thumbnailPath = await videoProcessingService.ExtractPosterAsync(fullPath, posterFullPath, durationSeconds ?? validation.DurationSeconds ?? 1, cancellationToken) is null
+                        ? null
+                        : thumbnailPath;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    logger.LogWarning(ex, "Video poster extraction failed. AssetId={AssetId}", id);
+                    thumbnailPath = null;
+                }
+            }
 
             var asset = new CreativeAsset
             {
                 Id = id,
                 CampaignId = campanha.Id,
+                MediaType = validation.MediaType,
                 FileName = safeName,
                 StoragePath = relativePath,
+                ThumbnailPath = thumbnailPath,
                 MimeType = validation.MimeType,
-                Width = validation.Width,
-                Height = validation.Height,
-                FileSize = file.Content.LongLength,
+                Width = width,
+                Height = height,
+                DurationSeconds = durationSeconds,
+                FileSize = file.Length,
                 IsSelected = false,
                 CreatedAt = DateTime.UtcNow
             };
@@ -89,9 +134,15 @@ public sealed class CreativeAssetService(
             throw new KeyNotFoundException("Imagem nao encontrada para esta campanha.");
         }
 
-        var content = await File.ReadAllBytesAsync(ResolveStoragePath(asset.StoragePath), cancellationToken);
+        var content = asset.MediaType == CreativeAssetMediaType.Image
+            ? await File.ReadAllBytesAsync(ResolveStoragePath(asset.StoragePath), cancellationToken)
+            : null;
+        var frames = asset.MediaType == CreativeAssetMediaType.Video
+            ? await VideoFramesAsync(asset, cancellationToken)
+            : [];
         var briefing = CampanhaMapping.ToBriefing(campanha);
         var result = await analysisProvider.AnalyzeAsync(new CreativeAssetAnalysisProviderRequest(
+            asset.Id,
             campanha.Segment?.Name,
             briefing.BusinessDescription,
             briefing.ProductOrService,
@@ -102,12 +153,22 @@ public sealed class CreativeAssetService(
             briefing.BrandTone,
             briefing.Restrictions.ToArray(),
             asset.FileName,
+            asset.MediaType.ToString(),
             asset.MimeType,
             asset.Width,
             asset.Height,
-            content), cancellationToken);
+            asset.DurationSeconds,
+            content,
+            frames), cancellationToken);
 
         var parsed = ParseAnalysis(result.RawJson);
+        if (parsed.Scores.OriginalScale == 10)
+        {
+            logger.LogInformation(
+                "CreativeAnalysis score scale normalized. AssetId={AssetId} OriginalScale=0-10 TargetScale=0-100",
+                asset.Id);
+        }
+
         var analysis = new CreativeAssetAnalysis
         {
             Id = Guid.NewGuid(),
@@ -115,16 +176,16 @@ public sealed class CreativeAssetService(
             Provider = string.IsNullOrWhiteSpace(result.Provider) ? "Unknown" : result.Provider,
             Model = string.IsNullOrWhiteSpace(result.Model) ? "Unknown" : result.Model,
             Summary = parsed.Summary,
-            VisualQualityScore = parsed.VisualQualityScore,
-            BrandFitScore = parsed.BrandFitScore,
-            TextDensityScore = parsed.TextDensityScore,
+            VisualQualityScore = parsed.Scores.VisualQualityScore,
+            BrandFitScore = parsed.Scores.BrandFitScore,
+            TextDensityScore = parsed.Scores.TextDensityScore,
             PlacementRecommendationsJson = JsonSerializer.Serialize(parsed.Placements, JsonOptions),
             RisksJson = JsonSerializer.Serialize(parsed.Risks, JsonOptions),
             SuggestedHeadline = parsed.SuggestedCopy.Headline,
             SuggestedPrimaryText = parsed.SuggestedCopy.PrimaryText,
             SuggestedDescription = parsed.SuggestedCopy.Description,
             SuggestedCta = parsed.SuggestedCopy.Cta,
-            RawResponseJson = NormalizeJson(result.RawJson),
+            RawResponseJson = result.RawJson,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -152,6 +213,47 @@ public sealed class CreativeAssetService(
         return ToResponse(selected);
     }
 
+    public async Task RemoverAsync(Guid campaignId, Guid assetId, CancellationToken cancellationToken)
+    {
+        if (await campanhaRepository.ObterPorIdAsync(campaignId, cancellationToken) is null)
+        {
+            throw new KeyNotFoundException("Campanha nao encontrada.");
+        }
+
+        var asset = await assetRepository.ObterPorIdAsync(assetId, cancellationToken)
+            ?? throw new KeyNotFoundException("Imagem nao encontrada.");
+        if (asset.CampaignId != campaignId)
+        {
+            throw new KeyNotFoundException("Imagem nao encontrada para esta campanha.");
+        }
+
+        var path = ResolveStoragePath(asset.StoragePath);
+        var thumbnailPath = string.IsNullOrWhiteSpace(asset.ThumbnailPath) ? null : ResolveStoragePath(asset.ThumbnailPath);
+        string? contentHash = null;
+        if (File.Exists(path))
+        {
+            var content = await File.ReadAllBytesAsync(path, cancellationToken);
+            contentHash = Convert.ToHexString(SHA256.HashData(content));
+        }
+
+        assetRepository.Remover(asset);
+        if (!string.IsNullOrWhiteSpace(contentHash))
+        {
+            await metaAdsImagemRepository.RemoverPorConteudoAsync(campaignId, contentHash, "CreativeAsset", cancellationToken);
+        }
+
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+        if (!string.IsNullOrWhiteSpace(thumbnailPath) && File.Exists(thumbnailPath))
+        {
+            File.Delete(thumbnailPath);
+        }
+
+        await assetRepository.SalvarAsync(cancellationToken);
+    }
+
     public async Task<(byte[] Content, string MimeType, string FileName)> GetContentAsync(Guid campaignId, Guid assetId, CancellationToken cancellationToken)
     {
         var asset = await assetRepository.ObterPorIdAsync(assetId, cancellationToken)
@@ -164,43 +266,160 @@ public sealed class CreativeAssetService(
         return (await File.ReadAllBytesAsync(ResolveStoragePath(asset.StoragePath), cancellationToken), asset.MimeType, asset.FileName);
     }
 
-    private ImageValidationResult Validate(CreativeAssetUploadItem file)
+    public async Task<(byte[] Content, string MimeType, string FileName)> GetThumbnailAsync(Guid campaignId, Guid assetId, CancellationToken cancellationToken)
+    {
+        var asset = await assetRepository.ObterPorIdAsync(assetId, cancellationToken)
+            ?? throw new KeyNotFoundException("Imagem nao encontrada.");
+        if (asset.CampaignId != campaignId || string.IsNullOrWhiteSpace(asset.ThumbnailPath))
+        {
+            throw new KeyNotFoundException("Thumbnail nao encontrado para esta midia.");
+        }
+
+        return (await File.ReadAllBytesAsync(ResolveStoragePath(asset.ThumbnailPath), cancellationToken), "image/png", $"{Path.GetFileNameWithoutExtension(asset.FileName)}-poster.png");
+    }
+
+    private async Task<MediaValidationResult> ValidateAsync(CreativeAssetUploadItem file, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(file.FileName))
         {
-            throw new ArgumentException("Nome da imagem obrigatorio.");
+            throw new ArgumentException("Nome da midia obrigatorio.");
         }
-        if (file.Content.Length == 0)
+        if (file.Length == 0)
         {
-            throw new ArgumentException("Imagem obrigatoria.");
+            throw new ArgumentException("Midia obrigatoria.");
         }
-        if (file.Content.LongLength > options.Value.MaxFileBytes)
+        var maxAnyFileBytes = Math.Max(EffectiveMaxImageBytes(), EffectiveMaxVideoBytes());
+        if (file.Length > maxAnyFileBytes)
         {
-            throw new ArgumentException($"Imagem excede o limite de {options.Value.MaxFileBytes / 1024 / 1024} MB.");
+            throw new ArgumentException($"Midia excede o limite de {maxAnyFileBytes / 1024 / 1024} MB.");
         }
 
         var extension = Path.GetExtension(file.FileName);
         if (string.IsNullOrWhiteSpace(extension))
         {
-            throw new ArgumentException("Extensao de imagem obrigatoria.");
+            throw new ArgumentException("Extensao de midia obrigatoria.");
         }
 
-        var detected = ImageHeaderReader.Detect(file.Content)
-            ?? throw new ArgumentException("MIME real da imagem nao foi reconhecido.");
+        var probe = await ReadProbeAsync(file.Content, cancellationToken);
+        var image = ImageHeaderReader.Detect(probe);
+        if (image is not null)
+        {
+            return ValidateImage(file, extension, image);
+        }
+
+        var video = VideoHeaderReader.Detect(probe);
+        if (video is not null)
+        {
+            return ValidateVideo(file, extension, video);
+        }
+
+        throw new ArgumentException("MIME real da midia nao foi reconhecido.");
+    }
+
+    private MediaValidationResult ValidateImage(CreativeAssetUploadItem file, string extension, ImageHeader detected)
+    {
+        if (file.Length > EffectiveMaxImageBytes())
+        {
+            throw new ArgumentException($"Imagem excede o limite de {EffectiveMaxImageBytes() / 1024 / 1024} MB.");
+        }
         if (!AllowedExtensions.TryGetValue(detected.MimeType, out var extensions) || !extensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
         {
-            throw new ArgumentException("Extensao da imagem nao corresponde ao formato real.");
+            throw new ArgumentException("Extensao da midia nao corresponde ao formato real.");
         }
         if (!string.IsNullOrWhiteSpace(file.ContentType) && !string.Equals(file.ContentType, detected.MimeType, StringComparison.OrdinalIgnoreCase))
         {
-            throw new ArgumentException("Content-Type informado nao corresponde ao MIME real da imagem.");
+            throw new ArgumentException("Content-Type informado nao corresponde ao MIME real da midia.");
         }
         if (detected.Width <= 0 || detected.Height <= 0 || detected.Width > options.Value.MaxWidth || detected.Height > options.Value.MaxHeight)
         {
             throw new ArgumentException("Dimensoes da imagem fora dos limites aceitos.");
         }
 
-        return new ImageValidationResult(detected.MimeType, extension.ToLowerInvariant(), detected.Width, detected.Height);
+        return new MediaValidationResult(CreativeAssetMediaType.Image, detected.MimeType, extension.ToLowerInvariant(), detected.Width, detected.Height, null);
+    }
+
+    private MediaValidationResult ValidateVideo(CreativeAssetUploadItem file, string extension, VideoHeader detected)
+    {
+        if (file.Length > EffectiveMaxVideoBytes())
+        {
+            throw new ArgumentException($"Video excede o limite de {EffectiveMaxVideoBytes() / 1024 / 1024} MB.");
+        }
+        if (!AllowedExtensions.TryGetValue(detected.MimeType, out var extensions) || !extensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Extensao da midia nao corresponde ao formato real.");
+        }
+        if (!string.IsNullOrWhiteSpace(file.ContentType) && !string.Equals(file.ContentType, detected.MimeType, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Content-Type informado nao corresponde ao MIME real da midia.");
+        }
+        if (detected.DurationSeconds > EffectiveMaxVideoDurationSeconds())
+        {
+            throw new ArgumentException($"Video excede a duracao maxima de {EffectiveMaxVideoDurationSeconds()} segundos.");
+        }
+        if (detected.Width <= 0 || detected.Height <= 0 || detected.Width > options.Value.MaxWidth || detected.Height > options.Value.MaxHeight)
+        {
+            throw new ArgumentException("Dimensoes do video fora dos limites aceitos.");
+        }
+
+        return new MediaValidationResult(CreativeAssetMediaType.Video, detected.MimeType, extension.ToLowerInvariant(), detected.Width, detected.Height, detected.DurationSeconds);
+    }
+
+    private static async Task<byte[]> ReadProbeAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        const int maxProbeBytes = 1024 * 1024;
+        stream.Position = 0;
+        using var memory = new MemoryStream();
+        var buffer = new byte[81920];
+        while (memory.Length < maxProbeBytes)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, maxProbeBytes - (int)memory.Length)), cancellationToken);
+            if (read == 0)
+            {
+                break;
+            }
+            memory.Write(buffer, 0, read);
+        }
+        stream.Position = 0;
+        return memory.ToArray();
+    }
+
+    private async Task<IReadOnlyList<CreativeAssetAnalysisFrame>> VideoFramesAsync(CreativeAsset asset, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var frames = await videoProcessingService.ExtractAnalysisFramesAsync(ResolveStoragePath(asset.StoragePath), asset.DurationSeconds ?? 1, cancellationToken);
+            if (frames.Count == 0)
+            {
+                throw new InvalidOperationException("Processamento de video nao esta disponivel neste ambiente.");
+            }
+
+            logger.LogInformation(
+                "Video analysis frames ready. AssetId={AssetId} Duration={Duration} FrameCount={FrameCount} Timestamps={Timestamps}",
+                asset.Id,
+                asset.DurationSeconds,
+                frames.Count,
+                string.Join(",", frames.Select(x => x.OffsetSeconds.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))));
+            return frames;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new InvalidOperationException("Processamento de video nao esta disponivel neste ambiente.", ex);
+        }
+    }
+
+    private long EffectiveMaxImageBytes()
+    {
+        return options.Value.MaxImageBytes > 0 ? options.Value.MaxImageBytes : options.Value.MaxFileBytes;
+    }
+
+    private long EffectiveMaxVideoBytes()
+    {
+        return options.Value.MaxVideoBytes > 0 ? options.Value.MaxVideoBytes : options.Value.MaxFileBytes;
+    }
+
+    private int EffectiveMaxVideoDurationSeconds()
+    {
+        return options.Value.MaxVideoDurationSeconds > 0 ? options.Value.MaxVideoDurationSeconds : 120;
     }
 
     private string ResolveStoragePath(string relativePath)
@@ -223,12 +442,7 @@ public sealed class CreativeAssetService(
             var root = doc.RootElement;
             var summary = RequiredString(root, "summary", 2000);
             var detectedText = OptionalString(root, "detectedText", 2000) ?? string.Empty;
-            var visual = RequiredScore(root, "visualQualityScore");
-            var campaign = RequiredScore(root, "campaignFitScore");
-            var brand = RequiredScore(root, "brandFitScore");
-            var density = RequiredScore(root, "textDensityScore");
-            var consistency = RequiredScore(root, "messageConsistencyScore");
-            var semanticMismatch = RequiredBool(root, "semanticMismatch");
+            var scores = CreativeAnalysisScoreNormalizer.FromJson(root, RequiredScore, RequiredBool);
             var placements = RequiredStringMap(root, root.TryGetProperty("placementRecommendations", out _) ? "placementRecommendations" : "placements");
             var risks = OptionalStringArray(root, "risks");
             var copy = root.TryGetProperty("suggestedCopy", out var copyElement) && copyElement.ValueKind == JsonValueKind.Object
@@ -238,18 +452,12 @@ public sealed class CreativeAssetService(
                     OptionalString(copyElement, "description", 300),
                     OptionalString(copyElement, "cta", 40))
                 : throw new ArgumentException("Resposta IA sem suggestedCopy valido.");
-            return new ParsedAnalysis(summary, detectedText, visual, campaign, brand, density, consistency, semanticMismatch, placements, risks, copy);
+            return new ParsedAnalysis(summary, detectedText, scores, placements, risks, copy);
         }
         catch (JsonException ex)
         {
             throw new ArgumentException("Resposta IA nao contem JSON valido.", ex);
         }
-    }
-
-    private static string NormalizeJson(string rawJson)
-    {
-        using var doc = JsonDocument.Parse(rawJson);
-        return JsonSerializer.Serialize(doc.RootElement, JsonOptions);
     }
 
     private static string RequiredString(JsonElement root, string property, int maxLength)
@@ -275,6 +483,13 @@ public sealed class CreativeAssetService(
         }
 
         return value;
+    }
+
+    private static int? OptionalScore(JsonElement root, string property)
+    {
+        return root.TryGetProperty(property, out var item) && item.TryGetInt32(out var value) && value is >= 0 and <= 100
+            ? value
+            : null;
     }
 
     private static bool RequiredBool(JsonElement root, string property)
@@ -320,12 +535,16 @@ public sealed class CreativeAssetService(
         return new CreativeAssetResponse(
             asset.Id,
             asset.CampaignId,
+            asset.MediaType.ToString(),
             asset.FileName,
             asset.StoragePath,
             asset.MimeType,
             asset.Width,
             asset.Height,
+            asset.DurationSeconds,
             asset.FileSize,
+            $"/api/campanhas/{asset.CampaignId}/creative-assets/{asset.Id}/content",
+            string.IsNullOrWhiteSpace(asset.ThumbnailPath) ? null : $"/api/campanhas/{asset.CampaignId}/creative-assets/{asset.Id}/thumbnail",
             asset.IsSelected,
             asset.CreatedAt,
             analysis,
@@ -337,8 +556,8 @@ public sealed class CreativeAssetService(
         var placements = JsonSerializer.Deserialize<IReadOnlyDictionary<string, string>>(analysis.PlacementRecommendationsJson, JsonOptions)
             ?? new Dictionary<string, string>();
         var risks = JsonSerializer.Deserialize<IReadOnlyList<string>>(analysis.RisksJson, JsonOptions) ?? [];
-        var extra = AnalysisExtra.FromRawJson(analysis.RawResponseJson, analysis.BrandFitScore);
-        var ranking = RankingScore(analysis.VisualQualityScore, extra.CampaignFitScore, analysis.BrandFitScore, extra.MessageConsistencyScore, extra.SemanticMismatch);
+        var extra = AnalysisExtra.FromRawJson(analysis);
+        var ranking = CreativeAnalysisScoreNormalizer.RankingScore(extra.Scores);
         return new CreativeAssetAnalysisResponse(
             analysis.Id,
             analysis.CreativeAssetId,
@@ -346,12 +565,12 @@ public sealed class CreativeAssetService(
             analysis.Model,
             analysis.Summary,
             extra.DetectedText,
-            analysis.VisualQualityScore,
-            extra.CampaignFitScore,
-            analysis.BrandFitScore,
-            analysis.TextDensityScore,
-            extra.MessageConsistencyScore,
-            extra.SemanticMismatch,
+            extra.Scores.VisualQualityScore,
+            extra.Scores.CampaignFitScore,
+            extra.Scores.BrandFitScore,
+            extra.Scores.TextDensityScore,
+            extra.Scores.MessageConsistencyScore,
+            extra.Scores.SemanticMismatch,
             placements,
             risks,
             new CreativeAssetSuggestedCopy(analysis.SuggestedHeadline, analysis.SuggestedPrimaryText, analysis.SuggestedDescription, analysis.SuggestedCta),
@@ -360,50 +579,33 @@ public sealed class CreativeAssetService(
             ranking);
     }
 
-    private static int RankingScore(int visualQualityScore, int campaignFitScore, int brandFitScore, int messageConsistencyScore, bool semanticMismatch)
-    {
-        var score = (int)Math.Round(
-            campaignFitScore * 0.35
-            + messageConsistencyScore * 0.30
-            + brandFitScore * 0.20
-            + visualQualityScore * 0.15,
-            MidpointRounding.AwayFromZero);
-        return semanticMismatch ? Math.Min(score, 35) : score;
-    }
-
     private static string? FormatLocation(CampaignLocationDto? location)
     {
         return location is null ? null : string.Join(" / ", new[] { location.Region, location.City, location.State }.Where(x => !string.IsNullOrWhiteSpace(x)));
     }
 
-    private sealed record ImageValidationResult(string MimeType, string Extension, int Width, int Height);
-    private sealed record ParsedAnalysis(string Summary, string DetectedText, int VisualQualityScore, int CampaignFitScore, int BrandFitScore, int TextDensityScore, int MessageConsistencyScore, bool SemanticMismatch, IReadOnlyDictionary<string, string> Placements, IReadOnlyList<string> Risks, CreativeAssetSuggestedCopy SuggestedCopy);
+    private sealed record MediaValidationResult(CreativeAssetMediaType MediaType, string MimeType, string Extension, int Width, int Height, double? DurationSeconds);
 
-    private sealed record AnalysisExtra(string DetectedText, int CampaignFitScore, int MessageConsistencyScore, bool SemanticMismatch)
+    private sealed record ParsedAnalysis(string Summary, string DetectedText, CreativeAnalysisScores Scores, IReadOnlyDictionary<string, string> Placements, IReadOnlyList<string> Risks, CreativeAssetSuggestedCopy SuggestedCopy);
+
+    private sealed record AnalysisExtra(string DetectedText, CreativeAnalysisScores Scores)
     {
-        public static AnalysisExtra FromRawJson(string rawJson, int fallbackScore)
+        public static AnalysisExtra FromRawJson(CreativeAssetAnalysis analysis)
         {
             try
             {
-                using var doc = JsonDocument.Parse(rawJson);
+                using var doc = JsonDocument.Parse(analysis.RawResponseJson);
                 var root = doc.RootElement;
                 return new AnalysisExtra(
                     OptionalString(root, "detectedText", 2000) ?? string.Empty,
-                    OptionalScore(root, "campaignFitScore") ?? fallbackScore,
-                    OptionalScore(root, "messageConsistencyScore") ?? fallbackScore,
-                    root.TryGetProperty("semanticMismatch", out var mismatch) && mismatch.ValueKind is JsonValueKind.True or JsonValueKind.False && mismatch.GetBoolean());
+                    CreativeAnalysisScoreNormalizer.FromJson(root, analysis.VisualQualityScore, analysis.BrandFitScore, analysis.BrandFitScore));
             }
             catch (JsonException)
             {
-                return new AnalysisExtra(string.Empty, fallbackScore, fallbackScore, false);
+                return new AnalysisExtra(
+                    string.Empty,
+                    new CreativeAnalysisScores(analysis.VisualQualityScore, analysis.BrandFitScore, analysis.BrandFitScore, analysis.TextDensityScore, analysis.BrandFitScore, false, false, null, 100));
             }
-        }
-
-        private static int? OptionalScore(JsonElement root, string property)
-        {
-            return root.TryGetProperty(property, out var item) && item.TryGetInt32(out var value) && value is >= 0 and <= 100
-                ? value
-                : null;
         }
     }
 }

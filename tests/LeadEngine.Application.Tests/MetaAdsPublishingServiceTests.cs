@@ -46,6 +46,22 @@ public sealed class MetaAdsPublishingServiceTests
     }
 
     [Fact]
+    public async Task Retry_CreativeDeVideo_UsaVideoIdEAnuncioPermanecePaused()
+    {
+        var ctx = TestContext.Create();
+        ctx.PreviewMediaType = "Video";
+        ctx.PreviewImageHash = null;
+        ctx.PreviewVideoId = "meta_video_1";
+
+        var result = await Service(ctx).RetentarAsync(ctx.Publicacao.Id, CancellationToken.None);
+
+        Assert.Equal("Concluida", result.Status);
+        Assert.Null(ctx.Graph.LastCreativePayload?.ImageHash);
+        Assert.Equal("meta_video_1", ctx.Graph.LastCreativePayload?.VideoId);
+        Assert.Equal("PAUSED", ctx.Graph.LastAdPayload?.Status);
+    }
+
+    [Fact]
     public async Task Retry_ErroMetaNoCreative_MantemFalhaParcialIdsEDetalhes()
     {
         var ctx = TestContext.Create();
@@ -419,6 +435,8 @@ public sealed class MetaAdsPublishingServiceTests
         public bool PreviewReady { get; set; } = true;
         public string? PreviewPageId { get; set; } = "page_1";
         public string? PreviewImageHash { get; set; } = "image_hash_1";
+        public string? PreviewVideoId { get; set; }
+        public string PreviewMediaType { get; set; } = "Image";
         public Campanhas Campanhas { get; }
         public Contas Contas { get; }
         public Selecoes Selecoes { get; }
@@ -489,7 +507,7 @@ public sealed class MetaAdsPublishingServiceTests
                 new MetaAdsPreviewAssets(null, null, "act_1", null, ctx.PreviewPageId, null, null, null, null, null),
                 new MetaAdsCampaignPreview("Campanha", "OUTCOME_TRAFFIC", "PAUSED", "NONE", ["NONE"]),
                 new MetaAdsAdSetPreview("AdSet", "OUTCOME_TRAFFIC", 20m, 2000, "BRL", "IMPRESSIONS", "LINK_CLICKS", "LOWEST_COST_WITHOUT_CAP", new MetaAdsTargetingPreview(["BR"], new MetaAdsLocationResponse("1001655", "Rio", "city", "BR", "Brazil", "RJ", null, false, true), null, null, 18, 65), null, null, null),
-                new MetaAdsCreativePreview(ctx.PreviewPageId, null, "Texto principal", "Headline", "Descricao", "https://example.com", "LEARN_MORE", null, "hash", ctx.PreviewImageHash, !string.IsNullOrWhiteSpace(ctx.PreviewImageHash)),
+                new MetaAdsCreativePreview(ctx.PreviewPageId, null, "Texto principal", "Headline", "Descricao", "https://example.com", "LEARN_MORE", null, "hash", ctx.PreviewImageHash, !string.IsNullOrWhiteSpace(ctx.PreviewImageHash), MediaType: ctx.PreviewMediaType, MetaVideoId: ctx.PreviewVideoId),
                 new MetaAdsAdPreview("Ad", "PAUSED"),
                 preflight));
         }
@@ -586,6 +604,7 @@ public sealed class MetaAdsPublishingServiceTests
         public Task<MetaAdsPermissionStatusResponse> GetPermissionsAsync(MetaAdsConfiguration config, string accessToken, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaAdsLocationResponse>> SearchTargetingLocationsAsync(MetaAdsConfiguration config, string accessToken, string query, string countryCode, int limit, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<string> UploadAdImageAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, string fileName, string contentType, byte[] content, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<string> UploadAdVideoAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, string fileName, string contentType, byte[] content, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task DeleteCampaignAsync(MetaAdsConfiguration config, string accessToken, string campaignId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task DeleteAdSetAsync(MetaAdsConfiguration config, string accessToken, string adSetId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<MetaAdsCreateResult> CreateDiagnosticAdCreativeAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsDiagnosticCreativeCreatePayload payload, CancellationToken cancellationToken) => throw new NotSupportedException();

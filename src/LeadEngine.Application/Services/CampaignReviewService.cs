@@ -9,7 +9,10 @@ namespace LeadEngine.Application.Services;
 
 public sealed class CampaignReviewService(
     ICampanhaRepository repository,
-    ICampaignSectionGenerationService sectionGenerationService) : ICampaignReviewService
+    ICampaignSectionGenerationService sectionGenerationService,
+    CreativeQualityGateService creativeQualityGateService,
+    ICreativeQualityOverrideRepository creativeQualityOverrideRepository,
+    IRequestContext requestContext) : ICampaignReviewService
 {
     public async Task<CampanhaResponse?> ObterRevisaoAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -95,7 +98,7 @@ public sealed class CampaignReviewService(
         return CampanhaMapping.ToResponse(campanha);
     }
 
-    public async Task<CampanhaResponse> AprovarCampanhaAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<AprovarCampanhaResponse> AprovarCampanhaAsync(Guid id, AprovarCampanhaRequest request, CancellationToken cancellationToken)
     {
         var campanha = await ObterCampanhaAsync(id, cancellationToken);
         if (campanha.Status is StatusCampanha.Gerando or StatusCampanha.Erro)
@@ -104,12 +107,47 @@ public sealed class CampaignReviewService(
         }
 
         ValidateCurrent(campanha);
+        var gate = await creativeQualityGateService.EvaluateAsync(campanha.Id, cancellationToken);
+        if (gate.Status == "BLOCKED")
+        {
+            if (!request.OverrideCreativeQuality)
+            {
+                throw new CreativeQualityGateException(gate);
+            }
+
+            var reason = CampanhaText.Limitar(request.OverrideReason, 500);
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                throw new ArgumentException("Motivo da excecao de qualidade criativa e obrigatorio.");
+            }
+
+            await creativeQualityOverrideRepository.AdicionarAsync(new CreativeQualityOverride
+            {
+                Id = Guid.NewGuid(),
+                CampaignId = campanha.Id,
+                CreativeAssetId = gate.CreativeAssetId!.Value,
+                CreativeAssetAnalysisId = gate.CreativeAssetAnalysisId,
+                RankingScore = gate.Score,
+                SemanticMismatch = gate.SemanticMismatch == true,
+                Reason = reason,
+                User = CampanhaText.Limitar(requestContext.User, 180) ?? "unknown",
+                CreatedAt = DateTime.UtcNow
+            }, cancellationToken);
+        }
+
         var anterior = CampanhaContentSnapshot.From(campanha);
         campanha.Status = StatusCampanha.Revisada;
         campanha.DataAtualizacao = DateTime.UtcNow;
         await RegistrarAsync(campanha.Id, "Aprovacao", null, anterior, CampanhaContentSnapshot.From(campanha), OrigemRevisaoCampanha.Manual, null, null, null, cancellationToken);
         await repository.SalvarAsync(cancellationToken);
-        return CampanhaMapping.ToResponse(campanha);
+        await creativeQualityOverrideRepository.SalvarAsync(cancellationToken);
+        return new AprovarCampanhaResponse(CampanhaMapping.ToResponse(campanha), gate);
+    }
+
+    public async Task<CreativeQualityGateResponse> ObterCreativeQualityGateAsync(Guid id, CancellationToken cancellationToken)
+    {
+        _ = await ObterCampanhaAsync(id, cancellationToken);
+        return await creativeQualityGateService.EvaluateAsync(id, cancellationToken);
     }
 
     public async Task<IReadOnlyList<CampanhaRevisaoHistoricoResponse>> ListarHistoricoAsync(Guid id, CancellationToken cancellationToken)

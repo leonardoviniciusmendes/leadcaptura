@@ -471,6 +471,7 @@ public sealed class LandingPublicaTests
     {
         public string? IpHash => "ip-hash";
         public string? UserAgent => "Mozilla/5.0 Test";
+        public string? User => "public-test";
     }
 
     private sealed class CampanhaRepo : ICampanhaRepository

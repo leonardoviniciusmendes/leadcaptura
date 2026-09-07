@@ -126,13 +126,14 @@ public sealed class MetaAdsPublishingService(
                 var creativePayload = BuildCreative(preview);
                 await MarkAsync(publicacao, StatusPublicacaoMetaAds.CriandoCreative, "CriandoCreative", cancellationToken);
                 logger.LogInformation(
-                    "Meta creative create step. Edge={MetaEdge} AdAccountId={AdAccountId} CampaignId={CampaignId} AdSetId={AdSetId} PageId={PageId} ImageHash={ImageHash}",
+                    "Meta creative create step. Edge={MetaEdge} AdAccountId={AdAccountId} CampaignId={CampaignId} AdSetId={AdSetId} PageId={PageId} ImageHash={ImageHash} VideoId={VideoId}",
                     "adcreatives",
                     publicacao.AdAccountId,
                     publicacao.CampaignExternalId,
                     publicacao.AdSetExternalId,
                     creativePayload.PageId,
-                    creativePayload.ImageHash);
+                    creativePayload.ImageHash,
+                    creativePayload.VideoId);
                 var created = await graphClient.CreateAdCreativeAsync(config, token, publicacao.AdAccountId, creativePayload, cancellationToken);
                 publicacao.CreativeExternalId = created.Id;
                 await MarkAsync(publicacao, StatusPublicacaoMetaAds.CreativeCriado, "CreativeCriado", cancellationToken);
@@ -364,21 +365,33 @@ public sealed class MetaAdsPublishingService(
 
     private static MetaAdsCreativeCreatePayload BuildCreative(MetaAdsPreviewResponse preview)
     {
-        if (string.IsNullOrWhiteSpace(preview.Creative.PageId) || string.IsNullOrWhiteSpace(preview.Creative.MetaImageHash))
+        if (string.IsNullOrWhiteSpace(preview.Creative.PageId))
         {
-            throw new InvalidOperationException("Creative Meta sem Page ou image_hash.");
+            throw new InvalidOperationException("Creative Meta sem Page.");
+        }
+
+        var isVideo = string.Equals(preview.Creative.MediaType, "Video", StringComparison.OrdinalIgnoreCase);
+        if (isVideo && string.IsNullOrWhiteSpace(preview.Creative.MetaVideoId))
+        {
+            throw new InvalidOperationException("Creative Meta de video sem video_id.");
+        }
+
+        if (!isVideo && string.IsNullOrWhiteSpace(preview.Creative.MetaImageHash))
+        {
+            throw new InvalidOperationException("Creative Meta sem image_hash.");
         }
 
         return new MetaAdsCreativeCreatePayload(
             Name("LeadEngine - " + preview.Campaign.Name + " - Creative"),
             preview.Creative.PageId,
             preview.Creative.InstagramAccountId,
-            preview.Creative.MetaImageHash,
+            isVideo ? null : preview.Creative.MetaImageHash,
             preview.Creative.DestinationUrl,
             preview.Creative.PrimaryText,
             preview.Creative.Headline,
             preview.Creative.Description,
-            "LEARN_MORE");
+            "LEARN_MORE",
+            isVideo ? preview.Creative.MetaVideoId : null);
     }
 
     private static MetaAdsAdCreatePayload BuildAd(MetaAdsPreviewResponse preview, string adSetId, string creativeId)

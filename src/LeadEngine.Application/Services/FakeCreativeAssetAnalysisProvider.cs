@@ -9,12 +9,13 @@ public sealed class FakeCreativeAssetAnalysisProvider : ICreativeAssetAnalysisPr
     public Task<CreativeAssetAnalysisProviderResult> AnalyzeAsync(CreativeAssetAnalysisProviderRequest request, CancellationToken cancellationToken)
     {
         var landscape = request.Width >= request.Height;
+        var mediaLabel = string.Equals(request.MediaType, "Video", StringComparison.OrdinalIgnoreCase) ? "Video" : "Imagem";
         var quality = Math.Clamp((request.Width * request.Height) >= 1_000_000 ? 90 : 76, 0, 100);
         var brandFit = string.IsNullOrWhiteSpace(request.BrandTone) ? 78 : 86;
         var textDensity = 35;
         var payload = new
         {
-            summary = $"Imagem {request.FileName} adequada para revisao criativa antes da publicacao.",
+            summary = $"{mediaLabel} {request.FileName} adequado para revisao criativa antes da publicacao.",
             detectedText = "",
             visualQualityScore = quality,
             campaignFitScore = 84,

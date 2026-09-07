@@ -24,5 +24,13 @@ public sealed class MetaAdsImagemRepository(LeadEngineDbContext context) : IMeta
         return context.MetaAdsImagens.AddAsync(imagem, cancellationToken).AsTask();
     }
 
+    public async Task RemoverPorConteudoAsync(Guid campanhaId, string contentHash, string origemImagem, CancellationToken cancellationToken)
+    {
+        var imagens = await context.MetaAdsImagens
+            .Where(x => x.CampanhaId == campanhaId && x.ContentHash == contentHash && x.OrigemImagem == origemImagem)
+            .ToArrayAsync(cancellationToken);
+        context.MetaAdsImagens.RemoveRange(imagens);
+    }
+
     public Task SalvarAsync(CancellationToken cancellationToken) => context.SaveChangesAsync(cancellationToken);
 }

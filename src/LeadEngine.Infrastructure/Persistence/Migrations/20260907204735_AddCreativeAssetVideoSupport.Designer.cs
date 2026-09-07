@@ -4,6 +4,7 @@ using LeadEngine.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LeadEngine.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(LeadEngineDbContext))]
-    partial class LeadEngineDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260907204735_AddCreativeAssetVideoSupport")]
+    partial class AddCreativeAssetVideoSupport
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1901,69 +1904,6 @@ namespace LeadEngine.Infrastructure.Persistence.Migrations
                     b.ToTable("MetaAdsPublicacoes", (string)null);
                 });
 
-            modelBuilder.Entity("LeadEngine.Domain.Entities.MetaAdsVideo", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("AdAccountId")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<Guid>("CampanhaId")
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("ContentHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<Guid>("CreativeAssetId")
-                        .HasColumnType("char(36)");
-
-                    b.Property<DateTime?>("DataAtualizacao")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime>("DataUpload")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<Guid>("MetaAdsContaId")
-                        .HasColumnType("char(36)");
-
-                    b.Property<string>("MetaVideoId")
-                        .IsRequired()
-                        .HasMaxLength(180)
-                        .HasColumnType("varchar(180)");
-
-                    b.Property<string>("NomeArquivo")
-                        .IsRequired()
-                        .HasMaxLength(180)
-                        .HasColumnType("varchar(180)");
-
-                    b.Property<long?>("TamanhoBytes")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CampanhaId");
-
-                    b.HasIndex("CreativeAssetId");
-
-                    b.HasIndex("MetaAdsContaId");
-
-                    b.HasIndex("AdAccountId", "ContentHash")
-                        .IsUnique();
-
-                    b.ToTable("MetaAdsVideos", (string)null);
-                });
-
             modelBuilder.Entity("LeadEngine.Domain.Entities.OrigemLead", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2487,33 +2427,6 @@ namespace LeadEngine.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Campanha");
-
-                    b.Navigation("MetaAdsConta");
-                });
-
-            modelBuilder.Entity("LeadEngine.Domain.Entities.MetaAdsVideo", b =>
-                {
-                    b.HasOne("LeadEngine.Domain.Entities.Campanha", "Campanha")
-                        .WithMany()
-                        .HasForeignKey("CampanhaId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("LeadEngine.Domain.Entities.CreativeAsset", "CreativeAsset")
-                        .WithMany()
-                        .HasForeignKey("CreativeAssetId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("LeadEngine.Domain.Entities.MetaAdsConta", "MetaAdsConta")
-                        .WithMany()
-                        .HasForeignKey("MetaAdsContaId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Campanha");
-
-                    b.Navigation("CreativeAsset");
 
                     b.Navigation("MetaAdsConta");
                 });

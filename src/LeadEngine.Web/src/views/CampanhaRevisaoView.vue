@@ -14,12 +14,23 @@
         <RouterLink v-if="campanha?.status === 'Revisada' && campanha?.publicada" class="button secondary" :to="`/campanhas/${campanha.id}/metaads-preview`">Preview Meta Ads</RouterLink>
         <button v-if="!campanha?.publicada" class="button secondary" :disabled="busy || !canPublicarLanding" @click="publicar">{{ publishing ? 'Publicando...' : 'Publicar landing' }}</button>
         <button v-else class="button secondary" :disabled="busy || !campanha" @click="despublicar">{{ publishing ? 'Despublicando...' : 'Despublicar' }}</button>
+        <button v-if="creativeGate?.status === 'BLOCKED'" class="button secondary" :disabled="busy || !campanha" @click="aprovarComExcecao">Aprovar com excecao</button>
         <button class="button" :disabled="busy || !campanha" @click="aprovar">{{ approving ? 'Aprovando...' : 'Aprovar campanha' }}</button>
       </div>
     </section>
 
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="saved" class="success">Salvo.</p>
+    <section v-if="creativeGate" class="panel quality-gate-panel" :class="`quality-${creativeGate.status.toLowerCase()}`">
+      <header class="section-heading"><h2>{{ creativeGateTitle }}</h2></header>
+      <p>{{ creativeGateMessage }}</p>
+      <p v-if="creativeGate.score !== undefined">Score IA: {{ creativeGate.score }}/100</p>
+      <p v-if="creativeGate.semanticMismatch">A analise detectou incompatibilidade entre o conteudo da midia e o objetivo desta campanha.</p>
+      <div v-if="creativeGate.status === 'BLOCKED'" class="actions">
+        <button class="button secondary" type="button" @click="scrollToCreativeAssets">Ver analise</button>
+        <button class="button secondary" type="button" @click="scrollToCreativeAssets">Trocar midia</button>
+      </div>
+    </section>
 
     <section v-if="loading" class="panel review-section">Carregando campanha...</section>
     <section v-else-if="campanha" class="review-grid">
@@ -40,16 +51,16 @@
       <section class="panel review-section creative-assets-section">
         <header class="review-section-header">
           <div>
-            <h2>Imagens da campanha</h2>
+            <h2>Midias da campanha</h2>
             <span v-if="creativeAssets.length > 1" class="unsaved">ordenadas por score quando analisadas</span>
           </div>
           <div class="actions">
-            <input ref="creativeFileInput" class="hidden-file" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple @change="uploadCreativeAssets" />
-            <button class="button secondary" :disabled="busy || creativeBusy" @click="creativeFileInput?.click()">Enviar imagens</button>
+            <input ref="creativeFileInput" class="hidden-file" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm" multiple @change="uploadCreativeAssets" />
+            <button class="button secondary" :disabled="busy || creativeBusy" @click="creativeFileInput?.click()">Enviar midia</button>
           </div>
         </header>
         <p v-if="creativeError" class="error">{{ creativeError }}</p>
-        <p v-if="creativeAssets.length === 0" class="muted">Campanha sem imagem.</p>
+        <p v-if="creativeAssets.length === 0" class="muted">Campanha sem midia.</p>
         <div v-else class="creative-grid">
           <article
             v-for="asset in creativeAssets"
@@ -57,16 +68,26 @@
             class="creative-card"
             :class="{ selected: asset.isSelected, comparing: comparingAssets.includes(asset.id) }"
           >
-            <img :src="creativeAssetContentUrl(asset.campaignId, asset.id)" :alt="asset.fileName" />
+            <video
+              v-if="asset.mediaType === 'Video'"
+              :src="creativeAssetUrl(asset)"
+              :poster="creativeAssetPosterUrl(asset)"
+              controls
+              preload="metadata"
+            />
+            <img v-else :src="creativeAssetUrl(asset)" :alt="asset.fileName" />
             <div class="creative-meta">
               <strong>{{ asset.fileName }}</strong>
-              <span>{{ asset.width }}x{{ asset.height }} · {{ fileSize(asset.fileSize) }}</span>
+              <span>{{ mediaTypeLabel(asset) }} · {{ asset.width }}x{{ asset.height }} · {{ fileSize(asset.fileSize) }}<template v-if="asset.durationSeconds"> · {{ duration(asset.durationSeconds) }}</template></span>
             </div>
             <div class="score-row">
               <span>Score</span>
               <strong>{{ asset.rankingScore ?? '-' }}</strong>
             </div>
-            <p v-if="asset.latestAnalysis?.semanticMismatch" class="semantic-alert">Esta imagem parece nao corresponder ao conteudo desta campanha.</p>
+            <p v-if="isAssetAnalyzing(asset.id)" class="muted">{{ analyzingMessage(asset) }}</p>
+            <p v-if="failedAnalysisAssetIds.includes(asset.id)" class="error">A ultima tentativa de analise falhou.</p>
+            <p v-if="analysisError(asset.id)" class="error">Motivo: {{ analysisError(asset.id) }}</p>
+            <p v-if="asset.latestAnalysis?.semanticMismatch" class="semantic-alert">Esta midia parece nao corresponder ao conteudo desta campanha.</p>
             <dl v-if="asset.latestAnalysis" class="compact-list creative-scores">
               <dt>Visual</dt><dd>{{ asset.latestAnalysis.visualQualityScore }}</dd>
               <dt>Campanha</dt><dd>{{ asset.latestAnalysis.campaignFitScore }}</dd>
@@ -83,9 +104,10 @@
               <li v-for="risk in asset.latestAnalysis.risks" :key="risk">{{ risk }}</li>
             </ul>
             <div class="actions">
-              <button class="button secondary" :disabled="busy || creativeBusy" @click="analyzeAsset(asset.id)">Analisar IA</button>
-              <button class="button secondary" :disabled="busy || creativeBusy" @click="toggleCompare(asset.id)">{{ comparingAssets.includes(asset.id) ? 'Remover comparacao' : 'Comparar' }}</button>
-              <button class="button" :disabled="busy || creativeBusy || asset.isSelected" @click="selectAsset(asset.id)">{{ asset.isSelected ? 'Principal' : 'Selecionar principal' }}</button>
+              <button class="button secondary" :disabled="busy || creativeBusy || isAssetAnalyzing(asset.id)" @click="analyzeAsset(asset)">{{ isAssetAnalyzing(asset.id) ? analyzingMessage(asset) : 'Analisar IA' }}</button>
+              <button class="button secondary" :disabled="busy || creativeBusy || isAssetAnalyzing(asset.id)" @click="toggleCompare(asset.id)">{{ comparingAssets.includes(asset.id) ? 'Remover comparacao' : 'Comparar' }}</button>
+              <button class="mini-button danger" :disabled="busy || creativeBusy || isAssetAnalyzing(asset.id) || deletingAssetId === asset.id" @click="removeCreativeAsset(asset)">{{ deletingAssetId === asset.id ? 'Removendo...' : 'Remover' }}</button>
+              <button class="button" :disabled="busy || creativeBusy || isAssetAnalyzing(asset.id) || asset.isSelected" @click="selectAsset(asset.id)">{{ asset.isSelected ? 'Principal' : 'Selecionar principal' }}</button>
             </div>
           </article>
         </div>
@@ -209,19 +231,21 @@ import { confirmAction, showToast } from '../components/uiEvents';
 import {
   aprovarCampanha,
   analisarCreativeAsset,
-  creativeAssetContentUrl,
   despublicarCampanha,
   enviarCreativeAssets,
   listarCreativeAssets,
   listarHistoricoRevisoes,
+  obterCreativeQualityGate,
   obterRevisaoCampanha,
   publicarCampanha,
   regenerarCampanhaSecao,
+  removerCreativeAsset as removerCreativeAssetApi,
   revisarCampanha,
   selecionarCreativeAsset,
   type Campanha,
   type CampanhaSecao,
   type CreativeAsset,
+  type CreativeQualityGate,
   type HistoricoRevisao,
   type RevisarCampanhaRequest
 } from '../services/api';
@@ -247,6 +271,11 @@ const creativeBusy = ref(false);
 const creativeError = ref('');
 const creativeFileInput = ref<HTMLInputElement | null>(null);
 const comparingAssets = ref<string[]>([]);
+const creativeGate = ref<CreativeQualityGate | null>(null);
+const deletingAssetId = ref<string | null>(null);
+const analyzingAssetIds = ref<string[]>([]);
+const failedAnalysisAssetIds = ref<string[]>([]);
+const analysisErrorsByAssetId = ref<Record<string, string>>({});
 
 const form = reactive<RevisarCampanhaRequest>({
   nome: '',
@@ -296,6 +325,23 @@ const publicUrl = computed(() => {
   const base = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/+$/, '');
   return `${base}/lp/${campanha.value.slug}`;
 });
+const creativeGateTitle = computed(() => {
+  if (!creativeGate.value) return '';
+  if (creativeGate.value.status === 'BLOCKED') return 'Midia incompativel com a campanha';
+  if (creativeGate.value.status === 'WARNING') return 'Atencao: criativo com qualidade intermediaria.';
+  if (creativeGate.value.status === 'APPROVED') return 'Criativo aprovado pela analise de qualidade.';
+  if (creativeGate.value.status === 'NOT_ANALYZED') return 'Esta midia ainda nao foi analisada.';
+  return 'Criativo da campanha';
+});
+const creativeGateMessage = computed(() => {
+  if (!creativeGate.value) return '';
+  if (creativeGate.value.status === 'BLOCKED') return 'A midia principal possui baixa aderencia a campanha.';
+  if (creativeGate.value.status === 'WARNING') return creativeGate.value.reasons[0] || 'Revise a midia principal antes de aprovar.';
+  if (creativeGate.value.status === 'APPROVED') return creativeGate.value.reasons[0] || 'Criativo aprovado.';
+  if (creativeGate.value.status === 'NOT_ANALYZED') return 'Execute a analise existente antes de decidir sobre o criativo.';
+  if (creativeGate.value.status === 'NO_CREATIVE') return 'Nenhuma midia principal selecionada.';
+  return creativeGate.value.reasons.join(' ');
+});
 
 const ReviewBlock = defineComponent({
   props: {
@@ -332,6 +378,7 @@ async function load() {
     campanha.value = await obterRevisaoCampanha(String(route.params.id));
     hydrate(campanha.value);
     await loadCreativeAssets();
+    await loadCreativeGate();
   } catch {
     error.value = 'Nao foi possivel carregar a campanha.';
   } finally {
@@ -339,13 +386,25 @@ async function load() {
   }
 }
 
-async function loadCreativeAssets() {
+async function loadCreativeAssets(showError = true) {
   if (!campanha.value) return;
   creativeError.value = '';
   try {
     creativeAssets.value = await listarCreativeAssets(campanha.value.id);
+    pruneAnalysisState();
   } catch (err: unknown) {
-    creativeError.value = message(err, 'Nao foi possivel carregar as imagens.');
+    if (showError) {
+      creativeError.value = message(err, 'Nao foi possivel carregar as midias.');
+    }
+  }
+}
+
+async function loadCreativeGate() {
+  if (!campanha.value) return;
+  try {
+    creativeGate.value = await obterCreativeQualityGate(campanha.value.id);
+  } catch {
+    creativeGate.value = null;
   }
 }
 
@@ -359,29 +418,34 @@ async function uploadCreativeAssets(event: Event) {
   creativeError.value = '';
   try {
     const result = await enviarCreativeAssets(campanha.value.id, files);
-    showToast({ type: 'success', title: 'Imagens enviadas', message: result.mensagem });
+    showToast({ type: 'success', title: 'Midias enviadas', message: result.mensagem });
     await loadCreativeAssets();
+    await loadCreativeGate();
   } catch (err: unknown) {
-    creativeError.value = message(err, 'Nao foi possivel enviar as imagens.');
+    creativeError.value = message(err, 'Nao foi possivel enviar as midias.');
     showToast({ type: 'error', title: 'Erro no upload', message: creativeError.value });
   } finally {
     creativeBusy.value = false;
   }
 }
 
-async function analyzeAsset(assetId: string) {
+async function analyzeAsset(asset: CreativeAsset) {
   if (!campanha.value) return;
-  creativeBusy.value = true;
-  creativeError.value = '';
+  markAnalysisStarted(asset.id);
   try {
-    await analisarCreativeAsset(campanha.value.id, assetId);
-    await loadCreativeAssets();
+    const analysis = await analisarCreativeAsset(campanha.value.id, asset.id);
+    updateAssetAnalysis(asset.id, analysis);
+    markAnalysisSucceeded(asset.id);
+    await loadCreativeAssets(false);
+    await loadCreativeGate();
+    markAnalysisSucceeded(asset.id);
     showToast({ type: 'success', title: 'Analise concluida', message: 'Revise a recomendacao antes de publicar.' });
   } catch (err: unknown) {
-    creativeError.value = message(err, 'Nao foi possivel analisar a imagem.');
-    showToast({ type: 'error', title: 'Erro na analise', message: creativeError.value });
+    const analysisMessage = message(err, 'Nao foi possivel analisar a midia.');
+    markAnalysisFailed(asset.id, analysisMessage);
+    showToast({ type: 'error', title: 'Erro na analise', message: analysisMessage });
   } finally {
-    creativeBusy.value = false;
+    analyzingAssetIds.value = analyzingAssetIds.value.filter((id) => id !== asset.id);
   }
 }
 
@@ -392,10 +456,42 @@ async function selectAsset(assetId: string) {
   try {
     await selecionarCreativeAsset(campanha.value.id, assetId);
     await loadCreativeAssets();
-    showToast({ type: 'success', title: 'Imagem principal selecionada' });
+    await loadCreativeGate();
+    showToast({ type: 'success', title: 'Midia principal selecionada' });
   } catch (err: unknown) {
-    creativeError.value = message(err, 'Nao foi possivel selecionar a imagem.');
+    creativeError.value = message(err, 'Nao foi possivel selecionar a midia.');
   } finally {
+    creativeBusy.value = false;
+  }
+}
+
+async function removeCreativeAsset(asset: CreativeAsset) {
+  if (!campanha.value || deletingAssetId.value) return;
+  const confirmed = await confirmAction({
+    title: 'Remover midia',
+    message: asset.isSelected
+      ? 'Esta e a midia principal. Ao remove-la, a campanha ficara sem midia principal.'
+      : 'Remover esta midia da campanha?',
+    confirmLabel: 'Remover'
+  });
+  if (!confirmed) return;
+
+  deletingAssetId.value = asset.id;
+  creativeBusy.value = true;
+  creativeError.value = '';
+  try {
+    await removerCreativeAssetApi(campanha.value.id, asset.id);
+    comparingAssets.value = comparingAssets.value.filter((id) => id !== asset.id);
+    failedAnalysisAssetIds.value = failedAnalysisAssetIds.value.filter((id) => id !== asset.id);
+    removeAnalysisError(asset.id);
+    await loadCreativeAssets();
+    await loadCreativeGate();
+    showToast({ type: 'info', title: 'Midia removida' });
+  } catch (err: unknown) {
+    creativeError.value = message(err, 'Nao foi possivel remover a midia.');
+    showToast({ type: 'error', title: 'Erro ao remover', message: creativeError.value });
+  } finally {
+    deletingAssetId.value = null;
     creativeBusy.value = false;
   }
 }
@@ -459,6 +555,12 @@ async function regenerate() {
 
 async function aprovar() {
   if (!campanha.value) return;
+  if (creativeGate.value?.status === 'BLOCKED') {
+    error.value = 'A midia principal nao passou no quality gate criativo.';
+    showToast({ type: 'error', title: 'Quality gate criativo', message: error.value });
+    return;
+  }
+
   if (dirty.value) {
     const confirmed = await confirmAction({
       title: 'Aprovar campanha',
@@ -470,16 +572,48 @@ async function aprovar() {
   approving.value = true;
   error.value = '';
   try {
-    campanha.value = await aprovarCampanha(campanha.value.id);
+    const result = await aprovarCampanha(campanha.value.id);
+    campanha.value = result.campanha;
+    creativeGate.value = result.creativeQualityGate;
     hydrate(campanha.value);
     saved.value = true;
-    showToast({ type: 'success', title: 'Campanha aprovada', message: 'Status alterado para Revisada.' });
+    showToast({ type: result.creativeQualityGate.status === 'WARNING' ? 'info' : 'success', title: 'Campanha aprovada', message: result.creativeQualityGate.reasons[0] || 'Status alterado para Revisada.' });
   } catch (err: unknown) {
     error.value = message(err, 'Nao foi possivel aprovar a campanha.');
     showToast({ type: 'error', title: 'Erro ao aprovar', message: error.value });
   } finally {
     approving.value = false;
   }
+}
+
+async function aprovarComExcecao() {
+  if (!campanha.value || creativeGate.value?.status !== 'BLOCKED') return;
+  const reason = window.prompt('Motivo da excecao');
+  if (!reason?.trim()) {
+    error.value = 'Motivo da excecao de qualidade criativa e obrigatorio.';
+    showToast({ type: 'error', title: 'Excecao obrigatoria', message: error.value });
+    return;
+  }
+
+  approving.value = true;
+  error.value = '';
+  try {
+    const result = await aprovarCampanha(campanha.value.id, { overrideCreativeQuality: true, overrideReason: reason.trim() });
+    campanha.value = result.campanha;
+    creativeGate.value = result.creativeQualityGate;
+    hydrate(campanha.value);
+    saved.value = true;
+    showToast({ type: 'success', title: 'Campanha aprovada com excecao', message: 'Override criativo registrado em auditoria.' });
+  } catch (err: unknown) {
+    error.value = message(err, 'Nao foi possivel aprovar com excecao.');
+    showToast({ type: 'error', title: 'Erro ao aprovar', message: error.value });
+  } finally {
+    approving.value = false;
+  }
+}
+
+function scrollToCreativeAssets() {
+  document.querySelector('.creative-assets-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function publicar() {
@@ -589,8 +723,82 @@ function fileSize(value: number) {
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function duration(value: number) {
+  const total = Math.round(value);
+  const minutes = Math.floor(total / 60);
+  const seconds = String(total % 60).padStart(2, '0');
+  return `${minutes}:${seconds}`;
+}
+
+function mediaTypeLabel(asset: CreativeAsset) {
+  return asset.mediaType === 'Video' ? 'Video' : 'Imagem';
+}
+
+function analyzingMessage(asset: CreativeAsset) {
+  return asset.mediaType === 'Video' ? 'Analisando video...' : 'Analisando imagem...';
+}
+
+function isAssetAnalyzing(assetId: string) {
+  return analyzingAssetIds.value.includes(assetId);
+}
+
+function analysisError(assetId: string) {
+  return analysisErrorsByAssetId.value[assetId] || '';
+}
+
+function markAnalysisStarted(assetId: string) {
+  analyzingAssetIds.value = [...new Set([...analyzingAssetIds.value, assetId])];
+  failedAnalysisAssetIds.value = failedAnalysisAssetIds.value.filter((id) => id !== assetId);
+  removeAnalysisError(assetId);
+}
+
+function markAnalysisSucceeded(assetId: string) {
+  failedAnalysisAssetIds.value = failedAnalysisAssetIds.value.filter((id) => id !== assetId);
+  removeAnalysisError(assetId);
+}
+
+function markAnalysisFailed(assetId: string, errorMessage: string) {
+  failedAnalysisAssetIds.value = [...new Set([...failedAnalysisAssetIds.value, assetId])];
+  analysisErrorsByAssetId.value = {
+    ...analysisErrorsByAssetId.value,
+    [assetId]: errorMessage
+  };
+}
+
+function removeAnalysisError(assetId: string) {
+  if (!analysisErrorsByAssetId.value[assetId]) return;
+  const { [assetId]: _, ...remaining } = analysisErrorsByAssetId.value;
+  analysisErrorsByAssetId.value = remaining;
+}
+
+function pruneAnalysisState() {
+  const ids = new Set(creativeAssets.value.map((asset) => asset.id));
+  failedAnalysisAssetIds.value = failedAnalysisAssetIds.value.filter((id) => ids.has(id));
+  analysisErrorsByAssetId.value = Object.fromEntries(Object.entries(analysisErrorsByAssetId.value).filter(([id]) => ids.has(id)));
+  analyzingAssetIds.value = analyzingAssetIds.value.filter((id) => ids.has(id));
+}
+
+function updateAssetAnalysis(assetId: string, analysis: CreativeAsset['latestAnalysis']) {
+  creativeAssets.value = creativeAssets.value.map((asset) => asset.id === assetId
+    ? { ...asset, latestAnalysis: analysis, rankingScore: analysis?.rankingScore }
+    : asset);
+}
+
+function creativeAssetUrl(asset: CreativeAsset) {
+  return asset.contentUrl || `/api/campanhas/${asset.campaignId}/creative-assets/${asset.id}/content`;
+}
+
+function creativeAssetPosterUrl(asset: CreativeAsset) {
+  return asset.thumbnailUrl || undefined;
+}
+
 function message(err: unknown, fallback: string) {
-  const response = err as { response?: { data?: { mensagem?: string } } };
-  return response.response?.data?.mensagem || fallback;
+  const response = err as { response?: { data?: { mensagem?: string; message?: string; title?: string } | string } };
+  const data = response.response?.data;
+  if (typeof data === 'string' && data.trim()) return data;
+  if (typeof data === 'object' && data !== null) {
+    return data.mensagem || data.message || data.title || fallback;
+  }
+  return fallback;
 }
 </script>

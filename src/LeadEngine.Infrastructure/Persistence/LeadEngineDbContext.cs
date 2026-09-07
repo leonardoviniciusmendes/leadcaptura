@@ -13,6 +13,7 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
     public DbSet<CampanhaRevisao> CampanhasRevisoes => Set<CampanhaRevisao>();
     public DbSet<CreativeAsset> CreativeAssets => Set<CreativeAsset>();
     public DbSet<CreativeAssetAnalysis> CreativeAssetAnalyses => Set<CreativeAssetAnalysis>();
+    public DbSet<CreativeQualityOverride> CreativeQualityOverrides => Set<CreativeQualityOverride>();
     public DbSet<ConfiguracaoSistema> ConfiguracoesSistema => Set<ConfiguracaoSistema>();
     public DbSet<ConfiguracaoSistemaHistorico> ConfiguracoesSistemaHistorico => Set<ConfiguracaoSistemaHistorico>();
     public DbSet<GoogleAdsConta> GoogleAdsContas => Set<GoogleAdsConta>();
@@ -29,6 +30,7 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
     public DbSet<MetaAdsOAuthState> MetaAdsOAuthStates => Set<MetaAdsOAuthState>();
     public DbSet<MetaAdsAtivoSelecionado> MetaAdsAtivosSelecionados => Set<MetaAdsAtivoSelecionado>();
     public DbSet<MetaAdsImagem> MetaAdsImagens => Set<MetaAdsImagem>();
+    public DbSet<MetaAdsVideo> MetaAdsVideos => Set<MetaAdsVideo>();
     public DbSet<MetaAdsPreparacaoPublicacao> MetaAdsPreparacoesPublicacao => Set<MetaAdsPreparacaoPublicacao>();
     public DbSet<MetaAdsPublicacao> MetaAdsPublicacoes => Set<MetaAdsPublicacao>();
     public DbSet<Lead> Leads => Set<Lead>();
@@ -129,12 +131,15 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
         {
             entity.ToTable("CreativeAssets");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.MediaType).HasConversion<int>();
             entity.Property(x => x.FileName).HasMaxLength(180).IsRequired();
             entity.Property(x => x.StoragePath).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.ThumbnailPath).HasMaxLength(500);
             entity.Property(x => x.MimeType).HasMaxLength(80).IsRequired();
             entity.HasIndex(x => x.CampaignId);
             entity.HasIndex(x => new { x.CampaignId, x.IsSelected });
             entity.HasIndex(x => x.CreatedAt);
+            entity.HasIndex(x => x.IsDeleted);
             entity.HasOne(x => x.Campaign)
                 .WithMany(x => x.CreativeAssets)
                 .HasForeignKey(x => x.CampaignId)
@@ -161,6 +166,30 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
                 .WithMany(x => x.Analyses)
                 .HasForeignKey(x => x.CreativeAssetId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CreativeQualityOverride>(entity =>
+        {
+            entity.ToTable("CreativeQualityOverrides");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.User).HasMaxLength(180).IsRequired();
+            entity.HasIndex(x => x.CampaignId);
+            entity.HasIndex(x => x.CreativeAssetId);
+            entity.HasIndex(x => x.CreativeAssetAnalysisId);
+            entity.HasIndex(x => x.CreatedAt);
+            entity.HasOne(x => x.Campaign)
+                .WithMany()
+                .HasForeignKey(x => x.CampaignId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.CreativeAsset)
+                .WithMany()
+                .HasForeignKey(x => x.CreativeAssetId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.CreativeAssetAnalysis)
+                .WithMany()
+                .HasForeignKey(x => x.CreativeAssetAnalysisId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<ConfiguracaoSistema>(entity =>
@@ -437,6 +466,32 @@ public sealed class LeadEngineDbContext(DbContextOptions<LeadEngineDbContext> op
             entity.HasOne(x => x.MetaAdsConta)
                 .WithMany()
                 .HasForeignKey(x => x.MetaAdsContaId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<MetaAdsVideo>(entity =>
+        {
+            entity.ToTable("MetaAdsVideos");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.AdAccountId).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.NomeArquivo).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.ContentType).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.ContentHash).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.MetaVideoId).HasMaxLength(180).IsRequired();
+            entity.HasIndex(x => new { x.AdAccountId, x.ContentHash }).IsUnique();
+            entity.HasIndex(x => x.CampanhaId);
+            entity.HasIndex(x => x.CreativeAssetId);
+            entity.HasOne(x => x.Campanha)
+                .WithMany()
+                .HasForeignKey(x => x.CampanhaId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.MetaAdsConta)
+                .WithMany()
+                .HasForeignKey(x => x.MetaAdsContaId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.CreativeAsset)
+                .WithMany()
+                .HasForeignKey(x => x.CreativeAssetId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

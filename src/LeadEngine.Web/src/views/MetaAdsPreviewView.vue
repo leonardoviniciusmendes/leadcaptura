@@ -92,14 +92,19 @@
         </article>
 
         <article class="panel">
-          <header class="section-heading"><h2>Imagem Meta</h2></header>
+          <header class="section-heading"><h2>Mídia Meta</h2></header>
           <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" :disabled="busy" @change="uploadImagem" />
           <p v-if="uploadMessage" class="subtitle">{{ uploadMessage }}</p>
           <dl class="compact-list">
-            <dt>Arquivo</dt><dd>{{ preview.creative.mediaReference || '-' }}</dd>
-            <dt>Upload</dt><dd>{{ preview.creative.mediaUploaded ? 'Enviado' : 'Pendente' }}</dd>
-            <dt>image_hash</dt><dd>{{ preview.creative.metaImageHash || '-' }}</dd>
+            <dt>Arquivo</dt><dd>{{ preview.creative.fileName || preview.creative.mediaReference || '-' }}</dd>
+            <dt>Origem</dt><dd>{{ mediaSourceLabel(preview.creative.mediaSource) }}</dd>
+            <dt>Tipo</dt><dd>{{ mediaTypeLabel(preview.creative.mediaType) }}</dd>
+            <dt>Score IA</dt><dd>{{ preview.creative.analysisScore ?? '-' }}</dd>
+            <dt>Quality Gate</dt><dd>{{ preview.creative.qualityGateStatus || '-' }}</dd>
+            <dt>Upload</dt><dd>{{ mediaUploadLabel(preview.creative) }}</dd>
+            <dt>{{ isVideoCreative ? 'Meta Video ID' : 'image_hash' }}</dt><dd>{{ isVideoCreative ? (preview.creative.metaVideoId || '-') : (preview.creative.metaImageHash || '-') }}</dd>
           </dl>
+          <p v-if="preview.creative.semanticMismatch" class="error">Mídia possivelmente incompatível com a campanha</p>
         </article>
       </section>
 
@@ -143,7 +148,7 @@
           <p><strong>{{ preview.creative.headline }}</strong></p>
           <p>{{ preview.creative.primaryText }}</p>
           <p class="subtitle">{{ preview.creative.description }}</p>
-          <p v-if="!preview.creative.imageUrl" class="error">Imagem/midia ainda nao configurada para Meta Ads.</p>
+          <p v-if="!preview.creative.metaImageHash && !preview.creative.metaVideoId" class="error">Imagem/midia ainda nao configurada para Meta Ads.</p>
         </article>
       </section>
 
@@ -164,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import EmptyState from '../components/EmptyState.vue';
 import MetricCard from '../components/MetricCard.vue';
@@ -198,6 +203,7 @@ const locations = ref<MetaAdsLocation[]>([]);
 const selectedLocationKey = ref<string | undefined>(undefined);
 const uploadMessage = ref('');
 let publicationPoll: number | undefined;
+const isVideoCreative = computed(() => preview.value?.creative.mediaType === 'Video');
 
 onMounted(async () => {
   await gerar();
@@ -374,6 +380,25 @@ function preflightClass(status: string) {
   if (status === 'OK') return 'status-revisada';
   if (status === 'ERROR') return 'status-erro';
   return 'status-gerada';
+}
+
+function mediaSourceLabel(source?: string) {
+  if (source === 'CreativeAsset') return 'Creative Asset da campanha';
+  if (source === 'MetaAdsImagem') return 'Imagem Meta Ads';
+  return '-';
+}
+
+function mediaTypeLabel(type?: string) {
+  return type === 'Video' ? 'Vídeo principal' : 'Imagem principal';
+}
+
+function mediaUploadLabel(creative: MetaAdsPreview['creative']) {
+  if (creative.mediaType === 'Video') {
+    if (creative.metaVideoId) return creative.videoIdReused ? 'Reutilizado' : 'Enviado';
+    return creative.videoUploadRequired ? 'Pronto para envio' : 'Pendente';
+  }
+
+  return creative.mediaUploaded ? 'Enviado' : 'Pendente';
 }
 
 function message(err: unknown, fallback: string) {

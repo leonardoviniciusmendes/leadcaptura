@@ -532,6 +532,22 @@ dd {
   padding: 16px;
 }
 
+.quality-gate-panel {
+  border-left: 4px solid #d1d5db;
+}
+
+.quality-blocked {
+  border-left-color: #dc2626;
+}
+
+.quality-warning {
+  border-left-color: #d97706;
+}
+
+.quality-approved {
+  border-left-color: #16a34a;
+}
+
 .review-section-header {
   display: flex;
   align-items: start;
@@ -567,6 +583,11 @@ dd {
   padding: 6px 9px;
   font-weight: 800;
   cursor: pointer;
+}
+
+.mini-button.danger {
+  border-color: #fecaca;
+  color: #b91c1c;
 }
 
 .narrow { width: fit-content; }
@@ -617,7 +638,8 @@ dd {
   border-color: #2563eb;
 }
 
-.creative-card img {
+.creative-card img,
+.creative-card video {
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;

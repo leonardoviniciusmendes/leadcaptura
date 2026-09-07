@@ -294,7 +294,7 @@ public sealed class CampanhaServiceTests
     public async Task CampanhaInexistente_Falha()
     {
         var review = ReviewService(new InMemoryCampanhaRepository());
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => review.AprovarCampanhaAsync(Guid.NewGuid(), CancellationToken.None));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => review.AprovarCampanhaAsync(Guid.NewGuid(), new AprovarCampanhaRequest(), CancellationToken.None));
     }
 
     [Fact]
@@ -318,7 +318,7 @@ public sealed class CampanhaServiceTests
         var criada = await Service(repository).GerarCampanhaAsync(BriefingPadrao(), CancellationToken.None);
         var review = ReviewService(repository);
 
-        var aprovada = await review.AprovarCampanhaAsync(criada.Id, CancellationToken.None);
+        var aprovada = (await review.AprovarCampanhaAsync(criada.Id, new AprovarCampanhaRequest(), CancellationToken.None)).Campanha;
 
         Assert.Equal(StatusCampanha.Revisada, aprovada.Status);
         Assert.Equal("Aprovacao", Assert.Single(repository.Revisoes).TipoAlteracao);
@@ -331,7 +331,7 @@ public sealed class CampanhaServiceTests
         var criada = await Service(repository).GerarCampanhaAsync(BriefingPadrao(), CancellationToken.None);
         repository.Campanhas[0].TitulosAnunciosJson = System.Text.Json.JsonSerializer.Serialize(TitulosValidos("x").Take(7).ToArray());
 
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() => ReviewService(repository).AprovarCampanhaAsync(criada.Id, CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => ReviewService(repository).AprovarCampanhaAsync(criada.Id, new AprovarCampanhaRequest(), CancellationToken.None));
         Assert.Contains("Titulos deve conter entre 8 e 12 itens", ex.Message);
     }
 
@@ -342,7 +342,7 @@ public sealed class CampanhaServiceTests
         var criada = await Service(repository).GerarCampanhaAsync(BriefingPadrao(), CancellationToken.None);
         repository.Campanhas[0].DescricoesAnunciosJson = System.Text.Json.JsonSerializer.Serialize(new[] { "uma", "duas" });
 
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() => ReviewService(repository).AprovarCampanhaAsync(criada.Id, CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => ReviewService(repository).AprovarCampanhaAsync(criada.Id, new AprovarCampanhaRequest(), CancellationToken.None));
         Assert.Contains("Descricoes deve conter entre 3 e 4 itens", ex.Message);
     }
 
@@ -374,7 +374,7 @@ public sealed class CampanhaServiceTests
         var repository = new InMemoryCampanhaRepository();
         var criada = await Service(repository).GerarCampanhaAsync(BriefingPadrao(), CancellationToken.None);
         var review = ReviewService(repository);
-        await review.AprovarCampanhaAsync(criada.Id, CancellationToken.None);
+        await review.AprovarCampanhaAsync(criada.Id, new AprovarCampanhaRequest(), CancellationToken.None);
 
         var editada = await review.RevisarCampanhaAsync(criada.Id, RequestValido(criada) with { Nome = "Reaberta" }, CancellationToken.None);
 
@@ -387,7 +387,7 @@ public sealed class CampanhaServiceTests
         var repository = new InMemoryCampanhaRepository();
         var criada = await Service(repository).GerarCampanhaAsync(BriefingPadrao(), CancellationToken.None);
         var review = ReviewService(repository);
-        await review.AprovarCampanhaAsync(criada.Id, CancellationToken.None);
+        await review.AprovarCampanhaAsync(criada.Id, new AprovarCampanhaRequest(), CancellationToken.None);
 
         var historico = await review.ListarHistoricoAsync(criada.Id, CancellationToken.None);
 
@@ -426,7 +426,13 @@ public sealed class CampanhaServiceTests
 
     private static CampaignReviewService ReviewService(InMemoryCampanhaRepository repository, ICampaignSectionGenerationService? generation = null)
     {
-        return new CampaignReviewService(repository, generation ?? new StubSectionGenerationService(CampanhaSecao.Nome, "Nome IA"));
+        var assets = new InMemoryCreativeAssetRepository();
+        return new CampaignReviewService(
+            repository,
+            generation ?? new StubSectionGenerationService(CampanhaSecao.Nome, "Nome IA"),
+            new CreativeQualityGateService(assets),
+            new InMemoryCreativeQualityOverrideRepository(),
+            new RequestContext());
     }
 
     private static RevisarCampanhaRequest RequestValido(CampanhaResponse campanha)
@@ -527,6 +533,29 @@ public sealed class CampanhaServiceTests
         {
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class InMemoryCreativeAssetRepository : ICreativeAssetRepository
+    {
+        public Task<CreativeAsset?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<CreativeAsset?>(null);
+        public Task<IReadOnlyList<CreativeAsset>> ListarPorCampanhaAsync(Guid campaignId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<CreativeAsset>>([]);
+        public Task AdicionarAsync(CreativeAsset asset, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task AdicionarAnaliseAsync(CreativeAssetAnalysis analysis, CancellationToken cancellationToken) => Task.CompletedTask;
+        public void Remover(CreativeAsset asset) { }
+        public Task SalvarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class InMemoryCreativeQualityOverrideRepository : ICreativeQualityOverrideRepository
+    {
+        public Task AdicionarAsync(CreativeQualityOverride item, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task SalvarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class RequestContext : IRequestContext
+    {
+        public string? IpHash => "ip";
+        public string? UserAgent => "test";
+        public string? User => "tester";
     }
 
     private sealed class InMemorySegmentRepository(IReadOnlyList<Segment> segments) : ISegmentRepository

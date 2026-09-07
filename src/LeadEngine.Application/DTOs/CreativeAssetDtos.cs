@@ -1,6 +1,12 @@
 namespace LeadEngine.Application.DTOs;
 
-public sealed record CreativeAssetUploadItem(string FileName, string ContentType, byte[] Content);
+public sealed record CreativeAssetUploadItem(string FileName, string ContentType, Stream Content, long Length)
+{
+    public CreativeAssetUploadItem(string fileName, string contentType, byte[] content)
+        : this(fileName, contentType, new MemoryStream(content), content.LongLength)
+    {
+    }
+}
 
 public sealed record CreativeAssetUploadResponse(
     IReadOnlyList<CreativeAssetResponse> Assets,
@@ -9,12 +15,16 @@ public sealed record CreativeAssetUploadResponse(
 public sealed record CreativeAssetResponse(
     Guid Id,
     Guid CampaignId,
+    string MediaType,
     string FileName,
     string StoragePath,
     string MimeType,
     int Width,
     int Height,
+    double? DurationSeconds,
     long FileSize,
+    string ContentUrl,
+    string? ThumbnailUrl,
     bool IsSelected,
     DateTime CreatedAt,
     CreativeAssetAnalysisResponse? LatestAnalysis,
@@ -47,6 +57,7 @@ public sealed record CreativeAssetSuggestedCopy(
     string? Cta);
 
 public sealed record CreativeAssetAnalysisProviderRequest(
+    Guid AssetId,
     string? Segment,
     string? BusinessDescription,
     string? ProductOrService,
@@ -57,9 +68,18 @@ public sealed record CreativeAssetAnalysisProviderRequest(
     string? BrandTone,
     IReadOnlyList<string> Restrictions,
     string FileName,
+    string MediaType,
     string MimeType,
     int Width,
     int Height,
+    double? DurationSeconds,
+    byte[]? Content,
+    IReadOnlyList<CreativeAssetAnalysisFrame> Frames);
+
+public sealed record CreativeAssetAnalysisFrame(
+    string Label,
+    double OffsetSeconds,
+    string MimeType,
     byte[] Content);
 
 public sealed record CreativeAssetAnalysisProviderResult(

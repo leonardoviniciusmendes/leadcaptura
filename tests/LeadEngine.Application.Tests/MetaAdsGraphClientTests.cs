@@ -430,6 +430,52 @@ public sealed class MetaAdsGraphClientTests
     }
 
     [Fact]
+    public async Task UploadAdVideoAsync_UsaAdvideosERetornaVideoId()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonResponse("""{ "id": "video_123" }"""));
+        var client = Client(handler);
+
+        var result = await client.UploadAdVideoAsync(Config(), "token-secreto", "1668410610924666", "video.mp4", "video/mp4", [1, 2, 3], CancellationToken.None);
+
+        Assert.Equal("video_123", result);
+        Assert.Equal(HttpMethod.Post, handler.LastMethod);
+        Assert.Contains("/v23.0/act_1668410610924666/advideos", handler.LastRequestUri);
+        Assert.DoesNotContain("access_token", handler.LastRequestUri);
+    }
+
+    [Fact]
+    public async Task CreateAdCreativeAsync_VideoUsaVideoDataSemImageHash()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonResponse("""{ "id": "creative_1" }"""));
+        var client = Client(handler);
+
+        await client.CreateAdCreativeAsync(
+            Config(),
+            "token-secreto",
+            "act_1668410610924666",
+            new MetaAdsCreativeCreatePayload(
+                "LeadEngine - Creative",
+                "page_1",
+                null,
+                null,
+                "https://example.com/landing",
+                "Texto principal",
+                "Titulo",
+                "Descricao",
+                "LEARN_MORE",
+                "video_123"),
+            CancellationToken.None);
+
+        var body = Decode(handler.LastRequestBody);
+        Assert.Contains("\"video_data\":{\"video_id\":\"video_123\"", body);
+        Assert.Contains("\"message\":\"Texto principal\"", body);
+        Assert.Contains("\"title\":\"Titulo\"", body);
+        Assert.Contains("\"call_to_action\":{\"type\":\"LEARN_MORE\",\"value\":{\"link\":\"https://example.com/landing\"}}", body);
+        Assert.DoesNotContain("image_hash", body);
+        Assert.DoesNotContain("link_data", body);
+    }
+
+    [Fact]
     public async Task CreateAdCreativeAsync_RegistraPayloadSanitizadoSemToken()
     {
         var handler = new StubHttpMessageHandler(_ => JsonResponse("""{ "id": "creative_1" }"""));
@@ -997,6 +1043,7 @@ public sealed class MetaAdsGraphClientTests
         public Task<MetaAdsPermissionStatusResponse> GetPermissionsAsync(MetaAdsConfiguration config, string accessToken, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<MetaAdsLocationResponse>> SearchTargetingLocationsAsync(MetaAdsConfiguration config, string accessToken, string query, string countryCode, int limit, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<string> UploadAdImageAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, string fileName, string contentType, byte[] content, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<string> UploadAdVideoAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, string fileName, string contentType, byte[] content, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<bool> ResourceExistsAsync(MetaAdsConfiguration config, string accessToken, string resourceId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<MetaAdsCreateResult> CreateCampaignAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsCampaignCreatePayload payload, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task DeleteCampaignAsync(MetaAdsConfiguration config, string accessToken, string campaignId, CancellationToken cancellationToken) => throw new NotSupportedException();

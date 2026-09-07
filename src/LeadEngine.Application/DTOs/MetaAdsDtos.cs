@@ -141,7 +141,17 @@ public sealed record MetaAdsCreativePreview(
     string? ImageUrl,
     string? MediaReference,
     string? MetaImageHash,
-    bool MediaUploaded);
+    bool MediaUploaded,
+    string? MediaSource = null,
+    string? MediaType = null,
+    Guid? CreativeAssetId = null,
+    string? FileName = null,
+    int? AnalysisScore = null,
+    bool? SemanticMismatch = null,
+    string? MetaVideoId = null,
+    bool VideoUploadRequired = false,
+    bool VideoIdReused = false,
+    string? QualityGateStatus = null);
 
 public sealed record MetaAdsAdPreview(string Name, string Status);
 
@@ -359,12 +369,13 @@ public sealed record MetaAdsCreativeCreatePayload(
     string Name,
     string PageId,
     string? InstagramActorId,
-    string ImageHash,
+    string? ImageHash,
     string Link,
     string Message,
     string Headline,
     string Description,
-    string CallToAction);
+    string CallToAction,
+    string? VideoId = null);
 
 public sealed record MetaAdsDiagnosticCreativeCreatePayload(
     string Name,

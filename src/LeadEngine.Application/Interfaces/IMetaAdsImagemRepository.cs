@@ -7,5 +7,6 @@ public interface IMetaAdsImagemRepository
     Task<MetaAdsImagem?> ObterPorCampanhaAsync(Guid campanhaId, string adAccountId, CancellationToken cancellationToken);
     Task<MetaAdsImagem?> ObterPorConteudoAsync(Guid campanhaId, string adAccountId, string contentHash, CancellationToken cancellationToken);
     Task AdicionarAsync(MetaAdsImagem imagem, CancellationToken cancellationToken);
+    Task RemoverPorConteudoAsync(Guid campanhaId, string contentHash, string origemImagem, CancellationToken cancellationToken);
     Task SalvarAsync(CancellationToken cancellationToken);
 }

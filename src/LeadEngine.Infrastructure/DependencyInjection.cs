@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<ILeadRepository, LeadRepository>();
         services.AddScoped<ICampanhaRepository, CampanhaRepository>();
         services.AddScoped<ICreativeAssetRepository, CreativeAssetRepository>();
+        services.AddScoped<ICreativeQualityOverrideRepository, CreativeQualityOverrideRepository>();
         services.AddScoped<ISegmentRepository, SegmentRepository>();
         services.AddScoped<IConfiguracaoRepository, ConfiguracaoRepository>();
         services.AddScoped<IGoogleAdsContaRepository, GoogleAdsContaRepository>();
@@ -32,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<IMetaAdsOAuthStateRepository, MetaAdsOAuthStateRepository>();
         services.AddScoped<IMetaAdsAtivoSelecionadoRepository, MetaAdsAtivoSelecionadoRepository>();
         services.AddScoped<IMetaAdsImagemRepository, MetaAdsImagemRepository>();
+        services.AddScoped<IMetaAdsVideoRepository, MetaAdsVideoRepository>();
         services.AddScoped<IMetaAdsPreparacaoPublicacaoRepository, MetaAdsPreparacaoPublicacaoRepository>();
         services.AddScoped<IMetaAdsPublicacaoRepository, MetaAdsPublicacaoRepository>();
         services.AddScoped<ISecretProtector, DataProtectionSecretProtector>();
@@ -56,6 +58,8 @@ public static class DependencyInjection
         services.AddScoped<IGoogleAdsAnalysisRepository, GoogleAdsAnalysisRepository>();
         services.AddScoped<CampaignPublicUrlBuilder>();
         services.AddScoped<CreativeAssetService>();
+        services.AddScoped<CreativeQualityGateService>();
+        services.AddScoped<IVideoProcessingService, FfmpegVideoProcessingService>();
         services.AddScoped<FakeCreativeAssetAnalysisProvider>();
         services.AddScoped<OpenRouterCreativeAssetAnalysisProvider>();
         services.AddScoped<ICreativeAssetAnalysisProvider, ConfiguredCreativeAssetAnalysisProvider>();
@@ -114,6 +118,7 @@ public static class DependencyInjection
             }
         });
         services.Configure<CreativeAssetOptions>(configuration.GetSection("CreativeAssets"));
+        services.Configure<VideoProcessingOptions>(configuration.GetSection("VideoProcessing"));
         services.Configure<CreativeAnalysisOptions>(options =>
         {
             configuration.GetSection("CreativeAnalysis").Bind(options);

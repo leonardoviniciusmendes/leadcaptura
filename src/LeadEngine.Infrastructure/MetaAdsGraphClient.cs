@@ -201,6 +201,34 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
         throw new MetaAdsGraphApiException("Upload de imagem Meta nao retornou image_hash.", "meta_image_hash_missing", false, response.StatusCode);
     }
 
+    public async Task<string> UploadAdVideoAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, string fileName, string contentType, byte[] content, CancellationToken cancellationToken)
+    {
+        var normalized = NormalizeAdAccountId(adAccountId);
+        using var request = new HttpRequestMessage(HttpMethod.Post, GraphUrl(config, $"{normalized}/advideos", new()));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(content);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(file, "source", fileName);
+        request.Content = form;
+
+        using var response = await httpClientFactory.CreateClient("metaads").SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var text = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw ParseError(text, response.StatusCode, "advideos");
+        }
+
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+        var id = S(json.RootElement, "id");
+        if (!string.IsNullOrWhiteSpace(id))
+        {
+            return id;
+        }
+
+        throw new MetaAdsGraphApiException("Upload de video Meta nao retornou video_id.", "meta_video_id_missing", false, response.StatusCode);
+    }
+
     public async Task<bool> ResourceExistsAsync(MetaAdsConfiguration config, string accessToken, string resourceId, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, GraphUrl(config, resourceId, new() { ["fields"] = "id" }));
@@ -322,10 +350,39 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
 
     public async Task<MetaAdsCreateResult> CreateAdCreativeAsync(MetaAdsConfiguration config, string accessToken, string adAccountId, MetaAdsCreativeCreatePayload payload, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(payload.ImageHash) && string.IsNullOrWhiteSpace(payload.VideoId))
+        {
+            throw new ArgumentException("Creative Meta exige image_hash ou video_id.", nameof(payload));
+        }
+
+        if (!string.IsNullOrWhiteSpace(payload.ImageHash) && !string.IsNullOrWhiteSpace(payload.VideoId))
+        {
+            throw new ArgumentException("Creative Meta nao pode misturar image_hash e video_id.", nameof(payload));
+        }
+
         var spec = new Dictionary<string, object?>
         {
-            ["page_id"] = payload.PageId,
-            ["link_data"] = new Dictionary<string, object?>
+            ["page_id"] = payload.PageId
+        };
+
+        if (!string.IsNullOrWhiteSpace(payload.VideoId))
+        {
+            spec["video_data"] = new Dictionary<string, object?>
+            {
+                ["video_id"] = payload.VideoId,
+                ["message"] = payload.Message,
+                ["title"] = payload.Headline,
+                ["link_description"] = payload.Description,
+                ["call_to_action"] = new Dictionary<string, object?>
+                {
+                    ["type"] = payload.CallToAction,
+                    ["value"] = new Dictionary<string, object?> { ["link"] = payload.Link }
+                }
+            };
+        }
+        else
+        {
+            spec["link_data"] = new Dictionary<string, object?>
             {
                 ["image_hash"] = payload.ImageHash,
                 ["link"] = payload.Link,
@@ -337,19 +394,21 @@ public sealed class MetaAdsGraphClient(IHttpClientFactory httpClientFactory, ILo
                     ["type"] = payload.CallToAction,
                     ["value"] = new Dictionary<string, object?> { ["link"] = payload.Link }
                 }
-            }
-        };
+            };
+        }
+
         if (!string.IsNullOrWhiteSpace(payload.InstagramActorId))
         {
             spec["instagram_actor_id"] = payload.InstagramActorId;
         }
 
         logger.LogInformation(
-            "Meta Ad Creative create request. Edge={MetaEdge} AdAccountId={AdAccountId} PageId={PageId} ImageHash={ImageHash} Link={Link} Message={Message} Name={Headline} Description={Description} CallToActionType={CallToActionType}",
+            "Meta Ad Creative create request. Edge={MetaEdge} AdAccountId={AdAccountId} PageId={PageId} ImageHash={ImageHash} VideoId={VideoId} Link={Link} Message={Message} Name={Headline} Description={Description} CallToActionType={CallToActionType}",
             "adcreatives",
             NormalizeAdAccountId(adAccountId),
             payload.PageId,
             payload.ImageHash,
+            payload.VideoId,
             SanitizeMetaMessage(payload.Link),
             SanitizeMetaMessage(payload.Message),
             SanitizeMetaMessage(payload.Headline),
