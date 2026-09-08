@@ -199,6 +199,13 @@ export interface RevisarCampanhaRequest {
   titulosAnuncios: string[];
   descricoesAnuncios: string[];
   form?: LeadFormSchema;
+  productOrService?: string;
+  targetAudience?: string;
+  campaignGoal?: string;
+  offer?: string;
+  location?: CampaignLocation;
+  brandTone?: string;
+  orcamentoDiario?: number;
 }
 
 export interface Campanha {

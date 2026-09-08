@@ -14,7 +14,13 @@ public sealed record CampanhaContentSnapshot(
     IReadOnlyList<string> PalavrasChave,
     IReadOnlyList<string> PalavrasChaveNegativas,
     IReadOnlyList<string> TitulosAnuncios,
-    IReadOnlyList<string> DescricoesAnuncios)
+    IReadOnlyList<string> DescricoesAnuncios,
+    string? Objetivo,
+    string Cidade,
+    string Estado,
+    string? Regiao,
+    decimal OrcamentoDiario,
+    string? CampaignConfigJson)
 {
     public static CampanhaContentSnapshot From(Campanha campanha)
     {
@@ -29,7 +35,13 @@ public sealed record CampanhaContentSnapshot(
             Deserialize<string>(campanha.PalavrasChaveJson),
             Deserialize<string>(campanha.PalavrasChaveNegativasJson),
             Deserialize<string>(campanha.TitulosAnunciosJson),
-            Deserialize<string>(campanha.DescricoesAnunciosJson));
+            Deserialize<string>(campanha.DescricoesAnunciosJson),
+            campanha.Objetivo,
+            campanha.Cidade,
+            campanha.Estado,
+            campanha.Regiao,
+            campanha.OrcamentoDiario,
+            campanha.CampaignConfigJson);
     }
 
     private static IReadOnlyList<T> Deserialize<T>(string? json)

@@ -104,6 +104,26 @@ public static class CampanhaValidator
         var erros = new List<string>();
         ValidarObrigatorio(request.Nome, "Nome", erros);
         ValidarTamanho(request.Nome, 180, "Nome", erros);
+        if (request.OrcamentoDiario is not null && request.OrcamentoDiario <= 0)
+        {
+            erros.Add("Orcamento diario deve ser maior que zero.");
+        }
+
+        if (TemBriefingTextualRevisao(request))
+        {
+            ValidarObrigatorio(request.ProductOrService, "Produto ou servico", erros);
+            ValidarObrigatorio(request.TargetAudience, "Publico-alvo", erros);
+            ValidarObrigatorio(request.CampaignGoal, "Objetivo da campanha", erros);
+        }
+
+        ValidarTamanho(request.ProductOrService, 180, "Produto ou servico", erros);
+        ValidarTamanho(request.TargetAudience, 300, "Publico-alvo", erros);
+        ValidarTamanho(request.CampaignGoal, 300, "Objetivo da campanha", erros);
+        ValidarTamanho(request.Offer, 300, "Oferta", erros);
+        ValidarTamanho(request.BrandTone, 120, "Tom de marca", erros);
+        ValidarTamanho(request.Location?.City, 120, "Cidade", erros);
+        ValidarTamanho(request.Location?.State, 2, "Estado", erros);
+        ValidarTamanho(request.Location?.Region, 120, "Bairro ou regiao", erros);
         ValidarCampanhaCompleta(conteudo, erros);
 
         if (erros.Count > 0)
@@ -161,6 +181,13 @@ public static class CampanhaValidator
         return string.Equals(request.Operadora, "Outra", StringComparison.OrdinalIgnoreCase)
             ? request.OperadoraOutra!.Trim()
             : request.Operadora.Trim();
+    }
+
+    private static bool TemBriefingTextualRevisao(RevisarCampanhaRequest request)
+    {
+        return request.ProductOrService is not null
+            || request.TargetAudience is not null
+            || request.CampaignGoal is not null;
     }
 
     private static bool UsaContextoGenerico(GerarCampanhaRequest request)

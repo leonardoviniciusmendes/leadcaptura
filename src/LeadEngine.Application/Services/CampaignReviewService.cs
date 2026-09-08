@@ -43,6 +43,7 @@ public sealed class CampaignReviewService(
             request.DescricoesAnuncios);
 
         campanha.Nome = CampanhaText.Limitar(request.Nome, 180) ?? string.Empty;
+        ApplyGeneralInfo(campanha, request);
         ApplyContent(campanha, conteudo);
         ApplyLeadForm(campanha, request.Form);
         campanha.Status = StatusCampanha.Gerada;
@@ -243,6 +244,12 @@ public sealed class CampaignReviewService(
     private static void ApplySnapshot(Campanha campanha, CampanhaContentSnapshot snapshot)
     {
         campanha.Nome = snapshot.Nome;
+        campanha.Objetivo = snapshot.Objetivo;
+        campanha.Cidade = snapshot.Cidade;
+        campanha.Estado = snapshot.Estado;
+        campanha.Regiao = snapshot.Regiao;
+        campanha.OrcamentoDiario = snapshot.OrcamentoDiario;
+        campanha.CampaignConfigJson = snapshot.CampaignConfigJson;
         campanha.TituloLandingPage = snapshot.TituloLandingPage;
         campanha.SubtituloLandingPage = snapshot.SubtituloLandingPage;
         campanha.TextoBotao = snapshot.TextoBotao;
@@ -253,6 +260,87 @@ public sealed class CampaignReviewService(
         campanha.PalavrasChaveNegativasJson = Serialize(snapshot.PalavrasChaveNegativas);
         campanha.TitulosAnunciosJson = Serialize(snapshot.TitulosAnuncios);
         campanha.DescricoesAnunciosJson = Serialize(snapshot.DescricoesAnuncios);
+    }
+
+    private static void ApplyGeneralInfo(Campanha campanha, RevisarCampanhaRequest request)
+    {
+        if (!HasGeneralInfo(request))
+        {
+            return;
+        }
+
+        if (request.OrcamentoDiario is not null)
+        {
+            campanha.OrcamentoDiario = request.OrcamentoDiario.Value;
+        }
+
+        if (!HasBriefingInfo(request))
+        {
+            return;
+        }
+
+        var current = CampaignContextConfig.From(campanha.CampaignConfigJson);
+        var location = NormalizeLocation(request.Location) ?? current.Location ?? new CampaignLocationDto(campanha.Cidade, campanha.Estado, campanha.Regiao);
+        campanha.Cidade = CampanhaText.Limitar(location.City, 120) ?? campanha.Cidade;
+        campanha.Estado = CampanhaText.Limitar(location.State, 2)?.ToUpperInvariant() ?? campanha.Estado;
+        campanha.Regiao = CampanhaText.Limitar(location.Region, 120);
+        campanha.Objetivo = CampanhaText.Limitar(request.CampaignGoal, 300) ?? current.CampaignGoal ?? campanha.Objetivo;
+
+        var config = new CampaignContextConfig(
+            current.BusinessDescription,
+            ApplyOptional(request.ProductOrService, current.ProductOrService, 180),
+            ApplyOptional(request.TargetAudience, current.TargetAudience, 300),
+            ApplyOptional(request.CampaignGoal, current.CampaignGoal, 300),
+            ApplyOptional(request.Offer, current.Offer, 300),
+            location,
+            ApplyOptional(request.BrandTone, current.BrandTone, 120),
+            current.Restrictions);
+        campanha.CampaignConfigJson = config.HasValues ? JsonSerializer.Serialize(config, JsonOptions) : null;
+    }
+
+    private static string? ApplyOptional(string? value, string? current, int maxLength)
+    {
+        return value is null ? current : CampanhaText.Limitar(value, maxLength);
+    }
+
+    private static bool HasGeneralInfo(RevisarCampanhaRequest request)
+    {
+        return request.ProductOrService is not null
+            || request.TargetAudience is not null
+            || request.CampaignGoal is not null
+            || request.Offer is not null
+            || request.Location is not null
+            || request.BrandTone is not null
+            || request.OrcamentoDiario is not null;
+    }
+
+    private static bool HasBriefingInfo(RevisarCampanhaRequest request)
+    {
+        return request.ProductOrService is not null
+            || request.TargetAudience is not null
+            || request.CampaignGoal is not null
+            || request.Offer is not null
+            || request.Location is not null
+            || request.BrandTone is not null;
+    }
+
+    private static CampaignLocationDto? NormalizeLocation(CampaignLocationDto? location)
+    {
+        if (location is null)
+        {
+            return null;
+        }
+
+        var normalized = new CampaignLocationDto(
+            CampanhaText.Limitar(location.City, 120),
+            CampanhaText.Limitar(location.State, 2)?.ToUpperInvariant(),
+            CampanhaText.Limitar(location.Region, 120));
+
+        return string.IsNullOrWhiteSpace(normalized.City)
+            && string.IsNullOrWhiteSpace(normalized.State)
+            && string.IsNullOrWhiteSpace(normalized.Region)
+            ? null
+            : normalized;
     }
 
     private static void ValidateCurrent(Campanha campanha)
@@ -314,5 +402,45 @@ public sealed class CampaignReviewService(
     private static string Serialize<T>(T value)
     {
         return JsonSerializer.Serialize(value);
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true };
+
+    private sealed record CampaignContextConfig(
+        string? BusinessDescription,
+        string? ProductOrService,
+        string? TargetAudience,
+        string? CampaignGoal,
+        string? Offer,
+        CampaignLocationDto? Location,
+        string? BrandTone,
+        IReadOnlyCollection<string>? Restrictions)
+    {
+        public bool HasValues =>
+            !string.IsNullOrWhiteSpace(BusinessDescription)
+            || !string.IsNullOrWhiteSpace(ProductOrService)
+            || !string.IsNullOrWhiteSpace(TargetAudience)
+            || !string.IsNullOrWhiteSpace(CampaignGoal)
+            || !string.IsNullOrWhiteSpace(Offer)
+            || Location is not null
+            || !string.IsNullOrWhiteSpace(BrandTone)
+            || Restrictions is { Count: > 0 };
+
+        public static CampaignContextConfig From(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return new CampaignContextConfig(null, null, null, null, null, null, null, null);
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<CampaignContextConfig>(json, JsonOptions) ?? new CampaignContextConfig(null, null, null, null, null, null, null, null);
+            }
+            catch (JsonException)
+            {
+                return new CampaignContextConfig(null, null, null, null, null, null, null, null);
+            }
+        }
     }
 }

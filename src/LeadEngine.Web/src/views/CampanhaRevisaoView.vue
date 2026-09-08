@@ -36,11 +36,19 @@
     <section v-else-if="campanha" class="review-grid">
       <ReviewBlock title="Informacoes gerais" secao="Nome" :dirty="dirty" :busy="busy" @save="save" @cancel="reset" @regenerate="startRegeneration('Nome')">
         <label>Nome<input v-model="form.nome" maxlength="180" /></label>
+        <label>Produto/servico<input v-model="form.productOrService" maxlength="180" /></label>
+        <label>Publico-alvo<textarea v-model="form.targetAudience" maxlength="300" rows="2" /></label>
+        <label>Objetivo<textarea v-model="form.campaignGoal" maxlength="300" rows="2" /></label>
+        <label>Oferta<textarea v-model="form.offer" maxlength="300" rows="2" /></label>
+        <div class="inline-edit general-location">
+          <label>Regiao<input v-model="form.location!.region" maxlength="120" /></label>
+          <label>Cidade<input v-model="form.location!.city" maxlength="120" /></label>
+          <label>UF<input v-model="form.location!.state" maxlength="2" /></label>
+        </div>
+        <label>Tom da marca<input v-model="form.brandTone" maxlength="120" /></label>
+        <label>Orcamento diario<input v-model.number="form.orcamentoDiario" type="number" min="1" step="0.01" /></label>
         <dl class="compact-list">
-          <template v-for="item in briefingItems" :key="item.label">
-            <dt>{{ item.label }}</dt><dd>{{ item.value }}</dd>
-          </template>
-          <dt>Orcamento</dt><dd>{{ money(campanha.orcamentoDiario) }}</dd>
+          <dt>Segmento</dt><dd>{{ campanha.segment?.name || (campanha.usesLegacyBriefing ? 'Segmento legado' : '-') }}</dd>
           <dt>Slug</dt><dd>{{ campanha.slug }}</dd>
           <dt>Publicacao</dt><dd>{{ campanha.publicada ? 'Publicada' : 'Despublicada' }}</dd>
           <dt>Data publicacao</dt><dd>{{ campanha.dataPublicacao ? dateTime(campanha.dataPublicacao) : '-' }}</dd>
@@ -283,6 +291,13 @@ const form = reactive<RevisarCampanhaRequest>({
   subtituloLandingPage: '',
   textoBotao: '',
   mensagemWhatsApp: '',
+  productOrService: '',
+  targetAudience: '',
+  campaignGoal: '',
+  offer: '',
+  location: { city: '', state: '', region: '' },
+  brandTone: '',
+  orcamentoDiario: 0,
   beneficios: [],
   perguntasFrequentes: [],
   palavrasChave: [],
@@ -294,32 +309,8 @@ const form = reactive<RevisarCampanhaRequest>({
 
 const busy = computed(() => loading.value || saving.value || regenerating.value || approving.value || publishing.value);
 const dirty = computed(() => JSON.stringify(form) !== baseline.value || leadFormJson.value !== baselineLeadFormJson.value);
-const localizacao = computed(() => campanha.value ? [campanha.value.regiao, campanha.value.cidade, campanha.value.estado].filter(Boolean).join(' / ') : '');
+const localizacao = computed(() => [form.location?.region, form.location?.city, form.location?.state].filter(Boolean).join(' / '));
 const canPublicarLanding = computed(() => campanha.value?.status === 'Revisada');
-const briefingItems = computed(() => {
-  if (!campanha.value) return [];
-  if (campanha.value.usesLegacyBriefing) {
-    return [
-      { label: 'Segmento', value: campanha.value.segment?.name || 'Segmento legado' },
-      { label: 'Publico', value: campanha.value.tipoPublico },
-      { label: 'Operadora', value: campanha.value.operadora || 'Nenhuma especifica' },
-      { label: 'Localizacao', value: localizacao.value || '-' },
-      { label: 'Objetivo', value: campanha.value.objetivo || '-' }
-    ];
-  }
-
-  const briefing = campanha.value.briefing;
-  const location = briefing.location;
-  return [
-    { label: 'Segmento', value: campanha.value.segment?.name || '-' },
-    { label: 'Produto/servico', value: briefing.productOrService || '-' },
-    { label: 'Publico-alvo', value: briefing.targetAudience || '-' },
-    { label: 'Objetivo', value: briefing.campaignGoal || campanha.value.objetivo || '-' },
-    { label: 'Oferta', value: briefing.offer || '-' },
-    { label: 'Localizacao', value: [location?.region, location?.city, location?.state].filter(Boolean).join(' / ') || localizacao.value || '-' },
-    { label: 'Tom da marca', value: briefing.brandTone || '-' }
-  ];
-});
 const publicUrl = computed(() => {
   if (!campanha.value) return '';
   const base = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/+$/, '');
@@ -680,6 +671,17 @@ async function loadHistorico() {
 
 function hydrate(source: Campanha) {
   form.nome = source.nome;
+  form.productOrService = source.briefing.productOrService || '';
+  form.targetAudience = source.briefing.targetAudience || '';
+  form.campaignGoal = source.briefing.campaignGoal || source.objetivo || '';
+  form.offer = source.briefing.offer || '';
+  form.location = {
+    city: source.briefing.location?.city || source.cidade || '',
+    state: source.briefing.location?.state || source.estado || '',
+    region: source.briefing.location?.region || source.regiao || ''
+  };
+  form.brandTone = source.briefing.brandTone || '';
+  form.orcamentoDiario = source.orcamentoDiario;
   form.tituloLandingPage = source.tituloLandingPage;
   form.subtituloLandingPage = source.subtituloLandingPage;
   form.textoBotao = source.textoBotao;

@@ -264,6 +264,50 @@ public sealed class CampanhaServiceTests
     }
 
     [Fact]
+    public async Task RevisaoManual_AtualizaInformacoesGeraisDoBriefing()
+    {
+        var repository = new InMemoryCampanhaRepository();
+        var criada = await Service(repository).GerarCampanhaAsync(BriefingPadrao(), CancellationToken.None);
+        var review = ReviewService(repository);
+
+        var revisada = await review.RevisarCampanhaAsync(criada.Id, RequestValido(criada) with
+        {
+            Nome = "Campanha estetica",
+            ProductOrService = "Harmonizacao facial",
+            TargetAudience = "Mulheres de 25 a 55 anos",
+            CampaignGoal = "Gerar agendamentos de avaliacao",
+            Offer = "Avaliacao inicial",
+            BrandTone = "Profissional e acolhedor",
+            Location = new CampaignLocationDto("Niteroi", "rj", "Icarai"),
+            OrcamentoDiario = 55.50m
+        }, CancellationToken.None);
+
+        Assert.Equal("Campanha estetica", revisada.Nome);
+        Assert.Equal("Harmonizacao facial", revisada.Briefing.ProductOrService);
+        Assert.Equal("Mulheres de 25 a 55 anos", revisada.Briefing.TargetAudience);
+        Assert.Equal("Gerar agendamentos de avaliacao", revisada.Briefing.CampaignGoal);
+        Assert.Equal("Avaliacao inicial", revisada.Briefing.Offer);
+        Assert.Equal("Profissional e acolhedor", revisada.Briefing.BrandTone);
+        Assert.Equal("Niteroi", revisada.Cidade);
+        Assert.Equal("RJ", revisada.Estado);
+        Assert.Equal("Icarai", revisada.Regiao);
+        Assert.Equal(55.50m, revisada.OrcamentoDiario);
+        Assert.Contains("\"productOrService\":\"Harmonizacao facial\"", repository.Campanhas[0].CampaignConfigJson);
+    }
+
+    [Fact]
+    public async Task RevisaoManual_ReprovaOrcamentoInvalido()
+    {
+        var repository = new InMemoryCampanhaRepository();
+        var criada = await Service(repository).GerarCampanhaAsync(BriefingPadrao(), CancellationToken.None);
+        var request = RequestValido(criada) with { OrcamentoDiario = 0 };
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => ReviewService(repository).RevisarCampanhaAsync(criada.Id, request, CancellationToken.None));
+
+        Assert.Contains("Orcamento diario deve ser maior que zero", ex.Message);
+    }
+
+    [Fact]
     public async Task RegeneracaoParcial_AtualizaSomenteSecaoEGeraHistoricoIa()
     {
         var repository = new InMemoryCampanhaRepository();

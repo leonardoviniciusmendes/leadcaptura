@@ -54,7 +54,14 @@ public sealed record RevisarCampanhaRequest(
     IReadOnlyList<string> PalavrasChaveNegativas,
     IReadOnlyList<string> TitulosAnuncios,
     IReadOnlyList<string> DescricoesAnuncios,
-    LeadFormResponse? Form = null);
+    LeadFormResponse? Form = null,
+    string? ProductOrService = null,
+    string? TargetAudience = null,
+    string? CampaignGoal = null,
+    string? Offer = null,
+    CampaignLocationDto? Location = null,
+    string? BrandTone = null,
+    decimal? OrcamentoDiario = null);
 
 public sealed record RegenerarCampanhaSecaoRequest(
     CampanhaSecao Secao,
