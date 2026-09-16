@@ -19,10 +19,9 @@ public static class LeadValidator
             erros.Add("Nome obrigatorio.");
         }
 
-        var whatsapp = LeadSanitizer.Digitos(request.WhatsApp);
-        if (whatsapp.Length is < 10 or > 13)
+        if (!LeadSanitizer.TryNormalizarCelularBrasileiro(request.WhatsApp, out _))
         {
-            erros.Add("WhatsApp deve conter DDD.");
+            erros.Add(LeadSanitizer.CelularBrasileiroInvalido);
         }
 
         var cep = LeadSanitizer.Digitos(request.Cep);

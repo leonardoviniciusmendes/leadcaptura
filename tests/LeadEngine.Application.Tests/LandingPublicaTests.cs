@@ -180,12 +180,37 @@ public sealed class LandingPublicaTests
         Assert.Equal(TipoContratacaoLead.Familiar, lead.TipoContratacao);
     }
 
-    [Fact]
-    public async Task CapturaLead_ValidaTelefone()
+    [Theory]
+    [InlineData("219972390")]
+    [InlineData("219982174")]
+    [InlineData("999999999")]
+    [InlineData("2133334444")]
+    [InlineData("telefone 21999999999")]
+    [InlineData("55")]
+    [InlineData("21899999999")]
+    public async Task CapturaLead_ValidaTelefoneENaoPersiste(string telefone)
     {
-        var service = ServiceComCampanhaPublicada();
+        var campanhas = new CampanhaRepo();
+        var leads = new LeadRepo();
+        campanhas.Campanhas.Add(Campanha(StatusCampanha.Revisada, publicada: true));
+        var service = LeadService(campanhas, leads);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.CapturarLeadPublicoAsync("plano-familiar-amil-barra", RequestValido() with { Telefone = "123" }, CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.CapturarLeadPublicoAsync("plano-familiar-amil-barra", RequestValido() with { Telefone = telefone }, CancellationToken.None));
+        Assert.Empty(leads.Leads);
+    }
+
+    [Fact]
+    public async Task CapturaLead_NormalizaCodigoPaisAntesDePersistir()
+    {
+        var campanhas = new CampanhaRepo();
+        var leads = new LeadRepo();
+        campanhas.Campanhas.Add(Campanha(StatusCampanha.Revisada, publicada: true));
+
+        await LeadService(campanhas, leads).CapturarLeadPublicoAsync("plano-familiar-amil-barra", RequestValido() with { Telefone = "+55 (21) 99999-9999" }, CancellationToken.None);
+
+        var lead = Assert.Single(leads.Leads);
+        Assert.Equal("21999999999", lead.WhatsApp);
+        Assert.Equal("21999999999", lead.WhatsAppNormalizado);
     }
 
     [Fact]

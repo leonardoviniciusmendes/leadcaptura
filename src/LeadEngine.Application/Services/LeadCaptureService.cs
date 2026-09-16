@@ -22,7 +22,7 @@ public sealed class LeadCaptureService(
             throw new ArgumentException(string.Join(" ", erros));
         }
 
-        var whatsAppNormalizado = LeadSanitizer.Digitos(request.WhatsApp);
+        _ = LeadSanitizer.TryNormalizarCelularBrasileiro(request.WhatsApp, out var whatsAppNormalizado);
         var origem = request.Origem;
         var duplicado = await repository.ObterDuplicadoRecenteAsync(
             whatsAppNormalizado,

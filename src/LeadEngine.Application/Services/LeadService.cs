@@ -38,7 +38,7 @@ public sealed class LeadService(
 
         var form = LeadFormSchema.GetEffectiveForm(campanha);
         var normalized = NormalizeAndValidateForm(campanha, form, request);
-        var telefone = LeadSanitizer.Digitos(normalized.Phone);
+        var telefone = normalized.Phone;
         var leadOptions = await EffectiveOptionsAsync(cancellationToken);
         var janela = DateTime.UtcNow.AddHours(-Math.Max(1, leadOptions.DuplicateWindowHours));
         var duplicado = await leadRepository.ObterDuplicadoRecenteAsync(campanha.Id, telefone, janela, cancellationToken);
@@ -175,10 +175,9 @@ public sealed class LeadService(
             erros.Add("Nome obrigatorio com pelo menos 2 caracteres.");
         }
 
-        var telefone = LeadSanitizer.Digitos(request.Telefone);
-        if (telefone.Length is < 10 or > 13)
+        if (!LeadSanitizer.TryNormalizarCelularBrasileiro(request.Telefone, out _))
         {
-            erros.Add("Telefone invalido.");
+            erros.Add(LeadSanitizer.CelularBrasileiroInvalido);
         }
 
         if (!string.IsNullOrWhiteSpace(request.Email))
@@ -265,10 +264,9 @@ public sealed class LeadService(
             errors.Add("Nome obrigatorio com pelo menos 2 caracteres.");
         }
 
-        var telefone = LeadSanitizer.Digitos(phone);
-        if (telefone.Length is < 10 or > 13)
+        if (!LeadSanitizer.TryNormalizarCelularBrasileiro(phone, out var telefone))
         {
-            errors.Add("Telefone invalido.");
+            errors.Add(LeadSanitizer.CelularBrasileiroInvalido);
         }
 
         if (!string.IsNullOrWhiteSpace(email))
@@ -291,10 +289,10 @@ public sealed class LeadService(
 
         if (errors.Count > 0)
         {
-            throw new ArgumentException(string.Join(" ", errors));
+            throw new ArgumentException(string.Join(" ", errors.Distinct()));
         }
 
-        return new NormalizedLeadForm(name!, phone!, email, city, state, normalizedAnswers);
+        return new NormalizedLeadForm(name!, telefone, email, city, state, normalizedAnswers);
     }
 
     private static JsonElement? ReadFieldValue(LeadFormField field, CapturarLeadPublicoRequest request, IReadOnlyDictionary<string, JsonElement> answers)
@@ -357,7 +355,7 @@ public sealed class LeadService(
                 if (actualValue.ValueKind != JsonValueKind.String) errors.Add($"{field.Label} invalido.");
                 break;
             case "phone":
-                if (actualValue.ValueKind != JsonValueKind.String || LeadSanitizer.Digitos(actualValue.GetString()).Length is < 10 or > 13) errors.Add($"{field.Label} invalido.");
+                if (actualValue.ValueKind != JsonValueKind.String || !LeadSanitizer.TryNormalizarCelularBrasileiro(actualValue.GetString(), out _)) errors.Add(LeadSanitizer.CelularBrasileiroInvalido);
                 break;
             case "email":
                 if (actualValue.ValueKind != JsonValueKind.String)

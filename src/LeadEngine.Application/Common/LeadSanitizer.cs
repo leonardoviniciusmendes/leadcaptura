@@ -4,6 +4,8 @@ namespace LeadEngine.Application.Common;
 
 public static partial class LeadSanitizer
 {
+    public const string CelularBrasileiroInvalido = "Informe um WhatsApp valido com DDD. Ex.: (21) 99999-9999.";
+
     public static string? Texto(string? value, int maxLength)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -20,6 +22,39 @@ public static partial class LeadSanitizer
         return string.IsNullOrWhiteSpace(value)
             ? string.Empty
             : new string(value.Where(char.IsDigit).ToArray());
+    }
+
+    public static bool TryNormalizarCelularBrasileiro(string? value, out string normalizado)
+    {
+        normalizado = string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        foreach (var character in value)
+        {
+            if (character is < '0' or > '9'
+                && !char.IsWhiteSpace(character)
+                && character is not '(' and not ')' and not '-' and not '+')
+            {
+                return false;
+            }
+        }
+
+        var digits = Digitos(value);
+        if (digits.Length == 13 && digits.StartsWith("55", StringComparison.Ordinal))
+        {
+            digits = digits[2..];
+        }
+
+        if (digits.Length != 11 || digits[2] != '9')
+        {
+            return false;
+        }
+
+        normalizado = digits;
+        return true;
     }
 
     public static string? Email(string? value)

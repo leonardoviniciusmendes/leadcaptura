@@ -33,6 +33,7 @@
                 :autocomplete="autocomplete(field.key, field.type)"
                 @input="field.type === 'phone' ? maskPhone(field.key) : undefined"
               />
+              <small v-if="field.type === 'phone' && phoneErrors[field.key]" class="error">{{ phoneErrors[field.key] }}</small>
             </label>
 
             <label v-else-if="field.type === 'textarea'">
@@ -151,6 +152,7 @@ import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { capturarLeadPublico, obterCampanhaPublica, type CampanhaPublica, type CapturarLeadPublicoRequest, type LeadFormField } from '../services/api';
 import { trackGoogleAdsConversion } from '../services/tracking';
+import { brazilianMobileError, maskBrazilianMobile, normalizeBrazilianMobile } from '../components/forms';
 import heroImage from '../imagens/Pf1.png';
 
 const route = useRoute();
@@ -167,6 +169,7 @@ const trackedConversionLeadIds = new Set<string>();
 type AnswerValue = string | number | string[];
 const answers = reactive<Record<string, AnswerValue>>({});
 const checkboxAnswers = reactive<Record<string, boolean>>({});
+const phoneErrors = reactive<Record<string, string>>({});
 const tracking = reactive<Record<string, string | undefined>>({});
 const simpleInputTypes: LeadFormField['type'][] = ['text', 'phone', 'email', 'number', 'date'];
 
@@ -206,6 +209,7 @@ onMounted(async () => {
 
 async function submit() {
   if (submitting.value || !campanha.value) return;
+  if (!validatePhones()) return;
   submitting.value = true;
   submitError.value = '';
   success.value = '';
@@ -309,16 +313,26 @@ function autocomplete(key: string, type: LeadFormField['type']) {
 
 function maskPhone(key: string) {
   const value = typeof answers[key] === 'string' ? String(answers[key]) : '';
-  const digits = value.replace(/\D/g, '').slice(0, 11);
-  if (digits.length <= 2) {
-    answers[key] = digits;
-    return;
+  answers[key] = maskBrazilianMobile(value);
+  phoneErrors[key] = '';
+}
+
+function validatePhones(): boolean {
+  if (!campanha.value) return false;
+
+  let valid = true;
+  for (const field of campanha.value.form.fields.filter(item => item.type === 'phone')) {
+    const value = typeof answers[field.key] === 'string' ? String(answers[field.key]) : '';
+    const normalized = normalizeBrazilianMobile(value);
+    if (!normalized) {
+      phoneErrors[field.key] = brazilianMobileError;
+      valid = false;
+    } else {
+      phoneErrors[field.key] = '';
+      answers[field.key] = maskBrazilianMobile(normalized);
+    }
   }
-  const ddd = digits.slice(0, 2);
-  const prefixLength = digits.length > 10 ? 5 : 4;
-  const prefix = digits.slice(2, 2 + prefixLength);
-  const suffix = digits.slice(2 + prefixLength);
-  answers[key] = `(${ddd}) ${prefix}${suffix ? `-${suffix}` : ''}`;
+  return valid;
 }
 
 function multiValue(key: string) {
